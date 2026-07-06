@@ -8,8 +8,8 @@ import { GlassCard } from "@/components/ui/GlassCard";
 import { Disclaimer } from "@/components/ui/Disclaimer";
 import { SaveNoteButton } from "@/components/ui/SaveNoteButton";
 import { api, ApiError, type RadarData, type Industry, type Announcement, type NewsItem } from "@/lib/api";
+import { generateAllIndustryDigests, generateIndustryDigest, useIntelDigestStore } from "@/lib/intelDigestStore";
 import { loadWatch } from "@/lib/watchlist";
-import { hasLlm, chatStream } from "@/lib/llm";
 import { cn } from "@/lib/utils";
 
 const TABS = [
@@ -19,15 +19,12 @@ const TABS = [
   { key: "investment-news", label: "Investment News", icon: Rss, integrated: true, desc: "12 赛道全球公开 RSS 资讯（集成自 investment-news 仓库）" },
 ];
 
-interface Digest { loading?: boolean; text?: string; err?: string; needKey?: boolean }
-
 function InvestmentNewsPanel() {
   const [data, setData] = useState<RadarData | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [active, setActive] = useState("ai");
   const [refreshing, setRefreshing] = useState(false);
-  const [digests, setDigests] = useState<Record<string, Digest>>({});
-  const [bulk, setBulk] = useState<{ running: boolean; done: number; total: number }>({ running: false, done: 0, total: 0 });
+  const { digests, bulk } = useIntelDigestStore();
 
   useEffect(() => {
     api.radar().then(setData).catch((e) => setErr(e instanceof ApiError ? e.message : "加载失败"));
@@ -44,34 +41,21 @@ function InvestmentNewsPanel() {
   const cur = industries.find((i) => i.key === active) || industries[0];
   const hasData = !!data?.generated_at;
 
-  const genDigest = async (ind: Industry) => {
-    if (!hasLlm()) { setDigests((d) => ({ ...d, [ind.key]: { needKey: true } })); return; }
-    setDigests((d) => ({ ...d, [ind.key]: { loading: true } }));
-    const ctx = ind.items.slice(0, 25).map((it) => `[${it.time}] ${it.source}｜${it.zh || it.title}`).join("\n");
-    const prompt =
-      `以下是「${ind.name}」赛道近期资讯。请提炼「今日要点」3-5 条：每条一句话（≤40 字），` +
-      `只客观陈述重要事件 / 趋势，不推荐标的、不预测涨跌、不构成建议。直接用「- 」列点，不要多余前后缀。\n\n${ctx}`;
-    try {
-      let acc = "";
-      await chatStream([{ role: "user", content: prompt }], `${ind.name}赛道资讯`, {
-        onDelta: (t) => { acc += t; setDigests((d) => ({ ...d, [ind.key]: { text: acc } })); },
-      });
-    } catch (e) {
-      setDigests((d) => ({ ...d, [ind.key]: { err: e instanceof ApiError ? e.message : "生成失败" } }));
-    }
-  };
+  /**
+   * 生成当前赛道的今日要点。
+   *
+   * Args:
+   *   ind: 当前要提炼的赛道。
+   */
+  const genDigest = (ind: Industry) => generateIndustryDigest(ind);
 
-  // 一键提炼全部赛道要点（串行，带进度；单赛道按需的按钮仍保留）
-  const genAll = async () => {
-    if (!hasLlm()) { if (cur) setDigests((d) => ({ ...d, [cur.key]: { needKey: true } })); return; }
-    const targets = industries.filter((i) => i.items.length > 0);
-    setBulk({ running: true, done: 0, total: targets.length });
-    for (const ind of targets) {
-      await genDigest(ind);
-      setBulk((b) => ({ ...b, done: b.done + 1 }));
-    }
-    setBulk((b) => ({ ...b, running: false }));
-  };
+  /**
+   * 一键提炼全部赛道要点。
+   *
+   * Returns:
+   *   页面外批量任务的 Promise，切换界面后仍由 store 继续保存进度。
+   */
+  const genAll = () => generateAllIndustryDigests(industries, cur);
 
   const dg = cur ? digests[cur.key] : undefined;
 
