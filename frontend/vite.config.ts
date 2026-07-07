@@ -6,7 +6,7 @@ import path from "path";
 // Phase 1 为纯前端空壳，后端未接时前端仍可独立跑（接口调用做了降级）。
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
-  const apiTarget = env.VITE_API_URL || "http://localhost:8900";
+  const apiTarget = env.VITE_API_URL || "http://127.0.0.1:8900";
 
   return {
     plugins: [react()],
