@@ -47,6 +47,7 @@ _CLI_DEFS: dict[str, dict] = {
 
 _EXTRA_PATH_DIRS = [
     "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin",
+    "/Applications/Codex.app/Contents/Resources",
     str(Path.home() / ".local/bin"), str(Path.home() / ".npm-global/bin"),
     str(Path.home() / ".bun/bin"), str(Path.home() / ".deno/bin"),
     str(Path.home() / ".yarn/bin"),
