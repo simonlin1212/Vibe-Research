@@ -180,3 +180,61 @@ def us_hk_stock(query: str) -> dict:
         "quote": quote,
         "metrics": _key_metrics(info["secucode"]) if info["market"] != "KR" else None,  # 韩股东财无 F10 财务
     }
+
+
+# 港股现金流量表汇总科目：东财 RPT_HKSK_FN_CASHFLOW 的 STD_ITEM_CODE → 中文标签。
+# 用稳定数字码作 key（不用东财中文 ITEM_NAME，避开其编码/措辞差异）；实测每期返回这 8 行汇总。
+_HK_CF_ITEMS = {
+    "003999": "经营活动现金流净额",
+    "005999": "投资活动现金流净额",
+    "007999": "筹资活动现金流净额",
+    "006999": "汇率变动前现金净额",
+    "011997": "汇率变动等其他影响",
+    "010999": "现金及等价物净增加",
+    "011001": "期初现金及等价物",
+    "011999": "期末现金及等价物",
+}
+_HK_CF_ORDER = ("003999", "005999", "007999", "006999", "011997", "010999", "011001", "011999")
+
+
+def hk_cashflow(query: str, periods: int = 8) -> dict:
+    """港股现金流量表（东财 datacenter RPT_HKSK_FN_CASHFLOW，与已接入 GMAININDICATOR 同为东财域内源）。
+
+    按 REPORT_DATE 分组还原每期汇总（经营 / 投资 / 筹资 / 净增加 / 期初期末），返回最近 `periods` 期。
+    金额为原生币种（见 `currency`，港股多为人民币或港元），季度为 YTD 累计、附同比。
+    非港股（美/韩股，其现金流走 F10/SK 或无）或查不到 → 返回 {}。
+    """
+    info = resolve_symbol(query)
+    if not info or not info["secucode"].endswith(".HK"):
+        return {}
+    rows = astock.eastmoney_datacenter(
+        "RPT_HKSK_FN_CASHFLOW",
+        filter_str=f'(SECUCODE="{info["secucode"]}")',
+        page_size=300, sort_columns="REPORT_DATE", sort_types="-1")
+    if not rows:
+        return {}
+    by_period: dict[str, dict] = {}
+    for r in rows:
+        rd = str(r.get("REPORT_DATE") or "")[:10]
+        code = str(r.get("STD_ITEM_CODE") or "")
+        if not rd or code not in _HK_CF_ITEMS:
+            continue
+        p = by_period.setdefault(rd, {
+            "report_date": rd, "report": r.get("REPORT"),
+            "currency": r.get("CURRENCY"), "account_standard": r.get("ACCOUNT_STANDARD"),
+            "items": {},
+        })
+        amt, yoy = r.get("AMOUNT"), r.get("YOY_RATIO")
+        p["items"][_HK_CF_ITEMS[code]] = {
+            "amount": amt if isinstance(amt, (int, float)) else None,
+            "yoy": yoy if isinstance(yoy, (int, float)) else None,
+        }
+    if not by_period:
+        return {}
+    periods_out = sorted(by_period.values(), key=lambda x: x["report_date"], reverse=True)[:periods]
+    return {
+        "code": info["code"], "name": info["name"], "market": "HK",
+        "currency": periods_out[0].get("currency"),
+        "item_order": [_HK_CF_ITEMS[c] for c in _HK_CF_ORDER],
+        "periods": periods_out,
+    }
