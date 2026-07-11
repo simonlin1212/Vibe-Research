@@ -10,6 +10,8 @@ VibeResearch-专业化建议.md
 my-watchlist.json
 portfolio.json
 public/user-data/
+# Docker Compose 默认持久化目录（持仓 / 研报，绝不进仓库）
+data/
 
 # ── 密钥 / 环境（绝不进仓库） ──────────────────────────────────────
 .env

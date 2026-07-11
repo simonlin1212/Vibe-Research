@@ -123,6 +123,25 @@ cd frontend && npm install && npm run dev
 # 浏览器打开 http://localhost:5899
 ```
 
+### Docker Compose 部署
+
+需要 Docker Engine（含 Docker Compose）。Compose 会构建前端与后端，浏览器和 API 同源访问，后端不会直接暴露到宿主机。
+
+```bash
+cp .env.example .env
+docker compose up -d --build
+# 浏览器打开 http://127.0.0.1:8080
+```
+
+持仓和上传的研报会持久化在 `VR_DATA_DIR_HOST`（默认 `./data/`），升级时直接再次执行 `docker compose up -d --build` 即可；停止服务不删除数据。查看状态和日志：
+
+```bash
+docker compose ps
+docker compose logs -f
+```
+
+默认只监听本机回环地址，适合个人部署。如需局域网或公网访问，请在 `.env` 中将 `VR_BIND_ADDRESS` 改为 `0.0.0.0`，并设置高强度 `VR_API_KEY`；打开网页后，在「接入 AI」页底部填入同一个后端访问密钥。通过公网反向代理时，也应将 `VR_ALLOW_ORIGINS` 收紧为你的站点域名。
+
 ## 🔌 接入 AI
 
 在「接入 AI」页配置一次，全站的「问 AI / 复盘 / 今日要点」就都用你自己的模型。**分析都由你的模型给出，本产品不校准、无倾向。** 三种方式：

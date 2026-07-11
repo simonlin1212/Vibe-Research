@@ -1,0 +1,16 @@
+.git
+.env
+.env.*
+**/.venv
+**/node_modules
+**/__pycache__
+**/.cache
+**/.pytest_cache
+frontend/dist
+frontend/tsconfig.tsbuildinfo
+data
+docs
+a-stock-data
+global-stock-data
+backend/tests
+*.log

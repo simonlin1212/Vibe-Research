@@ -1,0 +1,37 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    restart: unless-stopped
+    environment:
+      VR_DATA_DIR: /data
+      VR_REPORTS_DIR: /data/myreports
+      VR_ALLOW_ORIGINS: ${VR_ALLOW_ORIGINS:-*}
+      VR_API_KEY: ${VR_API_KEY:-}
+      VR_DATA_PROXY: ${VR_DATA_PROXY:-}
+    volumes:
+      - ${VR_DATA_DIR_HOST:-./data}:/data
+    expose:
+      - "8900"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8900/api/health')"
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend.Dockerfile
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${VR_BIND_ADDRESS:-127.0.0.1}:${VR_PORT:-8080}:80"
