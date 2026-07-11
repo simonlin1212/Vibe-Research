@@ -103,3 +103,16 @@ def test_global_indices_and_stock():
     assert aapl["quote"]["price"] is not None
     hk = gstock.us_hk_stock("00700")
     assert hk.get("market") == "HK"
+
+
+@pytest.mark.live
+def test_hk_cashflow_shape():
+    """港股现金流量表（东财 RPT_HKSK_FN_CASHFLOW）：形状正确；非港股返回 {}。"""
+    import gstock
+    cf = gstock.hk_cashflow("00700")
+    assert cf.get("market") == "HK" and isinstance(cf.get("periods"), list)
+    assert isinstance(cf.get("item_order"), list)
+    if cf["periods"]:
+        assert "经营活动现金流净额" in cf["item_order"]
+        assert {"report_date", "items", "currency"} <= set(cf["periods"][0])
+    assert gstock.hk_cashflow("AAPL") == {}  # 美股不走此接口

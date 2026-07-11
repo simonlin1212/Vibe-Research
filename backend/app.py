@@ -302,6 +302,20 @@ def global_stock(symbol: str = Query(..., min_length=1, max_length=16)):
         raise HTTPException(502, f"美港股查询异常：{e}") from e
 
 
+@app.get("/api/global/hk/cashflow")
+def global_hk_cashflow(symbol: str = Query(..., min_length=1, max_length=16)):
+    """港股现金流量表（东财域内源 RPT_HKSK_FN_CASHFLOW）：经营/投资/筹资/净增加，多期。symbol 如 00700。"""
+    try:
+        data = gstock.hk_cashflow(symbol.strip())
+        if not data:
+            raise HTTPException(404, f"未找到港股「{symbol}」的现金流数据（仅港股支持）")
+        return {"data": data}
+    except HTTPException:
+        raise
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"港股现金流查询异常：{e}") from e
+
+
 @app.get("/api/indices")
 def indices():
     """A股大盘指数实时行情（上证/深证成指/创业板指/沪深300）。仅标准库。"""

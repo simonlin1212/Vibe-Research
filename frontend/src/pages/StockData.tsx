@@ -12,7 +12,7 @@ import {
   api, ApiError, type Valuation, type Report, type NewsItem, type ValPercentile, type ValMetric,
   type Financials, type Announcement, type MarginRow, type BlockTradeRow, type HolderRow,
   type DividendRow, type FundFlowRow, type DragonTiger, type Lockup, type Blocks, type HotConcept, type QaRow,
-  type GlobalStock,
+  type GlobalStock, type HkCashflow,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -100,6 +100,7 @@ export function StockData() {
   const [hotCon, setHotCon] = useState<HotConcept[]>([]);
   const [qa, setQa] = useState<QaRow[]>([]);
   const [gstock, setGStock] = useState<GlobalStock | null>(null);  // 美股 / 港股
+  const [cashflow, setCashflow] = useState<HkCashflow | null>(null);  // 港股现金流量表（仅港股）
   const runIdRef = useRef(0);
 
   const run = async () => {
@@ -108,10 +109,12 @@ export function StockData() {
     const rid = ++runIdRef.current;
     setLoading(true); setErr(null); setDepNote(null); setVal(null); setReports([]); setNews([]); setPctl(null); setFin(null); setAnns([]);
     setMargin([]); setBlockT([]); setHolders([]); setDividend([]); setFundFlow([]); setDt(null); setLockup(null); setBlocks(null); setHotCon([]); setQa([]);
-    setGStock(null);
+    setGStock(null); setCashflow(null);
 
     // 6 位纯数字 = A 股；否则（字母 / 港股短代码）走美股 / 港股（global-stock-data）
     if (!/^\d{6}$/.test(c)) {
+      // 港股现金流独立回填（美股返回 404 → 静默留空，卡片不渲染）
+      api.hkCashflow(c).then((cf) => { if (rid === runIdRef.current) setCashflow(cf); }).catch(() => { if (rid === runIdRef.current) setCashflow(null); });
       try {
         const g = await api.globalStock(c);
         if (rid === runIdRef.current) setGStock(g);
@@ -285,6 +288,43 @@ export function StockData() {
                     {m.yoy && <p className="text-[11px] text-muted-foreground">同比 {m.yoy}</p>}
                   </div>
                 ))}
+              </div>
+            </GlassCard>
+          )}
+
+          {cashflow && cashflow.periods.length > 0 && (
+            <GlassCard className="mb-4">
+              <h3 className="mb-1 flex items-center gap-1.5 text-sm font-semibold">
+                <BarChart3 className="h-4 w-4 text-primary" /> 现金流量表
+                <span className="text-xs font-normal text-muted-foreground/60">· 单位：亿{cashflow.currency ?? ""}</span>
+              </h3>
+              <p className="mb-3 text-[11px] text-muted-foreground/60">东财 RPT_HKSK_FN_CASHFLOW · 季度为年初至今累计 · 负数（现金流出）标绿。</p>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[520px] text-sm">
+                  <thead>
+                    <tr className="text-xs text-muted-foreground">
+                      <th className="py-1 pr-3 text-left font-normal">科目</th>
+                      {cashflow.periods.slice(0, 5).map((p) => (
+                        <th key={p.report_date} className="px-2 py-1 text-right font-normal">{p.report_date.slice(0, 7)}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {cashflow.item_order.map((it) => (
+                      <tr key={it} className="border-t border-border/40">
+                        <td className="py-1.5 pr-3 text-muted-foreground">{it}</td>
+                        {cashflow.periods.slice(0, 5).map((p) => {
+                          const amt = p.items[it]?.amount ?? null;
+                          return (
+                            <td key={p.report_date} className={cn("px-2 py-1.5 text-right font-mono", amt != null && amt < 0 ? "text-success" : "")}>
+                              {amt == null ? "—" : (amt / 1e8).toFixed(1)}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </GlassCard>
           )}
