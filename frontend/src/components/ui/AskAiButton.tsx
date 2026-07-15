@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Sparkles, X, Settings, Send, Loader2, Wrench, AlertCircle } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { cn } from "@/lib/utils";
 import { hasLlm, chatStream, type ChatMsg } from "@/lib/llm";
 import { ApiError } from "@/lib/api";
@@ -159,7 +161,13 @@ export function AskAiButton({ context, suggestions = [], label = "问 AI" }: Pro
                             ))}
                           </div>
                         )}
-                        <p className="whitespace-pre-wrap">{m.content}</p>
+                        {m.role === "assistant" ? (
+                          <div className="prose prose-sm prose-invert max-w-none break-words text-foreground">
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
+                          </div>
+                        ) : (
+                          <p className="whitespace-pre-wrap break-words">{m.content}</p>
+                        )}
                         {m.role === "assistant" && m.content && !(loading && i === msgs.length - 1) && (
                           <div className="mt-1.5"><SaveNoteButton kind="问AI" title={`问 AI · ${msgs[i - 1]?.content?.slice(0, 24) || "对话"}`} content={m.content} /></div>
                         )}
