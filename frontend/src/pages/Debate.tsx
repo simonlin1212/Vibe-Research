@@ -189,7 +189,7 @@ export function Debate() {
               <span className="text-sm font-semibold">{s.label}</span>
               {!s.done && <span className="animate-pulse text-[11px] text-muted-foreground">生成中…</span>}
             </div>
-            <div className="prose prose-sm prose-invert max-w-none text-foreground prose-table:text-sm">
+            <div className="prose prose-sm dark:prose-invert max-w-none text-foreground prose-table:text-sm">
               <ReactMarkdown remarkPlugins={[remarkGfm]}>{s.content || "…"}</ReactMarkdown>
             </div>
           </div>
