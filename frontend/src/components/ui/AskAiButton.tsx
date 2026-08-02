@@ -327,7 +327,7 @@ export function AskAiButton({ context, suggestions = [], label = "问 AI", scope
                           </div>
                         )}
                         {m.role === "assistant" ? (
-                          <div className="prose prose-sm prose-invert max-w-none break-words text-foreground">
+                          <div className="prose prose-sm dark:prose-invert max-w-none break-words text-foreground">
                             <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
                           </div>
                         ) : (
