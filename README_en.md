@@ -135,6 +135,23 @@ cd frontend && npm install && npm run dev
 # Open http://localhost:5899
 ```
 
+### Docker (start the whole app with one command)
+
+No Python / Node setup needed — just Docker. The repo ships a `Dockerfile` + `compose.yaml`:
+
+```bash
+docker compose up -d --build
+# Open http://localhost:5899
+```
+
+Notes:
+
+- **Two containers**: `backend` (Python + FastAPI :8900) and `frontend` (nginx serving the built SPA on :80, proxying `/api` to backend, exposed as `:5899`). All API calls use the relative `/api` prefix — nothing to configure.
+- **Data persistence**: portfolio / closed positions / uploaded reports are stored in the named volume `vibe-data` (container `VR_DATA_DIR=/data`), so `docker compose down` or container rebuilds don't lose data; wipe everything with `docker compose down -v`.
+- **Optional config**: copy [`.env.example`](.env.example) to `.env` (compose reads it automatically) to set `VR_API_KEY` (required for public deployment) and `VR_ALLOW_ORIGINS`.
+- Port `:8900` is also mapped to the host if you want to hit the API directly.
+- **Image footprint**: the image only contains `backend/` and `frontend/`; the root `a-stock-data/` and `global-stock-data/` toolkits are for local agents and are **not packaged into the image** (the backend data layer already ships the same implementations).
+
 ## Bring Your Own AI
 
 Configure once on the "Bring your AI" page and every AI feature across the dashboard uses your model. **All analysis comes from your model — this project does not tune or bias it.** Three options:

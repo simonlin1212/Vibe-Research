@@ -139,6 +139,23 @@ cd frontend && npm install && npm run dev
 # 浏览器打开 http://localhost:5899
 ```
 
+### Docker 部署（一条命令起整个应用）
+
+不想装 Python / Node 环境？有 Docker 就行。仓库自带 `Dockerfile` + `compose.yaml`，一条命令构建并启动前后端：
+
+```bash
+docker compose up -d --build
+# 浏览器打开 http://localhost:5899
+```
+
+说明：
+
+- **两个容器**：`backend`（Python + FastAPI :8900）与 `frontend`（nginx 托管前端静态产物 :80，并反代 `/api` 到 backend，对外暴露 `:5899`）。所有 API 走相对路径 `/api`，无需改任何配置。
+- **数据持久化**：持仓 / 已清仓 / 上传的研报写在 Docker 命名卷 `vibe-data`（容器内 `VR_DATA_DIR=/data`），`docker compose down` 或重建容器都不丢；要彻底清空用 `docker compose down -v`。
+- **可选配置**：复制 [`.env.example`](.env.example) 为 `.env`（compose 自动读取），按需设置 `VR_API_KEY`（公网部署必设）与 `VR_ALLOW_ORIGINS`。
+- 也想直接打后端 API？`:8900` 已一并映射到宿主机。
+- **体积说明**：镜像只含 `backend/` 与 `frontend/` 运行所需代码；根目录的 `a-stock-data/`、`global-stock-data/` 是给本地 agent 用的数据工具箱，**不打包进容器**（后端数据层已内置同源实现，功能不受影响）。
+
 ## 接入 AI
 
 在「接入 AI」页配置一次，全站的「问 AI / 复盘 / 今日要点」就都用你自己的模型。**分析都由你的模型给出，本产品不校准、无倾向。** 三种方式：

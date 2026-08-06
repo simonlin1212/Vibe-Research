@@ -1,0 +1,17 @@
+# Docker 构建上下文排除（根目录 compose build 用；镜像里只需要 backend/ 与 frontend/）
+**/.git
+**/.venv
+**/node_modules
+**/__pycache__
+**/.pytest_cache
+**/.cache
+**/*.pyc
+.env
+dist
+build
+a-stock-data
+global-stock-data
+docs
+assets
+*.log
+.DS_Store
