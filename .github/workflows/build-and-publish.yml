@@ -1,0 +1,115 @@
+# Vibe-Research · CI/CD：构建并发布前后端镜像到 GHCR（ghcr.io）。
+#
+# 触发方式：
+#   1. 手动一键：GitHub Actions 页面 → Run workflow
+#   2. 打 v* 格式 tag（如 v0.4.0）自动发布正式版
+#
+# 产物（多架构 linux/amd64 + linux/arm64）：
+#   ghcr.io/<owner>/vibe-research-backend
+#   ghcr.io/<owner>/vibe-research-frontend
+#
+# 注意：Docker 文件（backend/Dockerfile、frontend/Dockerfile、compose.yaml）由 PR #24
+#       引入，本 workflow 依赖它们 —— 需先合并 #24 再跑本 workflow。
+name: Build & Publish Docker Images
+
+on:
+  workflow_dispatch: # 手动「一键发布」
+  push:
+    tags:
+      - "v*" # 打 v0.4.0 这类 tag 时自动发布
+
+permissions:
+  contents: read
+  packages: write # 推送 GHCR 镜像需要
+
+jobs:
+  test:
+    name: Backend offline tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
+      - name: Install test deps
+        run: |
+          pip install -r backend/requirements.txt -r backend/requirements-dev.txt
+      - name: Run offline tests
+        working-directory: backend
+        # 离线单测 + API 校验：快、稳、无需联网（联网 live 用例留给出包前人工跑）
+        run: pytest -m "not live" -q
+
+  publish:
+    name: Build & push images to GHCR
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # GHCR 鉴权：用 GITHUB_TOKEN，零自定义 secret
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # 镜像 tag 方案（docker/metadata-action）：
+      #   - main 上跑（手动触发）：latest + sha-<短sha>
+      #   - v* tag 上跑：      <版本号> + <主.次> + latest + sha-<短sha>
+      - name: Compute backend tags
+        id: meta-backend
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/vibe-research-backend
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v') }}
+            type=raw,value=sha-{{sha}},enable=true
+            type=semver,pattern={{version}},enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            type=semver,pattern={{major}}.{{minor}},enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+
+      - name: Compute frontend tags
+        id: meta-frontend
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/vibe-research-frontend
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v') }}
+            type=raw,value=sha-{{sha}},enable=true
+            type=semver,pattern={{version}},enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            type=semver,pattern={{major}}.{{minor}},enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+
+      # 构建上下文 = 仓库根（与 docker compose build 一致），镜像里只需 backend/ 与 frontend/
+      - name: Build & push backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: backend/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta-backend.outputs.tags }}
+          labels: ${{ steps.meta-backend.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build & push frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: frontend/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta-frontend.outputs.tags }}
+          labels: ${{ steps.meta-frontend.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
