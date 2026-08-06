@@ -141,20 +141,41 @@ cd frontend && npm install && npm run dev
 
 ### Docker 部署（一条命令起整个应用）
 
-不想装 Python / Node 环境？有 Docker 就行。仓库自带 `Dockerfile` + `compose.yaml`，一条命令构建并启动前后端：
+不想装 Python / Node 环境？有 Docker 就行。**两种方式按需选：**
+
+**① 复制即部署（免 clone、免构建）** —— 只要机器有 Docker，复制 [`docker-compose.yml`](docker-compose.yml) 这一个文件到任意目录：
 
 ```bash
+docker compose up -d
+# 浏览器打开 http://localhost:5899
+```
+
+> 前提是镜像已发布（见下文「一键发布镜像」）。想先自己试？把文件里镜像地址的 `simonlin1212` 改成你的 GitHub 用户名，在你自己的仓库跑一次发布即可。
+
+**② 本地构建（开发 / 想跑最新源码）** —— 拉下仓库自己打镜像：
+
+```bash
+git clone https://github.com/simonlin1212/Vibe-Research && cd Vibe-Research
 docker compose up -d --build
 # 浏览器打开 http://localhost:5899
 ```
 
 说明：
 
-- **两个容器**：`backend`（Python + FastAPI :8900）与 `frontend`（nginx 托管前端静态产物 :80，并反代 `/api` 到 backend，对外暴露 `:5899`）。所有 API 走相对路径 `/api`，无需改任何配置。
+- **两个 compose 文件**：`docker-compose.yml` 是**部署版**（`image:` 直接拉 GHCR 现成镜像，复制即用）；`compose.yaml` 是**开发版**（`build:` 本地构建，就是方式②用的）。
 - **数据持久化**：持仓 / 已清仓 / 上传的研报写在 Docker 命名卷 `vibe-data`（容器内 `VR_DATA_DIR=/data`），`docker compose down` 或重建容器都不丢；要彻底清空用 `docker compose down -v`。
 - **可选配置**：复制 [`.env.example`](.env.example) 为 `.env`（compose 自动读取），按需设置 `VR_API_KEY`（公网部署必设）与 `VR_ALLOW_ORIGINS`。
 - 也想直接打后端 API？`:8900` 已一并映射到宿主机。
-- **体积说明**：镜像只含 `backend/` 与 `frontend/` 运行所需代码；根目录的 `a-stock-data/`、`global-stock-data/` 是给本地 agent 用的数据工具箱，**不打包进容器**（后端数据层已内置同源实现，功能不受影响）。
+- **体积说明**：镜像只含 `backend/` 与 `frontend/` 运行所需代码；根目录的 `a-stock-data/`、`global-stock-data/` 是给本地 agent 用的数据工具箱，**不打包进镜像**（后端数据层已内置同源实现，功能不受影响）。
+
+### 一键发布镜像（CI/CD）
+
+合并后仓库自带 GitHub Actions，**一键发布前后端镜像到 GHCR（ghcr.io）**，多架构 `linux/amd64 + linux/arm64`：
+
+- **手动一键**：仓库 Actions 页 → Build & Publish Docker Images → **Run workflow**
+- **打 tag 自动**：`git tag v0.4.0 && git push --tags`
+
+产物：`ghcr.io/simonlin1212/vibe-research-backend` / `-frontend`（公开镜像，免登录拉取）。发布后上面的「复制即部署」即可直接用。
 
 ## 接入 AI
 
