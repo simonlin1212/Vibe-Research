@@ -143,7 +143,7 @@ cd frontend && npm install && npm run dev
 
 不想装 Python / Node 环境？有 Docker 就行。**两种方式按需选：**
 
-**① 复制即部署（免 clone、免构建）** —— 只要机器有 Docker，复制 [`docker-compose.yml`](docker-compose.yml) 这一个文件到任意目录：
+**① 复制即部署（免 clone、免构建）** —— 只要机器有 Docker，复制 [`compose.deploy.yaml`](compose.deploy.yaml) 这一个文件到任意目录：
 
 ```bash
 docker compose up -d
@@ -162,7 +162,7 @@ docker compose up -d --build
 
 说明：
 
-- **两个 compose 文件**：`docker-compose.yml` 是**部署版**（`image:` 直接拉 GHCR 现成镜像，复制即用）；`compose.yaml` 是**开发版**（`build:` 本地构建，就是方式②用的）。
+- **两个 compose 文件**：仓库根目录默认用 `compose.yaml`（**开发版**，`build:` 本地构建，就是方式②用的）；`compose.deploy.yaml` 是**部署版**（`image:` 直接拉 GHCR 现成镜像，复制即用）。部署版独立命名，避免被 `compose.yaml` 的默认优先级遮蔽；在仓库内跑部署版用 `docker compose -f compose.deploy.yaml up -d`。
 - **数据持久化**：持仓 / 已清仓 / 上传的研报写在 Docker 命名卷 `vibe-data`（容器内 `VR_DATA_DIR=/data`），`docker compose down` 或重建容器都不丢；要彻底清空用 `docker compose down -v`。
 - **可选配置**：复制 [`.env.example`](.env.example) 为 `.env`（compose 自动读取），按需设置 `VR_API_KEY`（公网部署必设）与 `VR_ALLOW_ORIGINS`。
 - 也想直接打后端 API？`:8900` 已一并映射到宿主机。

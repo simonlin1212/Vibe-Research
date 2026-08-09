@@ -139,7 +139,7 @@ cd frontend && npm install && npm run dev
 
 No Python / Node setup needed — just Docker. **Pick one of two ways:**
 
-**① Copy-and-run deployment (no clone, no build)** — if you have Docker, copy this one file [`docker-compose.yml`](docker-compose.yml) to any directory:
+**① Copy-and-run deployment (no clone, no build)** — if you have Docker, copy this one file [`compose.deploy.yaml`](compose.deploy.yaml) to any directory:
 
 ```bash
 docker compose up -d
@@ -158,7 +158,7 @@ docker compose up -d --build
 
 Notes:
 
-- **Two compose files**: `docker-compose.yml` is the **deployment** one (`image:` pulls ready-made GHCR images, copy-and-run); `compose.yaml` is the **development** one (`build:` local build, used by option ②).
+- **Two compose files**: `compose.yaml` is the default in the repo root — the **development** one (`build:` local build, used by option ②). `compose.deploy.yaml` is the **deployment** one (`image:` pulls ready-made GHCR images, copy-and-run); it has its own name so the `compose.yaml` default precedence doesn't silently shadow it — run it from the repo with `docker compose -f compose.deploy.yaml up -d`.
 - **Data persistence**: portfolio / closed positions / uploaded reports are stored in the named volume `vibe-data` (container `VR_DATA_DIR=/data`), so `docker compose down` or container rebuilds don't lose data; wipe everything with `docker compose down -v`.
 - **Optional config**: copy [`.env.example`](.env.example) to `.env` (compose reads it automatically) to set `VR_API_KEY` (required for public deployment) and `VR_ALLOW_ORIGINS`.
 - Port `:8900` is also mapped to the host if you want to hit the API directly.

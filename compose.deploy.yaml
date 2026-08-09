@@ -1,9 +1,15 @@
 # Vibe-Research · 部署版（复制即用，无需 clone 项目、无需本地构建）
 #
-# 用法：
-#   1. 复制本文件到任意目录（文件名叫 docker-compose.yml 或 compose.yaml 都行）
-#   2. docker compose up -d
-#   3. 浏览器打开 http://localhost:5899
+# 与 compose.yaml（开发版，本地 build）并存。为什么叫 compose.deploy.yaml：
+# Docker Compose 在根目录会自动优先用 compose.yaml，为避免部署版被静默遮蔽，
+# 部署版独立命名，需要时用 -f 显式指定。
+#
+# 用法（二选一）：
+#   1. 复制本文件到任意目录（文件名随意，docker-compose.yml 也行），然后：
+#      docker compose up -d
+#   2. 或在仓库根目录显式指定：
+#      docker compose -f compose.deploy.yaml up -d
+#   浏览器打开 http://localhost:5899
 #
 # 前提：镜像已发布到 GHCR（仓库 CI 会自动发布 ghcr.io/<owner>/vibe-research-*）。
 #       想先自己试？把下面 image 里的 `simonlin1212` 改成你自己的 GitHub 用户名，
