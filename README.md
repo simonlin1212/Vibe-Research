@@ -225,10 +225,6 @@ cd backend && .venv/bin/pip install -r requirements-dev.txt
 .venv/bin/pytest -m live          # 联网核对数据源 shape（升级 / 发布前跑一遍）
 ```
 
-## 更新日志
-
-见 [CHANGELOG.md](./CHANGELOG.md)。版本号唯一来源是 `frontend/package.json`，后端 API / 前端界面 / MCP `serverInfo` 全部从它读取。
-
 ## 合规
 
 - 只做客观数据整理与公开榜单呈现：**不荐股、不预测涨跌、不给买卖时机、不承诺收益、不做主观评分**；中立无倾向。

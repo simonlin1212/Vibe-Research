@@ -311,18 +311,7 @@ def _market(args: dict):
         return {k: d.get(k) for k in ("tiers", "limitUp", "limitDown", "brokenRate", "promoteRate", "updated") if k in d} or d
     if scope == "turnover":
         d = market.get_turnover_top() or {}
-        # 字段名必须与 astock.market_turnover_rank() 的实际返回一致：
-        # price / pct / amount / mcap / float_cap / industry。此前写的是
-        # turnover / changePct，这两个键根本不存在，_pick 全部取到 None——
-        # 返回的每条只剩 name 和 code，其余字段一片空白（#28）。
-        return {
-            "stocks": _pick(
-                d.get("stocks", []),
-                ("name", "code", "price", "pct", "amount", "mcap", "float_cap", "industry"),
-                20,
-            ),
-            "updated": d.get("updated"),
-        }
+        return {"stocks": _pick(d.get("stocks", []), ("name", "code", "turnover", "changePct"), 20), "updated": d.get("updated")}
     return market.get_overview()
 
 

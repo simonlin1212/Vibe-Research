@@ -10,7 +10,7 @@ import { Disclaimer } from "@/components/ui/Disclaimer";
 import { api, ApiError, type IndexQuote, type Quote, type MarketOverview, type ShortTermEmotion, type TurnoverTop, type GlobalIndex } from "@/lib/api";
 import { hasLlm, chatStream } from "@/lib/llm";
 import { SaveNoteButton } from "@/components/ui/SaveNoteButton";
-import { loadWatch, saveWatch, addCodes } from "@/lib/watchlist";
+import { loadWatch, saveWatch, type WatchItem } from "@/lib/watchlist";
 import { cn } from "@/lib/utils";
 
 // A股红涨绿跌。全球市场（美股/港股指数）**也沿用红涨**——与整个看板及东财等中国平台一致，
@@ -31,7 +31,7 @@ export function DailyReview() {
   const [turnover, setTurnover] = useState<TurnoverTop | null>(null);
   const [globalIdx, setGlobalIdx] = useState<GlobalIndex[]>([]);
   // 关注股票（自选，存本地）
-  const [watchCodes, setWatchCodes] = useState<string[]>(loadWatch);
+  const [watchItems, setWatchItems] = useState<WatchItem[]>(loadWatch);
   const [watchQuotes, setWatchQuotes] = useState<Record<string, Quote>>({});
   const [watchInput, setWatchInput] = useState("");
   const [watchLoading, setWatchLoading] = useState(false);
@@ -56,10 +56,12 @@ export function DailyReview() {
     </p>
   );
 
-  const refreshWatch = (codes: string[]) => {
-    if (!codes.length) { setWatchQuotes({}); return; }
+  const refreshWatch = (items: WatchItem[]) => {
+    if (!items.length) { setWatchQuotes({}); return; }
     setWatchLoading(true);
-    api.quote(codes.join(",")).then(setWatchQuotes).catch(() => {}).finally(() => setWatchLoading(false));
+    // 多市场：格式化为 market:code 传给 /api/quote
+    const codeStr = items.map((x) => `${x.market}:${x.code}`).join(",");
+    api.quote(codeStr).then(setWatchQuotes).catch(() => {}).finally(() => setWatchLoading(false));
   };
 
   useEffect(() => {
@@ -68,16 +70,22 @@ export function DailyReview() {
   }, []);
 
   const addWatch = () => {
-    // 支持一次粘贴多只（逗号 / 空格分隔）；全部无效或重复则清空输入、无副作用。
-    const { next, added } = addCodes(watchCodes, watchInput);
+    // 复盘页保留批量粘贴 6 位 A 股代码的快捷入口；港美股请在「自选股」页添加。
+    const tokens = watchInput.split(/[^\d]+/).filter(Boolean);
+    const newCodes = Array.from(new Set(tokens.filter((t) => /^\d{6}$/.test(t))));
+    const existing = new Set(watchItems.map((x) => `${x.market}:${x.code}`));
+    const toAdd: WatchItem[] = newCodes
+      .filter((c) => !existing.has(`A:${c}`))
+      .map((c) => ({ code: c, market: "A" }));
     setWatchInput("");
-    if (!added) return;
-    setWatchCodes(next); saveWatch(next); refreshWatch(next);
+    if (toAdd.length === 0) return;
+    const next = [...watchItems, ...toAdd];
+    setWatchItems(next); saveWatch(next); refreshWatch(next);
   };
 
-  const removeWatch = (c: string) => {
-    const next = watchCodes.filter((x) => x !== c);
-    setWatchCodes(next); saveWatch(next); refreshWatch(next);
+  const removeWatch = (code: string, market: string) => {
+    const next = watchItems.filter((x) => !(x.code === code && x.market === market));
+    setWatchItems(next); saveWatch(next); refreshWatch(next);
   };
 
   const today = new Date().toLocaleDateString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit" });
@@ -180,8 +188,8 @@ export function DailyReview() {
       {/* 2. 关注股票（自选） */}
       <div className="mb-3 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-muted-foreground">关注股票</h3>
-        {watchCodes.length > 0 && (
-          <button onClick={() => refreshWatch(watchCodes)} className="text-muted-foreground hover:text-primary" title="刷新价格">
+        {watchItems.length > 0 && (
+          <button onClick={() => refreshWatch(watchItems)} className="text-muted-foreground hover:text-primary" title="刷新价格">
             {watchLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
           </button>
         )}
@@ -192,30 +200,33 @@ export function DailyReview() {
             value={watchInput}
             onChange={(e) => setWatchInput(e.target.value.replace(/[^\d,\s]/g, "").slice(0, 80))}
             onKeyDown={(e) => e.key === "Enter" && addWatch()}
-            placeholder="加自选：可批量，如 600519 000858"
-            className="w-60 rounded-lg border border-border bg-black/20 px-3 py-2 text-sm outline-none focus:border-primary/50"
+            placeholder="加自选 A 股：可批量，如 600519 000858（港美股请到自选股页加）"
+            className="w-72 rounded-lg border border-border bg-black/20 px-3 py-2 text-sm outline-none focus:border-primary/50"
           />
           <button onClick={addWatch}
             className="inline-flex items-center gap-1.5 rounded-lg bg-primary/15 px-4 py-2 text-sm font-medium text-primary shadow-glow hover:bg-primary/25">
             <Plus className="h-4 w-4" /> 增加
           </button>
         </div>
-        {watchCodes.length === 0 ? (
+        {watchItems.length === 0 ? (
           <p className="text-sm text-muted-foreground/60">加上你关注的股票，随时看它们的实时价格与涨跌。数据存本地，不上传。</p>
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-            {watchCodes.map((c) => {
-              const q = watchQuotes[c];
+            {watchItems.map((it) => {
+              const q = watchQuotes[it.code];
               return (
-                <div key={c} className="group relative rounded-lg bg-muted/25 p-3">
-                  <button onClick={() => removeWatch(c)} title="移除"
+                <div key={`${it.market}:${it.code}`} className="group relative rounded-lg bg-muted/25 p-3">
+                  <button onClick={() => removeWatch(it.code, it.market)} title="移除"
                     className="absolute right-1.5 top-1.5 text-muted-foreground/40 opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100">
                     <X className="h-3.5 w-3.5" />
                   </button>
-                  <p className="truncate text-xs text-muted-foreground">{q?.name || c}</p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {q?.name || it.code}
+                    {it.market !== "A" && <span className="ml-1 text-[10px] text-primary/70">{it.market}</span>}
+                  </p>
                   <p className={cn("mt-1 font-mono text-lg font-bold", q ? pctColor(q.change_pct) : "text-muted-foreground/40")}>{q ? q.price : "—"}</p>
                   <p className={cn("text-xs", q ? pctColor(q.change_pct) : "text-muted-foreground/40")}>
-                    {q ? `${q.change_pct > 0 ? "+" : ""}${q.change_pct}%` : c}
+                    {q ? `${q.change_pct > 0 ? "+" : ""}${q.change_pct}%` : it.code}
                   </p>
                 </div>
               );
@@ -247,7 +258,7 @@ export function DailyReview() {
         )}
         {review ? (
           <>
-            <div className="prose prose-sm dark:prose-invert mt-4 max-w-none text-foreground"><ReactMarkdown remarkPlugins={[remarkGfm]}>{review}</ReactMarkdown></div>
+            <div className="prose prose-sm prose-invert mt-4 max-w-none text-foreground"><ReactMarkdown remarkPlugins={[remarkGfm]}>{review}</ReactMarkdown></div>
             {!reviewLoading && <div className="mt-3"><SaveNoteButton kind="复盘" title={`每日复盘 ${today}`} content={review} /></div>}
           </>
         ) : !needConfig && !reviewErr && !reviewLoading ? (

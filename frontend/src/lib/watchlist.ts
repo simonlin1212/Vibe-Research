@@ -3,33 +3,30 @@
 
 const KEY = "vr-watchlist";
 
-export function loadWatch(): string[] {
+export interface WatchItem {
+  code: string;
+  market: string;  // "A" / "HK" / "US" / "KR"
+}
+
+export function loadWatch(): WatchItem[] {
   try {
     const v = JSON.parse(localStorage.getItem(KEY) || "[]");
-    return Array.isArray(v) ? v.filter((c) => /^\d{6}$/.test(c)) : [];
+    if (!Array.isArray(v)) return [];
+    // 兼容旧格式 string[]：纯字符串（旧版只存 6 位 A 股代码）→ {code, market:"A"}
+    return v
+      .map((x) => (typeof x === "string" ? { code: x, market: "A" } : x))
+      .filter((x) => x && typeof x.code === "string" && x.code);
   } catch {
     return [];
   }
 }
 
-export function saveWatch(codes: string[]) {
+export function saveWatch(items: WatchItem[]) {
   // localStorage 在隐私模式 / 嵌入式浏览器 / 配额写满时会抛异常。
   // 存不下就算了——自选丢失总好过整页崩掉（读取侧同样是 try/catch 兜底）。
   try {
-    localStorage.setItem(KEY, JSON.stringify(codes));
+    localStorage.setItem(KEY, JSON.stringify(items));
   } catch {
     /* 存储不可用：本次会话内仍可正常使用，只是关掉页面后不保留 */
   }
-}
-
-// 从任意文本里抽取 6 位 A 股代码（逗号 / 空格 / 换行 / 顿号分隔都行，方便一次粘贴一串）。
-export function parseCodes(raw: string): string[] {
-  const tokens = raw.split(/[^\d]+/).filter(Boolean);
-  return Array.from(new Set(tokens.filter((t) => /^\d{6}$/.test(t))));
-}
-
-// 把用户输入的一串代码并入已有自选，返回去重后的新列表 + 实际新增数量。
-export function addCodes(existing: string[], raw: string): { next: string[]; added: number } {
-  const incoming = parseCodes(raw).filter((c) => !existing.includes(c));
-  return { next: [...existing, ...incoming], added: incoming.length };
 }

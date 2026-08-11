@@ -21,6 +21,12 @@ export default defineConfig(({ mode }) => {
         "/api": { target: apiTarget, changeOrigin: true },
       },
     },
+    preview: {
+      port: 5899,
+      proxy: {
+        "/api": { target: apiTarget, changeOrigin: true },
+      },
+    },
     build: {
       rollupOptions: {
         output: {

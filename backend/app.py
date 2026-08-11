@@ -28,12 +28,7 @@ import market
 import myreports as mr
 import reflection as reflect_layer
 
-
-from version import read_version
-
-__version__ = read_version()
-
-app = FastAPI(title="Vibe-Research API", version=__version__)
+app = FastAPI(title="Vibe-Research API", version="0.2.2")
 
 # 每半小时后台刷新持仓数据
 pf.start_scheduler(1800)
@@ -77,7 +72,7 @@ def _validate(code: str) -> str:
 
 @app.get("/api/health")
 def health():
-    return {"ok": True, "service": "vibe-research-api", "version": __version__}
+    return {"ok": True, "service": "vibe-research-api", "version": "0.2.2"}
 
 
 class LLMConfig(BaseModel):
@@ -189,9 +184,10 @@ def reflect(req: ReflectReq):
 
 
 class HoldingIn(BaseModel):
-    code: str
+    code: str          # 下拉选中=标准代码；直接输入=可能拼音/中文/代码
     shares: float
     cost: float
+    market: str = ""   # 下拉选中时传入；空则后端 fallback 解析
 
 
 @app.get("/api/portfolio")
@@ -206,13 +202,17 @@ def portfolio_get():
 @app.post("/api/portfolio/holding")
 def portfolio_add(h: HoldingIn):
     """加一笔持仓（同代码按加权平均成本合并）。存本地，不上传。"""
-    code = (h.code or "").strip()
-    if not code.isdigit() or len(code) != 6:
-        raise HTTPException(400, "代码必须是 6 位数字")
+    if h.market:
+        code, market = h.code.strip(), h.market
+    else:
+        resolved = gstock.resolve_for_portfolio(h.code)
+        if not resolved:
+            raise HTTPException(400, f"未找到该股票：{h.code}")
+        code, market = resolved["code"], resolved["market"]
     if h.shares <= 0:
         raise HTTPException(400, "数量必须大于 0")
     # 成本价不限正负：融券 / 返息 / 摊薄后为负成本等情形按结果计算，用户想怎么输就怎么输。
-    return {"data": pf.add_holding(code, h.shares, h.cost)}
+    return {"data": pf.add_holding(code, market, h.shares, h.cost)}
 
 
 @app.delete("/api/portfolio/holding")
@@ -262,14 +262,19 @@ class CloseIn(BaseModel):
     price: float
     shares: float
     cost: float
+    market: str = ""   # 下拉选中时传入；空则后端 fallback 解析
 
 
 @app.post("/api/portfolio/close")
 def portfolio_close(c: CloseIn):
     """记一笔已清仓（已实现盈亏）。存本地。"""
-    code = (c.code or "").strip()
-    if not code.isdigit() or len(code) != 6:
-        raise HTTPException(400, "代码必须是 6 位数字")
+    if c.market:
+        code, market = c.code.strip(), c.market
+    else:
+        resolved = gstock.resolve_for_portfolio(c.code)
+        if not resolved:
+            raise HTTPException(400, f"未找到该股票：{c.code}")
+        code, market = resolved["code"], resolved["market"]
     if c.price <= 0 or c.shares <= 0:
         raise HTTPException(400, "清仓价与股数必须大于 0")
     # 买入成本不限正负（同持仓录入）：按 (清仓价 - 成本) × 股数 的结果计算已实现盈亏。
@@ -281,7 +286,7 @@ def portfolio_close(c: CloseIn):
         datetime.strptime(date, "%Y-%m-%d")
     except ValueError:
         raise HTTPException(400, "清仓日期格式应为 YYYY-MM-DD") from None
-    return {"data": pf.close_position(code, date, c.price, c.shares, c.cost)}
+    return {"data": pf.close_position(code, market, date, c.price, c.shares, c.cost)}
 
 
 @app.delete("/api/portfolio/close")
@@ -393,16 +398,64 @@ def indices():
         raise HTTPException(502, f"指数行情异常：{e}") from e
 
 
+@app.get("/api/search")
+def search(q: str = Query(..., min_length=1, max_length=20)):
+    """股票搜索：代码/拼音首字母/中文/港美股代码 → 候选列表 [{code, name, market}]。"""
+    return {"data": gstock.search_suggestions(q)}
+
+
+def _normalize_global_to_quote(g: dict) -> dict:
+    """gstock 返回的 GlobalStock → 前端 Quote 形状（缺字段填 None/0）。"""
+    q = g.get("quote") or {}
+    return {
+        "name": g.get("name") or q.get("name") or g.get("code", ""),
+        "price": q.get("price") or 0.0,
+        "last_close": q.get("prev_close") or 0.0,
+        "change_pct": q.get("change_pct") or 0.0,
+        "pe_ttm": None, "pb": None, "mcap_yi": None,
+        "turnover_pct": None, "limit_up": None, "limit_down": None,
+    }
+
+
 @app.get("/api/quote")
-def quote(codes: str = Query(..., description="逗号分隔的 6 位代码")):
-    """实时行情：现价/涨跌/PE/PB/市值/换手/涨跌停。仅标准库，永远可用。"""
-    lst = [c.strip() for c in codes.split(",") if c.strip()]
-    if not lst or any(not c.isdigit() or len(c) != 6 for c in lst):
-        raise HTTPException(400, "codes 必须是逗号分隔的 6 位数字")
+def quote(codes: str = Query(..., description="逗号分隔代码，支持 市场:代码 前缀（如 A:600519,HK:00700,US:AAPL,FD:000834）")):
+    """实时行情：现价/涨跌/PE/PB/市值/换手/涨跌停。
+    A 股走腾讯（批量高效）；港美股走 gstock（逐个）；场外基金走 fund_nav（东财 lsjz，逐个）。
+    无前缀 6 位数字默认 A 股（向后兼容老自选股数据）。"""
+    raw = [c.strip() for c in codes.split(",") if c.strip()]
+    if not raw:
+        raise HTTPException(400, "codes 不能为空")
+    # 解析 市场:代码 前缀
+    a_codes, fd_codes, others = [], [], []
+    for c in raw:
+        if ":" in c:
+            mkt, code = c.split(":", 1)
+            if mkt == "A":
+                a_codes.append(code)
+            elif mkt == "FD":
+                fd_codes.append(code)
+            else:
+                others.append(code)
+        elif c.isdigit() and len(c) == 6:
+            a_codes.append(c)  # 向后兼容：无前缀 6 位数字 = A 股
+        else:
+            others.append(c)  # 港美股裸代码
+    result = {}
     try:
-        return {"data": astock.tencent_quote(lst)}
-    except Exception as e:  # noqa: BLE001 — 边界统一兜底
+        if a_codes:
+            result.update(astock.tencent_quote(a_codes))
+        if fd_codes:
+            result.update(astock.fund_nav(fd_codes))
+        for code in others:
+            try:
+                g = gstock.us_hk_stock(code)
+                if g:
+                    result[code] = _normalize_global_to_quote(g)
+            except Exception:
+                pass
+    except Exception as e:  # noqa: BLE001
         raise HTTPException(502, f"行情源异常：{e}") from e
+    return {"data": result}
 
 
 import time as _time

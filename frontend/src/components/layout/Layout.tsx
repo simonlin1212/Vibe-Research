@@ -9,11 +9,7 @@ import { cn } from "@/lib/utils";
 import { useDarkMode } from "@/hooks/useDarkMode";
 import { storageGet, storageSet } from "@/lib/storage";
 
-// 具名导入：只把 version 打进产物，不会把整个 package.json 塞进 bundle
-import { version as PKG_VERSION } from "../../../package.json";
-
-// 版本号只从 package.json 读，不再各处写死（发 v0.3.0 时三处忘改停在 v0.2.2，#20）
-const APP_VERSION = `v${PKG_VERSION}`;
+const APP_VERSION = "v0.2.2";
 const REPO_URL = "https://github.com/simonlin1212/Vibe-Research";
 // 作者联系方式
 const X_URL = "https://x.com/linsizhen";

@@ -94,6 +94,90 @@ def tencent_quote(codes: list[str]) -> dict[str, dict]:
     return _parse_gtimg(_fetch_gtimg(prefixed))
 
 
+# ---------------------------------------------------------------------------
+# 场外公募基金净值（东财 lsjz）—— 场外基金无盘中行情，只有日级净值
+# ---------------------------------------------------------------------------
+
+def _fund_lsjz(code: str) -> dict | None:
+    """东财历史净值接口取最新一行：单位净值 / 累计净值 / 日增长率 / 净值日期。
+
+    场外基金一天只有一个净值（收盘后由基金公司公布），无盘中实时行情。
+    lsjz 一次只查一个基金代码，受 em_get 全局限流（1 秒/次），多基金串行约 N 秒。
+    lsjz 不返回基金简称，另调 fundsuggest 取名称（合并到同一次返回里）。
+    """
+    url = "https://api.fund.eastmoney.com/f10/lsjz"
+    params = {"fundCode": code, "pageIndex": 1, "pageSize": 1}
+    headers = {"User-Agent": UA, "Referer": "https://fundf10.eastmoney.com/"}
+    try:
+        r = em_get(url, params=params, headers=headers, timeout=10)
+        rows = (r.json().get("Data") or {}).get("LSJZList") or []
+    except Exception:
+        return None
+    if not rows:
+        return None
+    row = rows[0]
+    # 字段：FSRQ=净值日期, DWJZ=单位净值, LJJZ=累计净值, JZZZL=日增长率(%)
+    try:
+        dwjz = float(row.get("DWJZ") or 0)
+    except (TypeError, ValueError):
+        dwjz = 0.0
+    try:
+        jzzzl = float(row.get("JZZZL") or 0)
+    except (TypeError, ValueError):
+        jzzzl = 0.0
+    return {
+        "name": _fund_name(code),
+        "price": dwjz,
+        "last_close": dwjz,  # 场外基金无「昨收」概念，用同一净值填
+        "change_pct": jzzzl,
+        "nav_date": str(row.get("FSRQ") or ""),  # 净值日期
+        "ljjz": row.get("LJJZ") or "",  # 累计净值（字符串，部分基金为空）
+    }
+
+
+def _fund_name(code: str) -> str:
+    """东财基金搜索取基金简称（fundsuggest）。失败返回空串。"""
+    url = "https://fundsuggest.eastmoney.com/FundSearch/api/FundSearchAPI.ashx"
+    params = {"callback": "", "m": 1, "key": code}
+    headers = {"User-Agent": UA, "Referer": "https://fund.eastmoney.com/"}
+    try:
+        r = em_get(url, params=params, headers=headers, timeout=10)
+        datas = r.json().get("Datas") or []
+        if datas:
+            return datas[0].get("NAME") or datas[0].get("SHORTNAME") or ""
+    except Exception:
+        pass
+    return ""
+
+
+def fund_nav(codes: list[str]) -> dict[str, dict]:
+    """场外基金净值（逐个查 lsjz）。返回与 tencent_quote 同形状的 {code: {name, price, ...}}。
+
+    受 em_get 全局限流影响，N 只基金约 N 秒。基金代码数量通常很少（几只），可接受。
+    PE/PB/市值/换手/涨跌停等对基金无意义，填 None / 0，与前端 Quote 类型兼容。
+    """
+    out: dict[str, dict] = {}
+    for c in codes:
+        c = c.strip()
+        if not c:
+            continue
+        v = _fund_lsjz(c)
+        if not v:
+            continue
+        out[c] = {
+            "name": v["name"],
+            "price": v["price"],
+            "last_close": v["last_close"],
+            "change_pct": v["change_pct"],
+            "pe_ttm": None, "pb": None, "mcap_yi": None,
+            "turnover_pct": None, "limit_up": None, "limit_down": None,
+            # 基金特有字段，前端可据此显示「净值日期」而非「现价」
+            "nav_date": v["nav_date"],
+            "ljjz": v["ljjz"],
+        }
+    return out
+
+
 # A股大盘指数（前缀规则与个股不同，固定带前缀代码）
 A_INDICES = ["sh000001", "sz399001", "sz399006", "sh000300"]
 

@@ -17,11 +17,7 @@ import sys
 
 import chat  # 复用 TOOLS 定义 + _exec_tool 执行逻辑（内含 astock）
 
-from version import read_version
-
-# 版本号与 HTTP API / 前端同源（#20）。此处曾是第 4 处硬编码，issue 只列了 3 处，
-# 照着改就会漏掉它——MCP 客户端初始化时拿到的仍是旧版本。
-SERVER_INFO = {"name": "vibe-research", "version": read_version()}
+SERVER_INFO = {"name": "vibe-research", "version": "0.2.2"}
 DEFAULT_PROTOCOL = "2024-11-05"
 
 # 把 chat.TOOLS（OpenAI 格式）转成 MCP 的 {name, description, inputSchema}
@@ -33,26 +29,6 @@ MCP_TOOLS = [
     }
     for t in chat.TOOLS
 ]
-
-
-def _force_utf8_stdio() -> None:
-    """把 stdio 钉死成 UTF-8。
-
-    Windows 上 Python 的 stdio 默认编码是 GBK(cp936)，而 JSON-RPC 响应里带
-    `ensure_ascii=False` 的中文、RSS 正文里的 `\xa0`（不换行空格）等字符 GBK 编不出来
-    —— 整条响应写不出去，客户端表现为工具调用失败 + 反复重连；即便不崩，中文也会被
-    客户端按 UTF-8 解 GBK 字节，全是乱码（#27）。
-
-    MCP 协议本身要求 UTF-8，所以这里直接重配而不是退让成 ensure_ascii=True
-    （后者能防崩，但会把中文全部变成 Unicode 转义序列，体积翻几倍）。
-    """
-    for stream in (sys.stdin, sys.stdout, sys.stderr):
-        try:
-            stream.reconfigure(encoding="utf-8", errors="replace")
-        except (AttributeError, ValueError):
-            # 极老的 Python 或被替换过的流：没有 reconfigure 就跳过，
-            # 至少不要因为这一步把服务弄挂。
-            pass
 
 
 def _send(obj: dict) -> None:
@@ -111,8 +87,6 @@ def _handle(msg: dict) -> None:
 
 
 def main() -> None:
-    # 必须在读写任何协议内容之前重配编码（#27）
-    _force_utf8_stdio()
     for line in sys.stdin:
         line = line.strip()
         if not line:

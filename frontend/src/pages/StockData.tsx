@@ -1,4 +1,5 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Search, FileText, Newspaper, Loader2, AlertCircle, LineChart, BarChart3, Megaphone,
   Wallet, Trophy, CalendarClock, Boxes, MessageSquare,
@@ -78,6 +79,7 @@ function ValBand({ label, m }: { label: string; m: ValMetric }) {
 }
 
 export function StockData() {
+  const [searchParams] = useSearchParams();
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -102,9 +104,22 @@ export function StockData() {
   const [gstock, setGStock] = useState<GlobalStock | null>(null);  // 美股 / 港股
   const [cashflow, setCashflow] = useState<HkCashflow | null>(null);  // 港股现金流量表（仅港股）
   const runIdRef = useRef(0);
+  // URL ?code= 自动运行：用 ref 防 StrictMode 双触发，避免同一代码连发两次请求
+  const autoRanRef = useRef(false);
 
-  const run = async () => {
-    const c = code.trim().toUpperCase();
+  // 持仓页快捷跳转：URL 带 ?code= 时填入输入框并立即查询
+  useEffect(() => {
+    if (autoRanRef.current) return;
+    const c = (searchParams.get("code") || "").trim();
+    if (!c) return;
+    autoRanRef.current = true;
+    setCode(c);
+    void runWith(c.toUpperCase());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  const runWith = async (raw: string) => {
+    const c = raw.trim().toUpperCase();
     if (!c) { setErr("请输入代码"); return; }
     const rid = ++runIdRef.current;
     setLoading(true); setErr(null); setDepNote(null); setVal(null); setReports([]); setNews([]); setPctl(null); setFin(null); setAnns([]);
@@ -166,6 +181,8 @@ export function StockData() {
       if (rid === runIdRef.current) setLoading(false);
     }
   };
+
+  const run = () => { void runWith(code); };
 
   const metrics = val ? [
     { k: "现价", v: fmt(val.price) },

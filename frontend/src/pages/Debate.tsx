@@ -1,4 +1,5 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Swords, Play, Square, Save, CheckCircle2, Circle, AlertTriangle } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -29,6 +30,7 @@ const STAGE_TONE: Record<DebateStage, string> = {
 const DOSSIER_HINT = "多空双方拿到的是同一份接口实时拉取的数据，谁也不能靠编数字赢。";
 
 export function Debate() {
+  const [searchParams] = useSearchParams();
   const [code, setCode] = useState("");
   const [rounds, setRounds] = useState(1);
   const [running, setRunning] = useState(false);
@@ -40,13 +42,19 @@ export function Debate() {
   const [saved, setSaved] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
+  // 持仓页快捷跳转：URL 带 ?code= 时仅填入输入框，不自动开始（辩论开销大，让用户确认后再点）
+  useEffect(() => {
+    const c = (searchParams.get("code") || "").trim();
+    if (c) setCode(c);
+  }, [searchParams]);
+
   const reset = () => {
     setStatus(""); setProgress([]); setMissing([]); setStages([]); setError(""); setSaved(false);
   };
 
   async function start() {
     const c = code.trim();
-    if (!/^\d{6}$/.test(c)) { setError("请输入 6 位 A 股代码"); return; }
+    if (!/^\d{6}$/.test(c)) { setError("多空辩论暂仅支持 6 位 A 股代码"); return; }
     reset();
     setRunning(true);
     const ctrl = new AbortController();
@@ -103,9 +111,9 @@ export function Debate() {
             <label className="mb-1 block text-xs text-muted-foreground">股票代码</label>
             <input
               value={code}
-              onChange={(e) => setCode(e.target.value.replace(/[^\d]/g, "").slice(0, 6))}
+              onChange={(e) => setCode(e.target.value.replace(/[^a-zA-Z0-9]/g, "").toUpperCase().slice(0, 10))}
               onKeyDown={(e) => { if (e.key === "Enter" && !running) start(); }}
-              placeholder="6 位代码，如 600519"
+              placeholder="6 位 A 股代码，如 600519"
               disabled={running}
               className="w-44 rounded-lg border border-border/60 bg-background/60 px-3 py-2 font-mono text-sm outline-none focus:border-primary/60"
             />
@@ -189,7 +197,7 @@ export function Debate() {
               <span className="text-sm font-semibold">{s.label}</span>
               {!s.done && <span className="animate-pulse text-[11px] text-muted-foreground">生成中…</span>}
             </div>
-            <div className="prose prose-sm dark:prose-invert max-w-none text-foreground prose-table:text-sm">
+            <div className="prose prose-sm prose-invert max-w-none text-foreground prose-table:text-sm">
               <ReactMarkdown remarkPlugins={[remarkGfm]}>{s.content || "…"}</ReactMarkdown>
             </div>
           </div>

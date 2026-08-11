@@ -12,6 +12,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type Quote } from "@/lib/api";
+import type { WatchItem } from "@/lib/watchlist";
 
 export const LIVE_INTERVAL_MS = 3000;   // A 股 level-1 快照粒度
 const MAX_BACKOFF_MS = 30_000;
@@ -52,16 +53,16 @@ export interface LiveQuotesState {
   refresh: () => void;
 }
 
-export function useLiveQuotes(codes: string[], enabled: boolean): LiveQuotesState {
+export function useLiveQuotes(items: WatchItem[], enabled: boolean): LiveQuotesState {
   const [quotes, setQuotes] = useState<Record<string, Quote>>({});
   const [loading, setLoading] = useState(false);
   const [updatedAt, setUpdatedAt] = useState<number | null>(null);
   const [polling, setPolling] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // 用 ref 存最新的 codes，让轮询循环不必因为 codes 变化而重建
-  const codesRef = useRef(codes);
-  codesRef.current = codes;
+  // 用 ref 存最新的 codes（格式化为 market:code），让轮询循环不必因为 items 变化而重建
+  const codesRef = useRef<string[]>([]);
+  codesRef.current = items.map((x) => `${x.market}:${x.code}`);
 
   const failuresRef = useRef(0);
   const inFlightRef = useRef(false);
@@ -117,7 +118,7 @@ export function useLiveQuotes(codes: string[], enabled: boolean): LiveQuotesStat
   // 首次进入 / 自选变化：立即拉一次（与开关无关，页面总要有数据）
   useEffect(() => {
     void fetchOnce();
-  }, [codes, fetchOnce]);
+  }, [items, fetchOnce]);
 
   // 轮询循环
   useEffect(() => {

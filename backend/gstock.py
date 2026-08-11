@@ -31,8 +31,10 @@ _INDICES = (
 )
 
 # 搜索返回的 MktNum → (secucode 后缀, 市场名)
-_MKT = {105: (".O", "NASDAQ"), 106: (".N", "NYSE"), 107: (".O", "US"), 116: (".HK", "HK"),
-        177: (".KS", "KR")}  # 177=韩股（Kospi/Kosdaq，含三星/SK海力士等半导体龙头）；东财仅行情、无 F10 财务
+_MKT = {0: ("", "A"), 1: ("", "A"),                  # 深A / 沪A（secucode 无后缀，6 位裸代码）
+        105: (".O", "US"), 106: (".N", "US"), 107: (".O", "US"), 116: (".HK", "HK"),
+        177: (".KS", "KR"),  # 177=韩股（Kospi/Kosdaq，含三星/SK海力士等半导体龙头）；东财仅行情、无 F10 财务
+        150: ("", "FD")}  # 150=场外公募基金（OTCFUND）；与 A 股同为 6 位数字代码，需按 MktNum 区分
 
 _QUOTE_FIELDS = "f43,f44,f45,f46,f48,f57,f58,f59,f60,f116,f170"
 
@@ -93,21 +95,6 @@ def global_indices() -> list[dict]:
     return out
 
 
-class SearchUnavailable(RuntimeError):
-    """证券搜索接口不可用（网络 / 风控 / 返回体变形）。
-
-    ⚠️ 与「查无此代码」严格区分：前者是基础设施问题、重试可能就好，后者是用户输错了。
-    压成同一个 None 会让用户对着"未找到对应美股/港股/韩股代码"完全无从下手（#26）。
-    """
-
-
-# 主端点 + 备用端点。单一端点被风控/变更就让整块功能瘫痪，代价太大。
-_SEARCH_ENDPOINTS = (
-    "https://searchapi.eastmoney.com/api/suggest/get",
-    "https://searchadapter.eastmoney.com/api/suggest/get",
-)
-
-
 def _search(q: str) -> dict | None:
     """东财搜索一次：市场过滤 + **精确代码匹配优先**，退而取第一条。
 
@@ -115,49 +102,14 @@ def _search(q: str) -> dict | None:
     搜 BABA 混入 05593(窝轮)，且 SecurityType 分不开(正股与 ETF 同为 Type7、正股港股与窝轮同为 Type6)。
     正股的 Code 恰好等于查询词，故精确匹配 Code==q 最稳；无精确匹配(名称查询)才退回第一条。
     """
+    url = "https://searchapi.eastmoney.com/api/suggest/get"
     params = {"input": q, "type": 14,
               "token": "D43BF722C8E33BDC906FB84D85E326E8", "count": 10}
-
-    rows, last_error = None, None
-    for url in _SEARCH_ENDPOINTS:
-        try:
-            r = astock.em_get(url, params=params, headers=_UA_H, timeout=10)
-            status = getattr(r, "status_code", 200)
-            if status >= 400:
-                # em_get 不会 raise_for_status，HTTP 错误页照样能 .json() 成功
-                raise RuntimeError(f"HTTP {status}")
-            payload = r.json()
-        except Exception as e:  # noqa: BLE001 — 网络/HTTP/JSON 解析都可能
-            last_error = f"{url} → {type(e).__name__}: {str(e)[:80]}"
-            continue
-
-        # 🔴 必须校验响应结构再决定收手。少了这一步，主端点返回「合法 JSON 但没有
-        # QuotationCodeTable」（错误响应 / 接口改版 / 风控页）时会被当成"查得到但
-        # 没有匹配"，直接 break —— 备用端点根本轮不上，调用方拿到的还是"未找到"。
-        # 而这恰恰就是 #26 报告者描述的情形，不校验的话这次修复对他完全无效。
-        # payload 本身也可能不是对象（`null` / 数组），直接 .get() 会抛 AttributeError
-        # 而不是切到备用端点；Data 也可能不是列表，那样会在下面遍历时才炸。
-        # 校验要一路做到能安全使用为止，否则"换下一个端点"这条路等于没铺。
-        table = payload.get("QuotationCodeTable") if isinstance(payload, dict) else None
-        data = table.get("Data") if isinstance(table, dict) else None
-        if not isinstance(data, list):
-            last_error = (
-                f"{url} → 响应结构异常（缺少 QuotationCodeTable.Data 或类型不对）"
-                f"，可能是接口改版或被风控页拦截"
-            )
-            continue
-
-        rows = data   # 结构正常但为空 = 真的没匹配到
-        break
-
-    if rows is None:
-        # 🔴 全部端点都请求失败 ≠ 查无此票。以前这里 `except: return None`，
-        # 两种情况被压成同一个"未找到"，用户只能自己逆向排查到底哪一步坏了（#26）。
-        raise SearchUnavailable(
-            f"证券搜索接口暂时不可用（已尝试 {len(_SEARCH_ENDPOINTS)} 个端点）。"
-            f"最后一个错误：{last_error}。"
-            f"这与「查无此代码」是两回事——请检查网络 / 代理，或稍后重试。"
-        )
+    try:
+        r = astock.em_get(url, params=params, headers=_UA_H, timeout=10)
+        rows = (r.json().get("QuotationCodeTable") or {}).get("Data") or []
+    except Exception:
+        return None
     matches = []
     for s in rows:
         try:
@@ -176,7 +128,7 @@ def _search(q: str) -> dict | None:
 
 
 def resolve_symbol(query: str) -> dict | None:
-    """代码/名称 → {code, name, secid_prefix, secucode, market}。认美股/港股/韩股。
+    """代码/名称 → {code, name, secid_prefix, secucode, market}。认 A 股/美股/港股/韩股。
     数字型港股短代码（如 `700`）补零到 5 位再试一次（东财按 `00700` 收）。
     韩股用国际后缀 `.KS`/`.KQ`/`.KR`（如三星 `005930.KS`）——韩股代码与 A 股同为 6 位数字，
     需显式后缀区分，否则前端会按 A 股处理、后端也搜不到韩股。"""
@@ -191,6 +143,57 @@ def resolve_symbol(query: str) -> dict | None:
     if hit is None and q.isdigit() and len(q) < 5:
         hit = _search(q.zfill(5))
     return hit
+
+
+def search_suggestions(query: str) -> list[dict]:
+    """东财搜索 → 候选列表 [{code, name, market}]，过滤到 A/HK/US/KR/FD 市场。
+
+    不再对 6 位数字直通 A 股：场外基金也是 6 位数字（MktNum=150），必须走东财搜索
+    才能按 MktNum 区分 A 股 / 场外基金。A 股代码搜索响应同样很快，省这一次请求
+    不值得把场外基金误判成 A 股。
+    """
+    q = query.strip().upper()
+    if not q:
+        return []
+    url = "https://searchapi.eastmoney.com/api/suggest/get"
+    params = {"input": q, "type": 14,
+              "token": "D43BF722C8E33BDC906FB84D85E326E8", "count": 10}
+    try:
+        r = astock.em_get(url, params=params, headers=_UA_H, timeout=10)
+        rows = (r.json().get("QuotationCodeTable") or {}).get("Data") or []
+    except Exception:
+        return []
+    out, seen = [], set()
+    for s in rows:
+        try:
+            mkt = int(s.get("MktNum"))
+        except (TypeError, ValueError):
+            continue
+        if mkt not in _MKT:
+            continue
+        code = s.get("Code", "")
+        market = _MKT[mkt][1]
+        key = (code, market)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append({"code": code, "name": s.get("Name", ""), "market": market})
+    return out[:8]  # 最多 8 条，下拉够用
+
+
+def resolve_for_portfolio(query: str) -> dict | None:
+    """输入 → {code, name, market}，取搜索第一条。
+
+    供后端 add_holding/close_position 的 fallback（用户直接输入未走下拉选中时）。
+    不再对 6 位数字直通 A 股：场外基金同为 6 位数字，需走东财搜索按 MktNum 判定。
+    """
+    q = query.strip().upper()
+    if not q:
+        return None
+    hits = search_suggestions(q)
+    if not hits:
+        return None
+    return hits[0]
 
 
 def _key_metrics(secucode: str) -> dict | None:
@@ -217,9 +220,12 @@ def _key_metrics(secucode: str) -> dict | None:
 
 
 def us_hk_stock(query: str) -> dict:
-    """个股聚合（美/港）：解析代码 → 行情 + 关键财务指标。查不到返回 {}。"""
+    """个股聚合（美/港）：解析代码 → 行情 + 关键财务指标。查不到返回 {}。
+
+    场外基金（market=="FD"）走单独的净值接口（astock.fund_nav），不进这里。
+    """
     info = resolve_symbol(query)
-    if not info:
+    if not info or info.get("market") == "FD":
         return {}
     d = _push2_stock_get(f"{info['secid_prefix']}.{info['code']}", _QUOTE_FIELDS)
     quote = _quote_from(d or {})  # 行情临时取不到也返回完整 null 形状，契合 GlobalQuote 类型

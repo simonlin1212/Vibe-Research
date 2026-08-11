@@ -4,14 +4,18 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Disclaimer } from "@/components/ui/Disclaimer";
 import { AskAiButton } from "@/components/ui/AskAiButton";
-import { loadWatch, saveWatch, addCodes } from "@/lib/watchlist";
+import { StockSearchInput } from "@/components/ui/StockSearchInput";
+import { loadWatch, saveWatch, type WatchItem } from "@/lib/watchlist";
 import { useLiveQuotes, isTradingHours } from "@/hooks/useLiveQuotes";
+import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 // A 股红涨绿跌（与整个看板一致）。
 const color = (v: number | undefined) =>
   v == null ? "text-muted-foreground" : v > 0 ? "text-danger" : v < 0 ? "text-success" : "text-muted-foreground";
 const pct = (v: number | undefined) => (v == null ? "—" : `${v > 0 ? "+" : ""}${v}%`);
+
+const MKT_LABEL: Record<string, string> = { A: "A股", HK: "港股", US: "美股", KR: "韩股", FD: "场外基金" };
 
 const LIVE_KEY = "vr-watchlist-live";
 
@@ -33,13 +37,13 @@ const saveLive = (on: boolean) => {
 };
 
 export function Watchlist() {
-  const [codes, setCodes] = useState<string[]>(loadWatch);
+  const [items, setItems] = useState<WatchItem[]>(loadWatch);
   const [input, setInput] = useState("");
   const [hint, setHint] = useState<string | null>(null);
   // 实时行情默认**关闭**——开着会持续请求，让用户自己决定要不要开。
   const [live, setLive] = useState(loadLive);
 
-  const { quotes, loading, updatedAt, polling, error, refresh } = useLiveQuotes(codes, live);
+  const { quotes, loading, updatedAt, polling, error, refresh } = useLiveQuotes(items, live);
 
   const toggleLive = () => {
     setLive((on) => {
@@ -49,34 +53,49 @@ export function Watchlist() {
     });
   };
 
-  const add = () => {
-    const { next, added } = addCodes(codes, input);
-    if (added === 0) {
-      setHint(input.trim() ? "没识别到新的 6 位代码（可能已在自选里）" : null);
+  // 下拉选中 → 直接加入自选（去重：同 code+market 不重复加）
+  const onSelect = (s: { code: string; market: string; name?: string }) => {
+    if (items.some((x) => x.code === s.code && x.market === s.market)) {
+      setHint("已在自选里");
       setInput("");
       return;
     }
-    setCodes(next); saveWatch(next); setInput(""); setHint(`已添加 ${added} 只`);
+    const next = [...items, { code: s.code, market: s.market }];
+    setItems(next); saveWatch(next); setInput(""); setHint(`已添加 ${s.code}`);
   };
-  const remove = (c: string) => {
-    const next = codes.filter((x) => x !== c);
-    setCodes(next); saveWatch(next);
+
+  // 手动添加 fallback：直接输入代码回车 → 调搜索取第一条
+  const add = async () => {
+    const q = input.trim();
+    if (!q) return;
+    try {
+      const results = await api.search(q);
+      if (results.length === 0) { setHint("未找到该股票"); return; }
+      onSelect(results[0]);
+    } catch {
+      setHint("搜索失败");
+    }
+  };
+
+  const remove = (code: string, market: string) => {
+    const next = items.filter((x) => !(x.code === code && x.market === market));
+    setItems(next); saveWatch(next);
   };
 
   const aiContext = useMemo(
     () =>
-      codes.length
+      items.length
         ? "我的自选股（本地）：\n" +
-          codes
-            .map((c) => {
-              const q = quotes[c];
+          items
+            .map((it) => {
+              const q = quotes[it.code];
               return q
-                ? `${q.name}(${c}) 现价${q.price} ${pct(q.change_pct)} PE(TTM)${q.pe_ttm ?? "—"} 换手${q.turnover_pct ?? "—"}%`
-                : `${c}（行情未取到）`;
+                ? `${q.name}(${it.code}) 现价${q.price} ${pct(q.change_pct)} PE(TTM)${q.pe_ttm ?? "—"} 换手${q.turnover_pct ?? "—"}%`
+                : `${it.code}（行情未取到）`;
             })
             .join("\n")
         : "还没有自选股。",
-    [codes, quotes],
+    [items, quotes],
   );
 
   return (
@@ -109,7 +128,7 @@ export function Watchlist() {
               </span>
               实时行情
             </button>
-            {codes.length > 0 && (
+            {items.length > 0 && (
               <AskAiButton
                 context={aiContext}
                 label="让 AI 读自选"
@@ -120,20 +139,17 @@ export function Watchlist() {
         }
       />
 
-      <GlassCard className="mb-4">
+      <GlassCard className="relative z-20 mb-4">
         <label className="mb-1.5 block text-xs text-muted-foreground">
-          批量添加 —— 粘贴一串代码即可（逗号 / 空格 / 换行都行，自动识别 6 位 A 股代码）
+          添加自选 —— 输入代码 / 拼音首字母 / 中文名，从下拉选中即可（支持 A 股 / 港股 / 美股）
         </label>
         <div className="flex gap-2">
-          <textarea
+          <StockSearchInput
             value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) add();
-            }}
-            rows={2}
-            placeholder={"如：600519 000858, 002463\n300750 688017"}
-            className="flex-1 resize-y rounded-lg border border-border bg-black/20 px-3 py-2 text-sm outline-none focus:border-primary/50"
+            onChange={setInput}
+            onSelect={onSelect}
+            placeholder="代码 / 拼音 / 中文，如 gzmt / AAPL / 腾讯"
+            className="flex-1 rounded-lg border border-border bg-black/20 px-3 py-2 text-sm outline-none focus:border-primary/50"
           />
           <button
             onClick={add}
@@ -149,7 +165,7 @@ export function Watchlist() {
         <div className="mb-2 flex items-center justify-between">
           <h3 className="flex items-center gap-1.5 font-semibold">
             <Star className="h-4 w-4 text-primary" /> 自选总览
-            <span className="text-xs font-normal text-muted-foreground">（{codes.length}）</span>
+            <span className="text-xs font-normal text-muted-foreground">（{items.length}）</span>
           </h3>
           <div className="flex items-center gap-2 text-[11px] text-muted-foreground/70">
             {error ? (
@@ -157,7 +173,7 @@ export function Watchlist() {
             ) : (
               <>
                 {/* 把「开着却没在刷」的原因说清楚，否则用户会以为坏了 */}
-                {live && !polling && codes.length > 0 && (
+                {live && !polling && items.length > 0 && (
                   <span>{isTradingHours() ? "已暂停（页面未激活）" : "非交易时段 · 已暂停"}</span>
                 )}
                 {polling && <span className="text-primary/80">实时 · 每 3 秒</span>}
@@ -178,9 +194,9 @@ export function Watchlist() {
             </button>
           </div>
         </div>
-        {codes.length === 0 ? (
+        {items.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground/60">
-            还没有自选股，用上面的框粘贴一串代码批量添加。
+            还没有自选股，用上面的搜索框添加（支持 A 股 / 港股 / 美股）。
           </p>
         ) : (
           <div className="overflow-x-auto">
@@ -195,12 +211,17 @@ export function Watchlist() {
                 </tr>
               </thead>
               <tbody>
-                {codes.map((c) => {
-                  const q = quotes[c];
+                {items.map((it) => {
+                  const q = quotes[it.code];
                   return (
-                    <tr key={c} className="border-b border-border/30">
-                      <td className="px-2 py-2.5 font-medium">{q?.name || "—"}</td>
-                      <td className="px-2 py-2.5 font-mono text-xs text-muted-foreground">{c}</td>
+                    <tr key={`${it.market}:${it.code}`} className="border-b border-border/30">
+                      <td className="px-2 py-2.5">
+                        <span className="font-medium">{q?.name || "—"}</span>
+                        {it.market && it.market !== "A" && (
+                          <span className="ml-1.5 rounded bg-primary/10 px-1 py-0.5 text-[10px] text-primary">{MKT_LABEL[it.market] || it.market}</span>
+                        )}
+                      </td>
+                      <td className="px-2 py-2.5 font-mono text-xs text-muted-foreground">{it.code}</td>
                       <td className={cn("px-2 py-2.5 font-mono", color(q?.change_pct))}>{q ? q.price : "—"}</td>
                       <td className={cn("px-2 py-2.5 font-mono", color(q?.change_pct))}>{q ? pct(q.change_pct) : "—"}</td>
                       <td className="px-2 py-2.5 font-mono text-muted-foreground">{q?.pe_ttm ?? "—"}</td>
@@ -208,7 +229,7 @@ export function Watchlist() {
                       <td className="px-2 py-2.5 font-mono text-muted-foreground">{q?.turnover_pct ?? "—"}</td>
                       <td className="px-2 py-2.5">
                         <button
-                          onClick={() => remove(c)}
+                          onClick={() => remove(it.code, it.market)}
                           className="text-muted-foreground/50 hover:text-destructive"
                           title="移除"
                         >

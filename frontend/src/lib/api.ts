@@ -176,16 +176,19 @@ export interface RadarData {
 }
 
 export interface Holding {
-  code: string; name: string; price: number; shares: number; cost: number;
+  code: string; market: string; name: string; price: number; shares: number; cost: number;
   market_value: number; pnl: number; pnl_pct: number;
 }
 export interface ClosedPosition {
-  code: string; name: string; date: string; price: number; shares: number; cost: number;
+  code: string; market: string; name: string; date: string; price: number; shares: number; cost: number;
   pnl: number; pnl_pct: number;
+}
+export interface MarketTotal {
+  market: string; market_value: number; cost: number; pnl: number; pnl_pct: number;
 }
 export interface PortfolioData {
   holdings: Holding[];
-  totals: { market_value: number; cost: number; pnl: number; pnl_pct: number };
+  totals: MarketTotal[];
   closed: ClosedPosition[];
   realized_pnl: number;
   updated: string; last_refresh: string | null;
@@ -243,6 +246,15 @@ export interface HkCashflow {
   currency: string | null; item_order: string[]; periods: HkCashflowPeriod[];
 }
 
+export interface SearchSuggestion {
+  code: string; name: string; market: string;
+}
+
+// 轻量持仓项（add/remove 写盘确认返回，不含行情）
+export interface HoldingBase {
+  code: string; market: string; shares: number; cost: number;
+}
+
 export const api = {
   health: () => get<{ ok: boolean }>("/health"),
   indices: () => get<IndexQuote[]>("/indices"),
@@ -254,18 +266,20 @@ export const api = {
   hkCashflow: (symbol: string) => get<HkCashflow>(`/global/hk/cashflow?symbol=${encodeURIComponent(symbol)}`),
   radar: () => get<RadarData>("/radar"),
   radarRefresh: () => request<RadarData>("/radar/refresh", "POST"),
+  search: (q: string) => get<SearchSuggestion[]>(`/search?q=${encodeURIComponent(q)}`),
   portfolio: () => get<PortfolioData>("/portfolio"),
-  addHolding: (code: string, shares: number, cost: number) => request<PortfolioData>("/portfolio/holding", "POST", { code, shares, cost }),
-  removeHolding: (code: string) => request<PortfolioData>(`/portfolio/holding?code=${code}`, "DELETE"),
+  addHolding: (code: string, shares: number, cost: number, market?: string) =>
+    request<HoldingBase[]>("/portfolio/holding", "POST", { code, shares, cost, market: market || "" }),
+  removeHolding: (code: string) => request<HoldingBase[]>(`/portfolio/holding?code=${encodeURIComponent(code)}`, "DELETE"),
   refreshPortfolio: () => request<PortfolioData>("/portfolio/refresh", "POST"),
-  closePosition: (code: string, date: string, price: number, shares: number, cost: number) =>
-    request<PortfolioData>("/portfolio/close", "POST", { code, date, price, shares, cost }),
+  closePosition: (code: string, date: string, price: number, shares: number, cost: number, market?: string) =>
+    request<PortfolioData>("/portfolio/close", "POST", { code, date, price, shares, cost, market: market || "" }),
   removeClosed: (index: number) => request<PortfolioData>(`/portfolio/close?index=${index}`, "DELETE"),
   valuation: (code: string) => get<Valuation>(`/valuation?code=${code}`),
   percentile: (code: string) => get<ValPercentile>(`/valuation/percentile?code=${code}`),
   financials: (code: string) => get<Financials>(`/financials?code=${code}`),
   announcements: (code: string) => get<Announcement[]>(`/announcements?code=${code}`),
-  quote: (codes: string) => get<Record<string, Quote>>(`/quote?codes=${codes}`),
+  quote: (codes: string) => get<Record<string, Quote>>(`/quote?codes=${encodeURIComponent(codes)}`),
   reports: (code: string) => get<Report[]>(`/reports?code=${code}`),
   news: (code: string) => get<NewsItem[]>(`/news?code=${code}`),
   margin: (code: string) => get<MarginRow[]>(`/margin?code=${code}`),

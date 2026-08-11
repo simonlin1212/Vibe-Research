@@ -12,6 +12,9 @@ import { loadWatch } from "@/lib/watchlist";
 import { hasLlm, chatStream } from "@/lib/llm";
 import { cn } from "@/lib/utils";
 
+// 公告 / 新闻端点仅支持 A 股。从自选（含港美股）中取 A 股代码。
+const aShareCodes = () => loadWatch().filter((x) => x.market === "A").map((x) => x.code);
+
 const TABS = [
   { key: "events", label: "事件概率", icon: TrendingUp, integrated: false, desc: "全球宏观预期概率（公开数据、免登录只读），后续接入" },
   { key: "filings", label: "A股公告", icon: FileText, integrated: false, desc: "汇总关注列表里各个股的近期公告（东财公开披露）" },
@@ -141,7 +144,7 @@ function InvestmentNewsPanel() {
                   <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" /> AI 正在读这个赛道的资讯…</p>
                 ) : dg?.text ? (
                   <>
-                    <div className="prose prose-sm dark:prose-invert max-w-none text-foreground"><ReactMarkdown remarkPlugins={[remarkGfm]}>{dg.text}</ReactMarkdown></div>
+                    <div className="prose prose-sm prose-invert max-w-none text-foreground"><ReactMarkdown remarkPlugins={[remarkGfm]}>{dg.text}</ReactMarkdown></div>
                     <div className="mt-2"><SaveNoteButton kind="今日要点" title={`${cur.name} 今日要点`} content={dg.text} /></div>
                   </>
                 ) : dg?.needKey ? (
@@ -186,7 +189,7 @@ interface FeedRow { code: string; name: string; when: string; title: string; met
 const MAX_ROWS = 60;
 
 function WatchlistFeed({ kind }: { kind: "filings" | "news" }) {
-  const [codes, setCodes] = useState<string[]>(loadWatch);
+  const [codes, setCodes] = useState<string[]>(aShareCodes);
   const [rows, setRows] = useState<FeedRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -242,14 +245,14 @@ function WatchlistFeed({ kind }: { kind: "filings" | "news" }) {
     }
   }, [kind]);
 
-  useEffect(() => { const cs = loadWatch(); setCodes(cs); load(cs); }, [load]);
+  useEffect(() => { const cs = aShareCodes(); setCodes(cs); load(cs); }, [load]);
 
-  const refresh = () => { const cs = loadWatch(); setCodes(cs); load(cs); };
+  const refresh = () => { const cs = aShareCodes(); setCodes(cs); load(cs); };
 
   if (!codes.length) {
     return (
       <div className="rounded-lg border border-dashed border-border/70 p-8 text-center text-sm text-muted-foreground/70">
-        还没有关注股票。到<Link to="/daily-review" className="text-primary">「每日复盘」</Link>加自选（6 位代码），这里会汇总它们的{kind === "filings" ? "公告" : "新闻"}。
+        还没有关注股票。到<Link to="/watchlist" className="text-primary">「自选股」</Link>加自选，这里会汇总它们的{kind === "filings" ? "公告" : "新闻"}（公告 / 新闻仅支持 A 股）。
       </div>
     );
   }

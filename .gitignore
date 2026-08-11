@@ -35,3 +35,4 @@ frontend/tsconfig.tsbuildinfo
 *.log
 .vscode/
 .idea/
+backend/venv/*

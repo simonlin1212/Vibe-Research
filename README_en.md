@@ -212,10 +212,6 @@ cd backend && .venv/bin/pip install -r requirements-dev.txt
 .venv/bin/pytest -m live         # verifies live data source shapes (run before releases)
 ```
 
-## Changelog
-
-See [CHANGELOG.md](./CHANGELOG.md). The single source of truth for the version is `frontend/package.json`; the backend API, the UI and the MCP `serverInfo` all read from it.
-
 ## Compliance
 
 - Objective data aggregation and public-ranking display only: **no stock recommendations, no price predictions, no trade timing, no return promises, no subjective scoring.** Neutral by design.
