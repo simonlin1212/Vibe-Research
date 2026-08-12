@@ -1,0 +1,38 @@
+# Vibe-Research Docker Compose 配置
+# 本地部署方式：docker compose up -d
+#
+# 访问地址：
+#   前端: http://localhost:5899
+#   后端: http://localhost:5899/api
+#
+# 数据持久化：
+#   用户数据（持仓、研报）存储在 vibe-data 卷中
+#   对应容器内路径 /data，即 ~/.vibe-research
+
+services:
+  vibe-research:
+    image: ghcr.io/birdxs/vibe-research:latest
+    container_name: vibe-research
+    restart: unless-stopped
+    ports:
+      - "5899:80"
+    environment:
+      # CORS 白名单（默认 * 放开，公网部署请改成你的域名）
+      - VR_ALLOW_ORIGINS=*
+      # API 鉴权 key（公网部署务必设置，否则任何人都能访问你的后端）
+      # - VR_API_KEY=your-secret-key-here
+      # 数据目录（容器内，映射到命名卷 vibe-data）
+      - VR_DATA_DIR=/data
+    volumes:
+      # 用户数据持久化（持仓 portfolio.json、研报 myreports/）
+      - vibe-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  vibe-data:
+    driver: local

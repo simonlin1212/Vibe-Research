@@ -1,0 +1,57 @@
+# Docker 构建忽略文件
+
+# Git
+.git
+.gitignore
+.github
+
+# Docker
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# 文档
+*.md
+LICENSE
+docs/
+
+# 前端
+frontend/node_modules
+frontend/.vite
+frontend/dist
+frontend/coverage
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv
+venv/
+ENV/
+env/
+*.egg-info
+.pytest_cache
+.mypy_cache
+
+# 测试
+tests/
+backend/tests/
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# 数据目录（用户数据不应进镜像）
+.cache/
+.vibe-research/
+*.json.bak
+
+# 杂项
+*.log
+*.tmp
+.DS_Store
+Thumbs.db

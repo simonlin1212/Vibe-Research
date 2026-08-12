@@ -1,0 +1,9 @@
+# 自动检测文本文件，行尾默认 LF
+* text=auto eol=lf
+
+# Shell 脚本在 Docker Linux 容器中必须保持 LF
+*.sh text eol=lf
+
+# Windows 批处理文件保持 CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
