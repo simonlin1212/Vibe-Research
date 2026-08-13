@@ -11,7 +11,7 @@
 
 services:
   vibe-research:
-    image: ghcr.io/birdxs/vibe-research:latest
+    image: ${GHCR_IMAGE:-ghcr.io/your-username/vibe-research:latest}
     container_name: vibe-research
     restart: unless-stopped
     ports:

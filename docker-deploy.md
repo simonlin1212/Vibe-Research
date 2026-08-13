@@ -34,8 +34,11 @@
 ### 快速启动
 
 ```bash
+# 设置镜像地址（替换为你自己的 ghcr 路径，或使用本地构建的镜像）
+export GHCR_IMAGE=ghcr.io/your-username/vibe-research:latest
+
 # 拉取最新镜像
-docker pull ghcr.io/birdxs/vibe-research:latest
+docker pull ${GHCR_IMAGE}
 
 # 启动
 docker compose up -d
@@ -73,15 +76,14 @@ docker run -d \
   -p 5899:80 \
   -v vibe-data:/data \
   -e VR_ALLOW_ORIGINS="*" \
-  ghcr.io/birdxs/vibe-research:latest
+  ghcr.io/your-username/vibe-research:latest
 ```
 
 ## GitHub Actions 自动构建
 
 ### 触发条件
 
-- 推送到 `main` / `master` 分支 → 构建并推送 `latest`
-- 推送 `v*` 标签（如 `v0.3.1`）→ 推送对应版本号
+手动触发（`workflow_dispatch`），可指定标签。
 
 ### 配置 Secrets
 
@@ -98,7 +100,7 @@ docker run -d \
 
 构建完成后，镜像同时推送至：
 
-- `ghcr.io/birdxs/vibe-research:latest`
+- `ghcr.io/<your-username>/vibe-research:latest`
 - `docker.io/<username>/vibe-research:latest`
 
 ### 手动触发
