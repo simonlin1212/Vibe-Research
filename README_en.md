@@ -153,6 +153,44 @@ cd frontend && npm install && npm run dev
 # Open http://localhost:5899
 ```
 
+### Docker (start the whole app with one command)
+
+No Python / Node setup needed — just Docker. **Pick one of two ways:**
+
+**① Copy-and-run deployment (no clone, no build)** — if you have Docker, copy this one file [`compose.deploy.yaml`](compose.deploy.yaml) to any directory:
+
+```bash
+docker compose up -d
+# Open http://localhost:5899
+```
+
+> Prerequisite: images must be published (see "One-click image publishing" below). Want to try it yourself first? Replace `simonlin1212` in the image addresses with your GitHub username and run the publish workflow in your own repo.
+
+**② Build locally (development / running latest source)** — clone the repo and build the images:
+
+```bash
+git clone https://github.com/simonlin1212/Vibe-Research && cd Vibe-Research
+docker compose up -d --build
+# Open http://localhost:5899
+```
+
+Notes:
+
+- **Two compose files**: `compose.yaml` is the default in the repo root — the **development** one (`build:` local build, used by option ②). `compose.deploy.yaml` is the **deployment** one (`image:` pulls ready-made GHCR images, copy-and-run); it has its own name so the `compose.yaml` default precedence doesn't silently shadow it — run it from the repo with `docker compose -f compose.deploy.yaml up -d`.
+- **Data persistence**: portfolio / closed positions / uploaded reports are stored in the named volume `vibe-data` (container `VR_DATA_DIR=/data`), so `docker compose down` or container rebuilds don't lose data; wipe everything with `docker compose down -v`.
+- **Optional config**: copy [`.env.example`](.env.example) to `.env` (compose reads it automatically) to set `VR_API_KEY` (required for public deployment) and `VR_ALLOW_ORIGINS`.
+- Port `:8900` is also mapped to the host if you want to hit the API directly.
+- **Image footprint**: the image only contains `backend/` and `frontend/`; the root `a-stock-data/` and `global-stock-data/` toolkits are for local agents and are **not packaged into the image** (the backend data layer already ships the same implementations).
+
+### One-click image publishing (CI/CD)
+
+The repo ships a GitHub Actions workflow that **publishes both images to GHCR** (`ghcr.io`), multi-arch `linux/amd64 + linux/arm64`:
+
+- **Manual one-click**: repo Actions tab → Build & Publish Docker Images → **Run workflow**
+- **Auto on tag**: `git tag v0.4.0 && git push --tags`
+
+Artifacts: `ghcr.io/simonlin1212/vibe-research-backend` / `-frontend` (public, pull without login). Once published, the "copy-and-run deployment" above just works.
+
 ## Bring Your Own AI
 
 Configure once on the "Bring your AI" page and every AI feature across the dashboard uses your model. **All analysis comes from your model — this project does not tune or bias it.** Three options:

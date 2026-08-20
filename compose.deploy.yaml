@@ -1,0 +1,55 @@
+# Vibe-Research · 部署版（复制即用，无需 clone 项目、无需本地构建）
+#
+# 与 compose.yaml（开发版，本地 build）并存。为什么叫 compose.deploy.yaml：
+# Docker Compose 在根目录会自动优先用 compose.yaml，为避免部署版被静默遮蔽，
+# 部署版独立命名，需要时用 -f 显式指定。
+#
+# 用法（二选一）：
+#   1. 复制本文件到任意目录（文件名随意，docker-compose.yml 也行），然后：
+#      docker compose up -d
+#   2. 或在仓库根目录显式指定：
+#      docker compose -f compose.deploy.yaml up -d
+#   浏览器打开 http://localhost:5899
+#
+# 前提：镜像已发布到 GHCR（仓库 CI 会自动发布 ghcr.io/<owner>/vibe-research-*）。
+#       想先自己试？把下面 image 里的 `simonlin1212` 改成你自己的 GitHub 用户名，
+#       在你自己的仓库跑一次发布 workflow 即可。
+#
+# 可选配置（可选，本地默认全留空）：
+#   VR_API_KEY        公网部署务必设一个强随机值，否则别人能读你的持仓/调你的后端
+#   VR_ALLOW_ORIGINS  公网部署时收紧成你的前端域名
+name: vibe-research
+
+services:
+  backend:
+    image: ghcr.io/simonlin1212/vibe-research-backend:latest
+    pull_policy: always # 每次 up 都拉最新镜像
+    # 用户私有数据（持仓 / 已清仓 / 上传研报）写进命名卷，重建容器不丢
+    environment:
+      VR_DATA_DIR: /data
+      VR_API_KEY: ${VR_API_KEY:-}
+      VR_ALLOW_ORIGINS: ${VR_ALLOW_ORIGINS:-*}
+    volumes:
+      - vibe-data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8900/api/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    ports:
+      - "8900:8900"
+    restart: unless-stopped
+
+  frontend:
+    image: ghcr.io/simonlin1212/vibe-research-frontend:latest
+    pull_policy: always
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "5899:80"
+    restart: unless-stopped
+
+volumes:
+  vibe-data:
