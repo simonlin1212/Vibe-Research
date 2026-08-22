@@ -9,6 +9,7 @@ import {
   FileSpreadsheet,
   GitCompare,
   Globe2,
+  Radio,
   LineChart,
   MoreHorizontal,
   Plug,
@@ -33,6 +34,7 @@ const NAV_ICONS: Record<string, LucideIcon> = {
   "/ai-watch": Cpu,
   "/derivatives": LineChart,
   "/arb": GitCompare,
+  "/event": Radio,
   "/portfolio": Wallet,
   "/settings": Plug,
 };
@@ -44,6 +46,7 @@ function isCockpitPath(pathname: string, tab: string | null) {
   if (pathname.startsWith("/ai-watch") || pathname.startsWith("/fin")) return true;
   if (pathname.startsWith("/derivatives")) return true;
   if (pathname.startsWith("/arb")) return true;
+  if (pathname.startsWith("/event")) return true;
   if (!pathname.startsWith("/a-share")) return false;
   if (!tab || tab === "review") return true;
   return false;

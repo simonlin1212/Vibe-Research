@@ -37,6 +37,7 @@ python3 -m venv .venv
 | `GET /api/market/hsgt` | 北向资金分钟流向 | requests |
 | `GET /api/market/quotes` · `/boards` · `/board-stocks` · `/rank` · `/board-flow-intraday` · `/commodities` · `/commodity-minutes` | 批量报价(股票指数按代码 5s, 期货走 commodities 并行) / 板块热点 / 成分股(腾讯pt*) / 个股榜单(含成交额, 新浪) / 分钟板块资金 / 大宗商品 | 腾讯/新浪/东财(仅独有资金流) |
 | `GET /api/market/spot-table` · `/chem-spot` · `/future-daily` · `/stock-boards` · `/stock-boards-batch` · `/stock-flows` · `/lives` · `/etf-shares` | 生意社现期/基差 · 化工现货 · 新浪期货日K · 个股行业/概念(单票/批量) · 自选主力净额/净占比(对齐参考看板 ulist) · 新浪7x24(华尔街见闻兜底) · 沪/深ETF日频份额+季报申购赎回 | requests |
+| `GET /api/polymarket/board` · `/event` · `/search` · `/watch` | Polymarket 事件概率（Gamma，钥匙 `polymarket`；监控复用 `event::slug`） | requests |
 | `GET /api/iwencai/status` · `/select` | 问财是否已配置 · 选股名单(产业链刷新) | IWENCAI_API_KEY |
 | `GET /api/market/breadth` · `/ths-profile` · `/ths-rotation` | 全A涨跌分位+直方图(新浪hs_a分页/腾讯) · shy313同花顺归属 · 概念/行业当日均涨 | requests |
 | `GET /api/fin/board` · `/forecast` · `/company` · `/suggest` | 财报窗口：盈利榜+日历 / 业绩预告 / F10+主营+现金流 / 代码联想。宏观包与 F10 并行拉东财 | 东财 datacenter |

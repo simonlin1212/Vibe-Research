@@ -16,6 +16,7 @@ export const PAGE_NAV: PageNavItem[] = [
   { to: "/a-share", label: "A股", short: "A股", match: (p) => p.startsWith("/a-share"), primary: true },
   { to: "/derivatives", label: "期权期货", short: "期权", match: (p) => p.startsWith("/derivatives"), primary: true },
   { to: "/arb", label: "套利", short: "套利", match: (p) => p.startsWith("/arb"), primary: true },
+  { to: "/event", label: "事件", short: "事件", match: (p) => p.startsWith("/event"), primary: true },
   { to: "/fin", label: "财报窗口", short: "财报", match: (p) => p.startsWith("/fin"), primary: true },
   { to: "/us-market", label: "美股", short: "美股", match: (p) => p.startsWith("/us-market"), primary: true },
   { to: "/research", label: "研究", short: "研究", match: (p) => p.startsWith("/research"), primary: false },

@@ -239,7 +239,7 @@ export function DerivCockpit() {
         {
           id: "tquote",
           title: "T 型报价",
-          hint: "理论价=Black-76 · 表上 IV 微笑 · 默认 ATM 购出图",
+          hint: "理论价=Black-76",
           icon: <Table size={14} />,
           accent: "#e879f9",
           defaultW: 0.68,

@@ -352,6 +352,48 @@ export interface FearGreedBoard {
   items: FearGreedItem[];
   updated?: string;
 }
+export interface PmOutcome {
+  label: string;
+  pct: number | null;
+}
+export interface PmMarket {
+  id: string;
+  title: string;
+  question: string;
+  yes: number | null;
+  outcomes: PmOutcome[];
+  volume: number | null;
+  end?: string | null;
+  closed?: boolean;
+  chg?: number | null;
+}
+export interface PmFeatured {
+  label: string;
+  pct: number | null;
+}
+export interface PmEvent {
+  id: string;
+  slug: string;
+  title: string;
+  description?: string | null;
+  volume: number | null;
+  volume24hr: number | null;
+  liquidity: number | null;
+  end?: string | null;
+  image?: string | null;
+  tags: string[];
+  featured?: PmFeatured | null;
+  markets: PmMarket[];
+  n_markets: number;
+}
+export interface PmBoard {
+  events: PmEvent[];
+  updated?: string;
+}
+export interface PmSearch {
+  q: string;
+  events: PmEvent[];
+}
 export interface StockBoards {
   code: string; name: string; industry: string; area: string;
   concepts: string[]; source?: string;
@@ -1296,6 +1338,8 @@ export interface OvlabTQuoteSide {
   ivBid?: number | null;
   ivAsk?: number | null;
   theoIv?: number | null;
+  /** Yesterday fitted IV (theovol_yday). Same on call/put. */
+  theoIvYd?: number | null;
   delta?: number | null;
   oi?: number | null;
   oiChg?: number | null;
@@ -1314,6 +1358,11 @@ export interface OvlabTQuoteExpiry {
   und?: string;
   expiryDate?: string;
   dte?: number | null;
+  /** Year fraction (maturity_tday). Term chart X is dte, not this. */
+  maturity?: number | null;
+  /** Smile window from surface display_strike. */
+  displayLo?: number | null;
+  displayHi?: number | null;
   forward?: number | null;
   forwardYd?: number | null;
   /** 当月期货最新 (future-ts future_tday). ETF 无期货则空, 前端回落行情观察. */
@@ -1327,8 +1376,15 @@ export interface OvlabTQuoteExpiry {
   moveDn?: number | null;
   sumOiCall?: number | null;
   sumOiPut?: number | null;
+  /** Yesterday month OI (surface sum_poi_call). */
+  sumOiCallYd?: number | null;
+  sumOiPutYd?: number | null;
   lastTime?: string;
   atm?: number | null;
+  /** Surface theovol_tday pairs (not T-ladder interp). */
+  theoSmile?: Array<[number, number]>;
+  /** Surface theovol_yday pairs. */
+  theoSmileYd?: Array<[number, number]>;
   strikes: OvlabTQuoteStrike[];
 }
 export interface OvlabTQuote {
@@ -1592,6 +1648,13 @@ export const api = {
   commodities: (codes?: string) =>
     get<Record<string, CommodityQuote>>(`/market/commodities${codes ? `?codes=${encodeURIComponent(codes)}` : ""}`),
   fearGreed: () => get<FearGreedBoard>("/market/fear-greed"),
+  polymarketBoard: (limit = 30) => get<PmBoard>(`/polymarket/board?limit=${limit}`),
+  polymarketEvent: (slug: string) =>
+    get<PmEvent>(`/polymarket/event?slug=${encodeURIComponent(slug)}`),
+  polymarketSearch: (q: string) =>
+    get<PmSearch>(`/polymarket/search?q=${encodeURIComponent(q)}`),
+  polymarketWatch: (slugs: string[]) =>
+    get<PmBoard>(`/polymarket/watch?slugs=${encodeURIComponent(slugs.slice(0, 20).join(","))}`),
   commodityMinutes: (codes: string) =>
     get<Record<string, CommodityMinute | null>>(`/market/commodity-minutes?codes=${encodeURIComponent(codes)}`),
   spotTable: () => get<SpotTable>("/market/spot-table"),

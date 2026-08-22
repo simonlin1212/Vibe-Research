@@ -16,6 +16,15 @@ function countNew(items, seen) {
   return Math.min(n, 99);
 }
 
+test("event page rides telegraphHub, no second news poll", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const page = await readFile(new URL("../src/pages/EventCockpit.tsx", import.meta.url), "utf8");
+  assert.match(page, /NewsCockpitPanel/);
+  assert.match(page, /from "@\/lib\/telegraphHub"/);
+  assert.doesNotMatch(page, /api\.clsTelegraph/);
+  assert.doesNotMatch(page, /api\.marketLives/);
+});
+
 test("news cell has jin10 tab on the same telegraph hub", async () => {
   const { readFile } = await import("node:fs/promises");
   const hub = await readFile(new URL("../src/lib/telegraphHub.ts", import.meta.url), "utf8");

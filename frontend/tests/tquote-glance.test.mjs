@@ -3,8 +3,8 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 function num(v) {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : null;
+  const n = typeof v === "string" ? parseFloat(v) : v;
+  return typeof n === "number" && !Number.isNaN(n) ? n : null;
 }
 
 function ivOf(s) {
@@ -74,34 +74,6 @@ test("ivSkew 沽虚值更贵为正", () => {
   assert.equal(skew, 3);
 });
 
-function smilePoints(strikes, fwd, keep, hide) {
-  const call = [];
-  const put = [];
-  for (const s of strikes) {
-    if (!hideItmSide("call", s.strike, fwd, keep, hide)) {
-      const v = ivOf(s.call);
-      if (v != null) call.push({ time: s.strike, value: v });
-    }
-    if (!hideItmSide("put", s.strike, fwd, keep, hide)) {
-      const v = ivOf(s.put);
-      if (v != null) put.push({ time: s.strike, value: v });
-    }
-  }
-  call.sort((a, b) => a.time - b.time);
-  put.sort((a, b) => a.time - b.time);
-  return { call, put };
-}
-
-test("smilePoints 跟隐藏实值同一套档, 横轴是行权价", () => {
-  const strikes = [mk(90, 0, 0, 22, 24), mk(100, 0, 0, 20, 20), mk(110, 0, 0, 21, 18)];
-  const all = smilePoints(strikes, 100, 100, false);
-  assert.deepEqual(all.call.map((p) => p.time), [90, 100, 110]);
-  assert.equal(all.call[0].value, 22);
-  const otm = smilePoints(strikes, 100, 100, true);
-  assert.deepEqual(otm.call.map((p) => p.time), [100, 110]);
-  assert.deepEqual(otm.put.map((p) => p.time), [90, 100]);
-});
-
 test("TQuotePanel 默认全部档位 / 自动 ATM 购", async () => {
   const src = await readFile(new URL("../src/components/deriv/TQuotePanel.tsx", import.meta.url), "utf8");
   assert.ok(!src.includes("sliceChain"), "不再切 ATM 附近窗");
@@ -136,6 +108,11 @@ test("TQuotePanel 默认全部档位 / 自动 ATM 购", async () => {
   assert.ok(!/<select[\s\S]*品种/.test(src), "不再用原生 select 选品种");
   assert.ok(src.includes("更新 {cur.lastTime.slice(11, 19)"), "更新时间带标签且到秒");
   assert.ok(src.includes("隐藏实值"), "顶栏有隐藏实值开关");
+  assert.ok(src.includes("expChipTitle"), "到期月小方块: 品名+YYMM");
+  assert.ok(src.includes("剩"), "到期月小方块写剩N天");
+  assert.ok(!src.includes("e.exp.slice(2)} ·"), "不再用 2610 · 26天");
+  assert.ok(src.includes("overflow-x-auto px-1.5 py-1.5"), "小方块在看涨/看跌表下往右排");
+  assert.ok(src.indexOf("看跌期权Put") < src.indexOf("{expChipTitle(prodAlias"), "小方块在 Call/Put 表后面");
   assert.ok(src.includes("deriv.tquote.hideItm"), "开关记本机");
   assert.ok(src.includes('storageGet("deriv.tquote.hideItm") !== "0"'), "未记过本机则默认隐藏实值");
   assert.ok(src.includes("hideItmSide"), "实值侧用 hideItmSide");
@@ -146,50 +123,225 @@ test("TQuotePanel 默认全部档位 / 自动 ATM 购", async () => {
   assert.ok(!src.includes("isAtm"), "不再把某一档标成 ATM");
   assert.ok(!src.includes(">ATM</span>"), "行权价旁不写 ATM 字母");
   assert.ok(!src.includes("lastTime.slice(5, 16)"), "不再截成月日暗字");
-  assert.ok(src.includes("IvSmileChart"), "T 表上挂 IV 微笑");
+  assert.ok(src.includes("IvSmileChart"), "T 表左侧挂 IV 微笑");
+  assert.ok(src.includes("IvTermChart"), "T 表左侧挂 ATM 隐波期限");
+  assert.ok(src.includes("lg:flex-row"), "宽屏微笑+期限在表左");
+  assert.ok(src.includes("onPickExp={setExp}"), "点期限月切 T 表");
+  assert.ok(src.includes("theoSmile"), "微笑走 surface 原始 theovol, 不画 T 表补档");
+  assert.ok(src.includes("spot={fwd}"), "微笑竖线走合成标的现价 forward");
   assert.ok(src.includes("expiry: cur?.expiryDate") || src.includes("expiry: cur.expiryDate"), "点合约带到期日给 markers");
 });
 
-test("IvSmileChart 是带标题的井, 图表重建丢掉旧 series", async () => {
+test("IvSmileChart LC 复刻 analysis", async () => {
   const smile = await readFile(new URL("../src/components/deriv/IvSmileChart.tsx", import.meta.url), "utf8");
-  assert.ok(smile.includes("LcWell"), "跟日K同一套井, 不是 72px 裸 div");
-  assert.ok(smile.includes(">IV微笑<"), "标题写在图上, 不靠 title 属性");
-  assert.ok(smile.includes("h-[128px]"), "井有明确高度");
+  const math = await readFile(new URL("../src/components/deriv/iv-chart-math.ts", import.meta.url), "utf8");
+  const tip = await readFile(new URL("../src/components/deriv/IvHtmlTip.tsx", import.meta.url), "utf8");
+  assert.ok(!smile.includes(">IV微笑<"), "标题去掉, 靠水印");
   assert.ok(smile.includes("useLcPriceChart"), "横轴行权价走 createOptionsChart");
-  assert.ok(smile.includes("LcHoverTag"), "十字价签同时间图");
-  assert.ok(smile.includes("useLcHoverTag"), "IV 涨跌相对 ATM");
-  assert.ok(smile.includes("bag.current.rev !== rev"), "StrictMode / 重建后不把线画在已销毁的图上");
-  assert.ok(smile.includes("resizeLcHost"), "flex 格里先踢尺寸再 fitContent");
-  assert.ok(smile.includes("smileSpotPts"), "现价竖线");
-  assert.ok(smile.includes('text: "ATM"'), "ATM 档钉在微笑上");
-  assert.ok(smile.includes("#38bdf8"), "竖线和 ATM 跟 T 表蓝线同色");
-  assert.ok(!smile.includes("wipeLc"), "options chart 不走时间图 wipeLc");
+  assert.ok(smile.includes("setPaneWatermark"), "IV微笑开淡字水印");
+  assert.ok(smile.includes("LcWell"), "跟日K同一套井");
+  assert.ok(smile.includes("IvHtmlTip"), "浮窗");
+  assert.ok(!tip.includes("bg-white"), "浮窗不白底");
+  assert.ok(smile.includes(">今<"), "今");
+  assert.ok(smile.includes(">昨<"), "昨");
+  assert.ok(!smile.includes("echarts"), "不走 ECharts");
+  assert.ok(!smile.includes("LcHoverTag"), "浮窗不是十字价签");
+  assert.ok(smile.includes("synthSpotTipHtml"), "移到竖线才出合成标的现价");
+  assert.ok(!smile.includes(">合成标的现价<"), "图上不钉合成标的现价");
+  assert.ok(smile.includes("nearSmileStem"), "十字靠近竖线才出合成标的, 不挡图");
+  assert.ok(!smile.includes("pointer-events-auto"), "竖线不抢十字");
+  assert.ok(smile.includes("smileStemX"), "竖线按窗口线性, 不靠 LC 已有点");
+  assert.ok(math.includes("smileStemX"), "合成标的像素X");
+  assert.ok(math.includes("smileStemBox"), "合成标的竖茎像素盒");
+  assert.ok(!math.includes("spot + eps"), "不再错位X");
+  assert.ok(math.includes("合成标的现价"), "浮窗带合成标的");
+  assert.ok(!math.includes("yesterday_forward"), "不画昨收竖线");
+  assert.ok(math.includes("#a21caf"), "官网紫");
+  assert.ok(tip.includes("createPortal"), "浮窗挂 body 不被左栏裁");
   const tq = await readFile(new URL("../src/components/deriv/TQuotePanel.tsx", import.meta.url), "utf8");
-  assert.ok(tq.includes("spot={undPx ?? fwd}"), "微笑竖线跟顶栏现价同一口");
-  assert.ok(tq.includes("atm={atm}"), "ATM 档用 tquote atm");
+  assert.ok(tq.includes("displayLo"), "窗口走 display_strike");
 });
 
-function smileSpotPts(spot, ivs) {
-  if (spot == null || !Number.isFinite(spot) || ivs.length === 0) return [];
-  const lo = Math.min(...ivs);
-  const hi = Math.max(...ivs);
-  const pad = Math.max((hi - lo) * 0.08, 0.3);
-  const eps = Math.max(Math.abs(spot) * 1e-8, 1e-6);
-  return [
-    { time: spot, value: lo - pad },
-    { time: spot + eps, value: hi + pad },
-  ];
+test("IvTermChart LC 复刻 vol-ts", async () => {
+  const term = await readFile(new URL("../src/components/deriv/IvTermChart.tsx", import.meta.url), "utf8");
+  const math = await readFile(new URL("../src/components/deriv/iv-chart-math.ts", import.meta.url), "utf8");
+  assert.ok(!term.includes(">IV期限<"), "标题去掉, 靠水印");
+  assert.ok(term.includes("atmTermPoints"), "各月 ATM 隐波");
+  assert.ok(term.includes("useLcPriceChart"), "横轴天数走 createOptionsChart");
+  assert.ok(term.includes("setPaneWatermark"), "IV期限开淡字水印");
+  assert.ok(term.includes("subscribeClick"), "点月切表");
+  assert.ok(term.includes("IvHtmlTip"), "浮窗");
+  assert.ok(!term.includes("echarts"), "不走 ECharts");
+  assert.ok(!term.includes("volatility-ts"), "不另打 volatility-ts-all");
+  assert.ok(math.includes("* 0.05"), "横轴左右扩 5%");
+  assert.ok(math.includes("平值隐波"), "悬浮窗标题对齐 vol-ts");
+  assert.ok(math.includes("月总持仓量"), "悬浮窗含月总持仓");
+});
+
+function termTipHtml(tip) {
+  const days = tip.dte != null ? ` · ${Math.round(tip.dte)}天` : "";
+  const ivChg = tip.td != null && tip.yd != null ? tip.td - tip.yd : null;
+  const hasOi = tip.callTd != null && tip.callYd != null && tip.putTd != null && tip.putYd != null;
+  const pcrTd = hasOi && tip.callTd !== 0 ? tip.putTd / tip.callTd : null;
+  return { days, ivChg, hasOi, pcrTd };
 }
 
-test("smileSpotPts 现价处画竖茎, 空 IV 不画", () => {
-  assert.deepEqual(smileSpotPts(null, [20, 22]), []);
-  assert.deepEqual(smileSpotPts(100, []), []);
-  const pts = smileSpotPts(100, [18, 22]);
-  assert.equal(pts.length, 2);
-  assert.equal(pts[0].time, 100);
-  assert.ok(pts[1].time > 100);
-  assert.ok(pts[0].value < 18);
-  assert.ok(pts[1].value > 22);
+test("termTip 对齐官网 平值隐波 + 月总持仓", () => {
+  const tip = termTipHtml({
+    exp: "202701",
+    dte: 126,
+    td: 19.08,
+    yd: 19.08,
+    callTd: 40,
+    callYd: 20,
+    putTd: 179,
+    putYd: 123,
+  });
+  assert.equal(tip.days, " · 126天");
+  assert.equal(tip.ivChg, 0);
+  assert.equal(tip.hasOi, true);
+  assert.equal(Number(tip.pcrTd.toFixed(2)), 4.47);
+});
+
+function isValidVol(v) {
+  return v != null && Number.isFinite(v) && v > 0 && v !== 100;
+}
+
+function smileFromStrikes(strikes) {
+  const today = [];
+  const yday = [];
+  for (const s of strikes) {
+    const td = num(s.call?.theoIv) ?? num(s.put?.theoIv);
+    const yd = num(s.call?.theoIvYd) ?? num(s.put?.theoIvYd);
+    if (isValidVol(td)) today.push([s.strike, td]);
+    if (isValidVol(yd)) yday.push([s.strike, yd]);
+  }
+  today.sort((a, b) => a[0] - b[0]);
+  yday.sort((a, b) => a[0] - b[0]);
+  return { today, yday };
+}
+
+function smileYRange(today, yday, lo, hi) {
+  const ys = [];
+  for (const [x, y] of [...today, ...yday]) {
+    if (lo != null && x < lo) continue;
+    if (hi != null && x > hi) continue;
+    ys.push(y);
+  }
+  if (!ys.length) return null;
+  return [Math.min(...ys) - 1, Math.max(...ys) + 1];
+}
+
+function smileXRange(today, yday, lo, hi) {
+  if (lo != null && hi != null && hi > lo) return [lo, hi];
+  const xs = [...today, ...yday].map((p) => p[0]);
+  if (!xs.length) return null;
+  return [Math.min(...xs), Math.max(...xs)];
+}
+
+function smileStemX(spot, from, to, width) {
+  if (spot == null || from == null || to == null) return null;
+  if (![spot, from, to, width].every(Number.isFinite) || !(to > from) || width < 2) return null;
+  const x = ((spot - from) / (to - from)) * width;
+  if (x < 0 || x > width) return null;
+  return x;
+}
+
+function nearSmileStem(px, stemX, hit = 7) {
+  return px != null && stemX != null && Number.isFinite(px) && Number.isFinite(stemX)
+    && Math.abs(px - stemX) <= hit;
+}
+
+test("smileStemX 按窗口线性, 合成价不必是行权价", () => {
+  assert.equal(smileStemX(100, 0, 200, 200), 100);
+  assert.equal(smileStemX(3850, 3500, 4200, 350), 175);
+  assert.equal(smileStemX(100, 100, 100, 200), null);
+  assert.equal(smileStemX(-10, 0, 200, 200), null);
+  assert.equal(smileStemX(250, 0, 200, 200), null);
+  assert.equal(smileStemX(0, 0, 200, 200), 0);
+});
+
+test("nearSmileStem 十字靠近竖线", () => {
+  assert.equal(nearSmileStem(100, 100), true);
+  assert.equal(nearSmileStem(107, 100), true);
+  assert.equal(nearSmileStem(108, 100), false);
+  assert.equal(nearSmileStem(100, null), false);
+});
+
+test("smileFromStrikes 用拟合隐波, 丢掉 100 占位", () => {
+  const strikes = [
+    { strike: 90, call: { theoIv: 24, theoIvYd: 25 }, put: { theoIv: 24, theoIvYd: 25 } },
+    { strike: 100, call: { theoIv: 20, theoIvYd: 21 }, put: { theoIv: 20, theoIvYd: 21 } },
+    { strike: 110, call: { theoIv: 100, theoIvYd: 23 }, put: { theoIv: 100, theoIvYd: 23 } },
+  ];
+  const all = smileFromStrikes(strikes);
+  assert.deepEqual(all.today.map((p) => p[0]), [90, 100]);
+  assert.equal(all.today[1][1], 20);
+  assert.deepEqual(smileXRange(all.today, all.yday, 95, 105), [95, 105]);
+  assert.deepEqual(smileYRange(all.today, all.yday, 95, 105), [19, 22]);
+});
+
+function atmTermPoints(expiries) {
+  const today = [];
+  const yday = [];
+  for (const e of expiries) {
+    const x = num(e.dte);
+    if (x === null) continue;
+    const iv = num(e.atmIv);
+    if (isValidVol(iv)) today.push({ x, y: iv, exp: e.exp });
+    const yd = num(e.atmIvYd);
+    if (isValidVol(yd)) yday.push({ x, y: yd, exp: e.exp });
+  }
+  today.sort((a, b) => a.x - b.x);
+  yday.sort((a, b) => a.x - b.x);
+  return { today, yday };
+}
+
+function termXRange(today, yday) {
+  const xs = [...today, ...yday].map((p) => p.x);
+  if (!xs.length) return null;
+  const lo = Math.min(...xs);
+  const hi = Math.max(...xs);
+  const pad = Math.max((hi - lo) * 0.05, hi === lo ? 1 : 0);
+  return [lo - pad, hi + pad];
+}
+
+function nearestTermExp(pts, t) {
+  if (!pts.length || !Number.isFinite(t)) return null;
+  let best = pts[0];
+  let dist = Math.abs(pts[0].x - t);
+  for (const p of pts) {
+    const d = Math.abs(p.x - t);
+    if (d < dist) {
+      dist = d;
+      best = p;
+    }
+  }
+  return best.exp;
+}
+
+test("atmTermPoints 按剩余天数排, 缺 dte/IV 丢掉", () => {
+  const { today, yday } = atmTermPoints([
+    { exp: "202611", dte: 54, atmIv: 18, atmIvYd: 17 },
+    { exp: "202610", dte: 17, atmIv: 20, atmIvYd: null },
+    { exp: "202612", dte: null, atmIv: 16, atmIvYd: 16 },
+    { exp: "202701", dte: 80, atmIv: null, atmIvYd: 15 },
+  ]);
+  assert.deepEqual(today.map((p) => p.exp), ["202610", "202611"]);
+  assert.deepEqual(today.map((p) => p.x), [17, 54]);
+  assert.deepEqual(yday.map((p) => p.exp), ["202611", "202701"]);
+  assert.deepEqual(termXRange(today, yday), [17 - (80 - 17) * 0.05, 80 + (80 - 17) * 0.05]);
+});
+
+test("nearestTermExp 点最近一个月", () => {
+  const pts = [
+    { x: 17, y: 20, exp: "202610" },
+    { x: 54, y: 18, exp: "202611" },
+  ];
+  assert.equal(nearestTermExp(pts, 20), "202610");
+  assert.equal(nearestTermExp(pts, 50), "202611");
+  assert.equal(nearestTermExp([], 20), null);
+  assert.equal(nearestTermExp(pts, Number.NaN), null);
 });
 
 test("undBracket 现价夹在相邻两档, 贴档用本档与更高档", () => {
@@ -214,6 +366,23 @@ test("hideItmSide 藏实值侧, 夹档两边都留", () => {
   assert.equal(hideItmSide("call", 90, 105, [100, 110], true), true);
   assert.equal(hideItmSide("put", 110, 105, [100, 110], true), false);
   assert.equal(hideItmSide("call", 100, 105, [100, 110], true), false);
+});
+
+function expMd(raw) {
+  const s = String(raw ?? "").trim();
+  const m = s.match(/^(\d{4})-?(\d{2})-?(\d{2})/);
+  return m ? `${m[2]}.${m[3]}` : "-";
+}
+
+function expChipTitle(alias, exp) {
+  return `${alias}${String(exp ?? "").slice(-4)}`;
+}
+
+test("expChip 乙二醇2610 / 09.16 剩26天", () => {
+  assert.equal(expChipTitle("乙二醇", "202610"), "乙二醇2610");
+  assert.equal(expMd("20260916"), "09.16");
+  assert.equal(expMd("2026-09-16"), "09.16");
+  assert.equal(expMd(""), "-");
 });
 
 test("maxOiVal 取购沽两侧最大值", () => {

@@ -69,8 +69,8 @@ function IndexBasisTable({
         <span className="min-w-0 flex-1">配对</span>
         <span className="w-[3.4rem] text-right">期货</span>
         <span className="w-[3.4rem] text-right">现货</span>
-        <span className="w-[3.4rem] text-right">基差</span>
-        <span className="w-[3.2rem] text-right">基差率</span>
+        <span className="w-[3.4rem] text-right">升贴水</span>
+        <span className="w-[3.2rem] text-right">升贴水率</span>
       </div>
       {list.map((r) => {
         const q = quotes[r.cashCode];

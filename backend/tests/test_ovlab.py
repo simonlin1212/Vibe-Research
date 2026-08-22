@@ -322,9 +322,12 @@ _SURFACE = {
         "maturity_tday": "0.0198413", "maturity_yday": "0.0238095",
         "atmvol_tday": "20.0764", "atmvol_yday": "20.8889",
         "rho_tday": "1.13", "move_up": "0.0227", "move_dn": "-0.0227",
-        "sum_oi_call": "23725", "sum_oi_put": "20361", "last_time": "2026-08-18 15:00:22",
+        "sum_oi_call": "23725", "sum_oi_put": "20361",
+        "sum_poi_call": "22000", "sum_poi_put": "19000",
+        "last_time": "2026-08-18 15:00:22",
         "theovol_tday": "[[952.0, 19.9525], [960.0, 20.6874]]",
         "theovol_yday": "[[952.0, 20.8889], [960.0, 21.5]]",
+        "display_strike": "[940.0, 980.0]",
         "delta_tday_call": "[[952.0, 0.536859], [960.0, 0.422002]]",
         "delta_tday_put": "[[952.0, -0.462662], [960.0, -0.577519]]",
         "mktvol_tday_call_bid": "[[952.0, 20.2277], [960.0, 20.6346]]",
@@ -348,10 +351,18 @@ def test_build_tquote_parses_str_fields(monkeypatch):
     exp = out["expiries"][0]
     assert exp["exp"] == "202609" and exp["dte"] == 7.0
     assert exp["forward"] == pytest.approx(954.119)
+    assert exp["maturity"] == pytest.approx(0.0198413)
+    assert exp["displayLo"] == 940.0 and exp["displayHi"] == 980.0
+    assert exp["sumOiCall"] == 23725.0 and exp["sumOiPut"] == 20361.0
+    assert exp["sumOiCallYd"] == 22000.0 and exp["sumOiPutYd"] == 19000.0
+    assert exp["theoSmile"] == [[952.0, 19.9525], [960.0, 20.6874]]
+    assert exp["theoSmileYd"] == [[952.0, 20.8889], [960.0, 21.5]]
     assert exp["atm"] == 952.0  # 距 forward 最近
     assert len(exp["strikes"]) == 2
     s0 = exp["strikes"][0]
     assert s0["strike"] == 952.0
+    assert s0["call"]["theoIv"] == pytest.approx(19.9525)
+    assert s0["call"]["theoIvYd"] == pytest.approx(20.8889)
     assert s0["call"]["delta"] == pytest.approx(0.536859)
     assert s0["call"]["oi"] == 2377.0
     assert s0["call"]["oiChg"] == 163.0

@@ -849,6 +849,19 @@ def _strike_map(v: Any) -> dict[float, float | None]:
     return out
 
 
+def _xy(m: dict[float, float | None]) -> list[list[float]]:
+    """Fitted smile pairs [[strike, iv], ...] from surface theovol (not T-ladder interp)."""
+    return [[k, v] for k, v in sorted(m.items()) if v is not None]
+
+
+def _lo_hi(v: Any) -> tuple[float | None, float | None]:
+    """display_strike / trading_strike: [lo, hi]."""
+    arr = _sjson(v)
+    if not isinstance(arr, list) or len(arr) < 2:
+        return None, None
+    return _sfloat(arr[0]), _sfloat(arr[1])
+
+
 def _oi_map(v: Any) -> dict[float, float | None]:
     """{"904.0": 336, ...} -> {904.0: 336}."""
     d = _sjson(v)
@@ -1011,12 +1024,14 @@ def _build_tquote(product: str) -> dict[str, Any]:
                 "putCode": option_code(product, exp_str, "P", k),
                 "call": {
                     "price": px_c, "pct": theo_chg(px_c, px_c_yd),
-                    "ivBid": iv_cb.get(k), "ivAsk": iv_ca.get(k), "theoIv": theo_iv,
+                    "ivBid": iv_cb.get(k), "ivAsk": iv_ca.get(k),
+                    "theoIv": theo_iv, "theoIvYd": iv_yd,
                     "delta": delta_c.get(k), "oi": oi_c.get(k), "oiChg": oid_c.get(k),
                 },
                 "put": {
                     "price": px_p, "pct": theo_chg(px_p, px_p_yd),
-                    "ivBid": iv_pb.get(k), "ivAsk": iv_pa.get(k), "theoIv": theo_iv,
+                    "ivBid": iv_pb.get(k), "ivAsk": iv_pa.get(k),
+                    "theoIv": theo_iv, "theoIvYd": iv_yd,
                     "delta": delta_p.get(k), "oi": oi_p.get(k), "oiChg": oid_p.get(k),
                 },
             })
@@ -1026,11 +1041,15 @@ def _build_tquote(product: str) -> dict[str, Any]:
             f = float(fwd)
             atm = min(keys, key=lambda k: abs(k - f))
         fut = _fut_of(futs, exp_str)
+        disp_lo, disp_hi = _lo_hi(blk.get("display_strike"))
         expiries.append({
             "exp": exp_str,
             "und": und_code(product, exp_str),
             "expiryDate": str(blk.get("expiry_date") or ""),
             "dte": _sfloat(blk.get("days_to_expiry")),
+            "maturity": t,
+            "displayLo": disp_lo,
+            "displayHi": disp_hi,
             "forward": fwd,
             "forwardYd": _sfloat(blk.get("forward_yd")),
             "futPx": fut.get("px"),
@@ -1042,8 +1061,12 @@ def _build_tquote(product: str) -> dict[str, Any]:
             "moveDn": _sfloat(blk.get("move_dn")),
             "sumOiCall": _sfloat(blk.get("sum_oi_call")),
             "sumOiPut": _sfloat(blk.get("sum_oi_put")),
+            "sumOiCallYd": _sfloat(blk.get("sum_poi_call")),
+            "sumOiPutYd": _sfloat(blk.get("sum_poi_put")),
             "lastTime": str(blk.get("last_time") or ""),
             "atm": atm,
+            "theoSmile": _xy(theo),
+            "theoSmileYd": _xy(theo_yd),
             "strikes": strikes,
         })
     return {"product": product, "expiries": expiries}

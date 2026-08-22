@@ -8,8 +8,8 @@ import {
   concatDaySlots, hmOf, kindOfUnd, lastFiniteIdx, minuteKey, padToSlots, tradingDaysOf,
 } from "@/lib/derivMinuteAxis";
 import {
-  BaselineSeries, applyTimeLabels, baselineOpts, ensureUpDown, lineValues, paintUpDown,
-  seriesAlive, setPaneWatermark, setRefPriceLine, sparseLine, styleLastTag,
+  LineSeries, applyTimeLabels, ensureUpDown, lineValues, paintUpDown, seriesAlive,
+  setPaneWatermark, setRefPriceLine, sparseLine, spreadLineOpts,
   useLcChart, useLcHoverTag, wipeLc,
   type IPriceLine, type ISeriesApi, type ISeriesUpDownMarkerPluginApi, type ITextWatermarkPluginApi,
   type LineData, type Time,
@@ -91,9 +91,12 @@ async function loadCash(code: string, mode: Mode): Promise<Pt[]> {
 }
 
 export function SpreadChart({ pick }: { pick: ArbPick | null }) {
-  const [mode, setMode] = useState<Mode>("minute");
+  const [mode, setMode] = useState<Mode>(pick?.kind === "idx" ? "daily" : "minute");
+  useEffect(() => {
+    setMode(pick?.kind === "idx" ? "daily" : "minute");
+  }, [pick?.kind, pick?.key]);
   const { ref, chartRef, labelsRef, onHoverRef } = useLcChart();
-  const seriesRef = useRef<ISeriesApi<"Baseline"> | null>(null);
+  const seriesRef = useRef<ISeriesApi<"Line"> | null>(null);
   const refLine = useRef<IPriceLine | null>(null);
   const wmRef = useRef<ITextWatermarkPluginApi<Time> | null>(null);
   const tickRef = useRef<ISeriesApi<"Line"> | null>(null);
@@ -182,21 +185,22 @@ export function SpreadChart({ pick }: { pick: ArbPick | null }) {
     }
     labelsRef.current = frame.cats;
     applyTimeLabels(chart, labelsRef, mode === "daily" ? "md" : "hm");
-    if (!seriesAlive(chart, seriesRef.current)) {
-      seriesRef.current = chart.addSeries(BaselineSeries, baselineOpts(0));
+    if (!seriesAlive(chart, seriesRef.current) || seriesRef.current?.seriesType() !== "Line") {
+      if (seriesAlive(chart, seriesRef.current) && seriesRef.current) {
+        try { chart.removeSeries(seriesRef.current); } catch { /* already gone */ }
+      }
+      seriesRef.current = chart.addSeries(LineSeries, spreadLineOpts());
       tickRef.current = null;
       udRef.current = null;
     } else {
-      seriesRef.current!.applyOptions(baselineOpts(0));
+      seriesRef.current!.applyOptions(spreadLineOpts());
     }
     const pxPts = sparseLine(frame.vals);
     seriesRef.current!.setData(pxPts);
     const tickPts = lineValues(pxPts);
     paintUpDown(ensureUpDown(chart, tickRef, udRef), tickPts, paintedTick.current);
     paintedTick.current = tickPts;
-    const i = lastFiniteIdx(frame.vals, null);
-    styleLastTag(seriesRef.current, i == null ? null : frame.vals[i], 0);
-    setRefPriceLine(seriesRef.current, refLine, 0, "0");
+    setRefPriceLine(seriesRef.current, refLine, null);
     setPaneWatermark(chart, wmRef, pick?.label ?? "", 72);
     chart.timeScale().fitContent();
   }, [frame, mode, pick?.label, chartRef, labelsRef]);
@@ -230,7 +234,9 @@ export function SpreadChart({ pick }: { pick: ArbPick | null }) {
           <span className={cn("font-mono text-[13px] tabular-nums", chgClass(last))}>{signed(last)}</span>
           <LcSeg
             value={mode}
-            options={[{ v: "minute" as const, label: "分时" }, { v: "daily" as const, label: "日K" }]}
+            options={pick?.kind === "idx"
+              ? [{ v: "minute" as const, label: "分时" }, { v: "daily" as const, label: "升贴水" }]
+              : [{ v: "minute" as const, label: "分时" }, { v: "daily" as const, label: "日K" }]}
             onChange={setMode}
           />
         </div>

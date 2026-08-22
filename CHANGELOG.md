@@ -5,6 +5,26 @@
 
 ## Unreleased
 
+### 改进：T 表到期月改成底部小方块
+
+不再用顶栏 `2610 · 26天`。看涨/看跌表下往右排小方块: `乙二醇2610` / `09.16 剩26天`。点月仍切表。
+
+### 改进：套利价差图去掉零轴红绿区
+
+价差不一定在 0 附近。`/arb` 点对出图改折线，不再用 Baseline 上红下绿填色，也不画 0 轴。
+
+### 改进：A 股复盘去掉时事热点格, 自选上移
+
+复盘首屏不再挂 7×24 快讯格。自选挪到首行右上。快讯仍走全站右上角弹窗和 `/event`。
+
+### 改进：T 表左侧叠 IV 微笑与 ATM 期限
+
+微笑从 T 表上方挪到左侧。两图走 `createOptionsChart`（和日K同一套 LC），深色浮窗 React 叠在图上：微笑合成标的现价竖线（像素叠层, 不两点折线）、期限平值隐波/月总持仓。不走 ECharts。同一口 `tquote`，不另开接口。首行期限结构卡仍是远期价+仓单。
+
+### 新增：事件驾驶舱 `/event`
+
+顶栏紧挨套利。左快讯走复盘同一份电报中心。右 Polymarket：**本机监控**（粘贴事件链接加入，最多 20 条，展开各档概率）+ 热门榜。Gamma 公开接口，监控复用 `event::{slug}`，不进复盘预热。本机 Clash/v2rayN 只写了 Windows 系统代理时，后端会读注册表走代理，不要求先设 `HTTPS_PROXY`。
+
 ### 改进：期权日K/分时跟 MQTT 行情走
 
 日K 叠 dataview 最新价到当日最后一根（高低跟着扩）。分时本来就叠最后一笔；盘中 history 15 秒拉一次，休市仍 60 秒。点图合约额外订 `instr/{别名}`（网页同款 `ag2609C16000`）。夜盘分时在 history 还没今夜点时切到当夜轴。期货主力价跟行情观察同一份 ctamap。网页按 OpenVlab 直连 `wss://emqx.openvlab.cn/mqtt`（mqtt.js，optionflow/ctamap/dataview）；broker 挂了才 SSE / 0.5s 读本机 sidecar。商品期权 `AG_O`/`AU_O` 常空 `prodUnd`，用目录 `und`+到期月拼 `AG2609`/`AU2609` 才能叠到右下角。叠价新鲜 dataview 优先，没有再认主力码 (`contractCode`)，换品种/T 表对行共用 `findRowByUnd`。股指期货 dataview 是 `FUT_CFFEX_IF:202608`（价在 `value`），收成 `IF2608` 叠分时；没有再走 ctamap。T 表换品种下拉出主力期货图，不再先清成没成交的 ATM 购。金价 HUD 两位小数。陈旧 dataview 不再盖住。last-bar 仍做底。点 T 表顶栏期货价出标的图。期权图仍不走 last-bar。不打第二条行情。

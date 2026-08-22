@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import {
   Sparkles, Loader2, AlertCircle, RefreshCw, X,
   ArrowLeftRight, ListOrdered, Globe, Layers, BarChart3,
-  Activity, Star, Flame, ScrollText, Rss,
+  Activity, Star, Flame, ScrollText,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -23,8 +23,6 @@ import { BoardFlowLivePanel } from "@/components/cockpit/BoardFlowLivePanel";
 import { MoneyFlowRankPanel } from "@/components/cockpit/MoneyFlowRankPanel";
 import { RankTabBar, StockRankPanel, type RankTab } from "@/components/cockpit/StockRankPanel";
 import { CommodityPanel } from "@/components/cockpit/CommodityPanel";
-import { NewsFeedBar, NewsCockpitPanel } from "@/components/cockpit/NewsCockpitPanel";
-import type { FeedSource } from "@/lib/telegraphHub";
 import { reviewPending } from "@/components/review/reviewPending";
 import { useReviewData } from "@/hooks/useReviewData";
 import { api, ApiError } from "@/lib/api";
@@ -44,8 +42,6 @@ export function DailyReview() {
   const [sectorKind, setSectorKind] = useState<SectorKind>("01");
   const [sectorQ, setSectorQ] = useState("");
   const [rankTab, setRankTab] = useState<RankTab>("hot");
-  const [newsAuto, setNewsAuto] = useState(true);
-  const [newsSource, setNewsSource] = useState<FeedSource>("cls");
   const [headerSlot, setHeaderSlot] = useState<HTMLElement | null>(null);
   useLayoutEffect(() => {
     setHeaderSlot(document.getElementById("cockpit-header-actions"));
@@ -61,7 +57,7 @@ export function DailyReview() {
       const packed = await api.reviewContext({
         watch_codes: d.watchCodes,
         sector_kind: sectorKind,
-        news_source: newsSource,
+        news_source: "cls",
       });
       const snap = packed.text;
       const prompt = `以下是今天复盘驾驶舱的客观快照(与当前看板同源):\n${snap}\n\n${packed.prompt_task}`;
@@ -139,21 +135,18 @@ export function DailyReview() {
           ),
         },
         {
-          id: "news",
-          title: "实时热点 · 7×24",
-          icon: <Rss size={14} />,
-          accent: "#f472b6",
+          id: "watch",
+          title: "自选",
+          icon: <Star size={14} />,
+          accent: "#fbbf24",
           defaultW: 0.33,
-          mobileH: "h-[420px]",
+          mobileH: "h-[400px]",
           right: (
-            <NewsFeedBar
-              source={newsSource}
-              auto={newsAuto}
-              onSource={setNewsSource}
-              onAuto={setNewsAuto}
-            />
+            <span className="text-[10px] tabular-nums text-slate-500">
+              {d.watchCodes.length}只 · 5s
+            </span>
           ),
-          body: <NewsCockpitPanel source={newsSource} auto={newsAuto} />,
+          body: <WatchlistCockpitPanel />,
         },
       ],
     },
@@ -231,25 +224,11 @@ export function DailyReview() {
       defaultH: 0.36,
       panels: [
         {
-          id: "watch",
-          title: "自选",
-          icon: <Star size={14} />,
-          accent: "#fbbf24",
-          defaultW: 0.26,
-          mobileH: "h-[400px]",
-          right: (
-            <span className="text-[10px] tabular-nums text-slate-500">
-              {d.watchCodes.length}只 · 5s
-            </span>
-          ),
-          body: <WatchlistCockpitPanel />,
-        },
-        {
           id: "risk",
           title: "涨跌停",
           icon: <Flame size={14} />,
           accent: "#fb7185",
-          defaultW: chainOn ? 0.16 : 0.22,
+          defaultW: chainOn ? 0.22 : 0.28,
           mobileH: "h-[380px]",
           right: (
             <span className="text-[10px] tabular-nums text-slate-500">盘中 90s</span>
@@ -266,7 +245,7 @@ export function DailyReview() {
           title: "龙虎 / 资金 / 产业链",
           icon: <ScrollText size={14} />,
           accent: "#a78bfa",
-          defaultW: chainOn ? 0.58 : 0.52,
+          defaultW: chainOn ? 0.78 : 0.72,
           mobileH: "h-[520px]",
           maxZoomW: 0.82,
           right: (
@@ -324,7 +303,7 @@ export function DailyReview() {
         getContext={() => collectReviewContext({
           watchCodes: d.watchCodes,
           sectorKind,
-          newsSource,
+          newsSource: "cls",
         })}
         label="问 AI"
         suggestions={["今天大盘怎么走", "哪些指数领涨领跌", "盘面有什么值得注意"]}
@@ -359,7 +338,7 @@ export function DailyReview() {
             </div>
           </div>
           <p className="mt-1 text-[10px] text-slate-500">
-            已带入当前看板各格快照 (指数 / 板块 / 资金 / 榜单 / 实时热点 / 涨跌停等)
+            已带入当前看板各格快照 (指数 / 板块 / 资金 / 榜单 / 涨跌停等)
           </p>
           {needConfig && (
             <div className="mt-3 flex items-center gap-2 rounded border border-warning/30 bg-warning/5 p-3 text-sm text-slate-400">

@@ -91,8 +91,8 @@ test("breadth panel clock is last fetch, not legu session close", () => {
 
 test("breadth strip is not three cells", async () => {
   const src = await readFile(new URL("../src/components/review/ReviewSentimentPanel.tsx", import.meta.url), "utf8");
-  assert.match(src, /平 <span className="font-mono tabular-nums">\{flat\}<\/span>/);
-  assert.match(src, /sharePct\(flat, total\)/);
+  assert.match(src, /CountChip label="平"/);
+  assert.match(src, /flatShare/);
   assert.match(src, /平均 /);
   assert.match(src, /中位 /);
   assert.doesNotMatch(src, /家数/);
@@ -104,7 +104,9 @@ test("Daily Review and Ask AI send the packed snapshot", () => {
   assert.match(reviewSrc, /api\.reviewContext/);
   assert.match(reviewSrc, /prompt_task/);
   assert.match(reviewSrc, /sectorKind/);
-  assert.match(reviewSrc, /newsSource/);
+  assert.match(reviewSrc, /newsSource: "cls"/);
+  assert.doesNotMatch(reviewSrc, /NewsCockpitPanel/);
+  assert.ok(reviewSrc.indexOf('id: "watch"') < reviewSrc.indexOf('id: "flow"'), "自选在首行右上, 资金流之前");
   assert.doesNotMatch(reviewSrc, /今日大盘数据：\$\{d\.dataSummary\}/);
   assert.match(askSrc, /getContext\?:/);
   assert.match(askSrc, /await getContext\(\)/);

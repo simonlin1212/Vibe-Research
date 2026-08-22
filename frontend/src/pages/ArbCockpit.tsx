@@ -146,8 +146,8 @@ export function ArbCockpit() {
       panels: [
         {
           id: "arb-chart",
-          title: "价差图",
-          hint: "两腿相减 · 零轴=平水",
+          title: pick?.kind === "idx" ? "日度升贴水" : "价差图",
+          hint: pick?.kind === "idx" ? "期货−现货 · 零轴=平水" : "两腿相减 · 零轴=平水",
           icon: <CandlestickChart size={14} />,
           accent: "#e879f9",
           defaultW: 0.78,
@@ -192,7 +192,7 @@ export function ArbCockpit() {
         scopeKey="arb"
         suggestions={[
           "今天跨期价差较昨变动最大的是哪些品种?",
-          "股指期现基差现在是多少?",
+          "股指日度升贴水最近怎么走?",
           "黑色系跨品种价差较昨怎么变?",
         ]}
       />

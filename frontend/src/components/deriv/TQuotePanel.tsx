@@ -6,6 +6,7 @@ import { num } from "@/components/ovlab/shared";
 import { cn } from "@/lib/utils";
 import { CellEmpty, CtnText, ProdSearchSelect, SortableHd, contractCode, findRowByUnd, tickFresh, undOfRow } from "./derivShared";
 import { IvSmileChart } from "./IvSmileChart";
+import { IvTermChart } from "./IvTermChart";
 import { storageGet, storageSet } from "@/lib/storage";
 
 /** 右下日K/分时: 点行情观察出标的, 点 T 表出期权合约. */
@@ -20,6 +21,18 @@ export interface OptionPick {
 /** 代码转展示名: AU2609C952 -> AU2609购952. 锚定末尾 C/P+行权价, 防品种码本身含 C/P (玉米 C / PP / ZC). */
 export function optionName(code: string): string {
   return code.replace(/C(\d+(?:\.\d+)?)$/, "购$1").replace(/P(\d+(?:\.\d+)?)$/, "沽$1");
+}
+
+/** 20260916 / 2026-09-16 -> 09.16 */
+export function expMd(raw?: string | null): string {
+  const s = String(raw ?? "").trim();
+  const m = s.match(/^(\d{4})-?(\d{2})-?(\d{2})/);
+  return m ? `${m[2]}.${m[3]}` : "-";
+}
+
+/** 乙二醇2610 */
+export function expChipTitle(alias: string, exp: string): string {
+  return `${alias}${String(exp ?? "").slice(-4)}`;
 }
 
 function fmtPrice(v: number | null | undefined): string {
@@ -49,30 +62,6 @@ export function ivOf(s: OvlabTQuoteSide): number | null {
   return num(s.theoIv);
 }
 
-/** Call/Put IV vs strike for createOptionsChart. Same hide-ITM rule as the table. */
-export function smilePoints(
-  strikes: OvlabTQuoteStrike[],
-  fwd: number | null,
-  keep: number | readonly number[] | null,
-  hide: boolean,
-): { call: Array<{ time: number; value: number }>; put: Array<{ time: number; value: number }> } {
-  const call: Array<{ time: number; value: number }> = [];
-  const put: Array<{ time: number; value: number }> = [];
-  for (const s of strikes) {
-    if (!hideItmSide("call", s.strike, fwd, keep, hide)) {
-      const v = ivOf(s.call);
-      if (v != null) call.push({ time: s.strike, value: v });
-    }
-    if (!hideItmSide("put", s.strike, fwd, keep, hide)) {
-      const v = ivOf(s.put);
-      if (v != null) put.push({ time: s.strike, value: v });
-    }
-  }
-  call.sort((a, b) => a.time - b.time);
-  put.sort((a, b) => a.time - b.time);
-  return { call, put };
-}
-
 /** 沽虚值 IV - 购虚值 IV; 正=沽更贵 (下行保护需求). */
 export function ivSkew(strikes: OvlabTQuoteStrike[], fwd: number | null): number | null {
   if (fwd === null || strikes.length === 0) return null;
@@ -82,16 +71,6 @@ export function ivSkew(strikes: OvlabTQuoteStrike[], fwd: number | null): number
   const callIv = above ? ivOf(above.call) : null;
   if (putIv === null || callIv === null) return null;
   return putIv - callIv;
-}
-
-export function maxOiIdx(strikes: OvlabTQuoteStrike[], side: "call" | "put"): number {
-  let best = -1;
-  let idx = -1;
-  for (let i = 0; i < strikes.length; i++) {
-    const v = num(side === "call" ? strikes[i].call.oi : strikes[i].put.oi);
-    if (v !== null && v > best) { best = v; idx = i; }
-  }
-  return idx;
 }
 
 /** Adjacent rungs that bracket undPx. Exact hit uses this strike + the next higher. */
@@ -412,6 +391,7 @@ export function TQuotePanel({ d, product, onProduct, pick, onPickContract }: {
     }
     return m;
   }, [rows, hideItm, fwd, keepStrikes]);
+  const prodAlias = products.find((p) => p.code === prod)?.alias ?? prod;
   const fwdYd = num(cur?.forwardYd);
   const fwdChg = fwd !== null && fwdYd !== null && fwdYd !== 0 ? ((fwd - fwdYd) / fwdYd) * 100 : null;
   const atmIvChg = cur?.atmIv != null && cur?.atmIvYd != null ? cur.atmIv - cur.atmIvYd : null;
@@ -470,24 +450,7 @@ export function TQuotePanel({ d, product, onProduct, pick, onPickContract }: {
             </span>
           </button>
         )}
-        <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
-          {expiries.map((e) => (
-            <button
-              key={e.exp}
-              type="button"
-              onClick={() => setExp(e.exp)}
-              className={cn(
-                "h-6 shrink-0 rounded px-1.5 text-[11px] tabular-nums transition-colors",
-                cur?.exp === e.exp
-                  ? "bg-cyan-500/20 text-cyan-300"
-                  : "text-slate-400 hover:bg-slate-800/60 hover:text-slate-200",
-              )}
-              title={`到期日 ${e.expiryDate ?? "-"}`}
-            >
-              {e.exp.slice(2)} · {e.dte ?? "-"}天
-            </button>
-          ))}
-        </div>
+        <span className="min-w-0 flex-1" />
         <span className="flex shrink-0 items-center gap-1">
           <span className="text-[10px] text-slate-500">隐藏实值</span>
           <button
@@ -556,17 +519,24 @@ export function TQuotePanel({ d, product, onProduct, pick, onPickContract }: {
         </div>
       )}
 
-      {cur && (
-        <IvSmileChart
-          strikes={cur.strikes ?? []}
-          fwd={fwd}
-          keep={keepStrikes}
-          hideItm={hideItm}
-          spot={undPx ?? fwd}
-          atm={atm}
-        />
-      )}
-
+      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+        {cur && (
+          <div className="flex h-[240px] shrink-0 flex-col lg:h-auto lg:w-[30%] lg:min-h-0 lg:min-w-[200px] lg:max-w-[380px]">
+            <IvSmileChart
+              smileTd={cur.theoSmile}
+              smileYd={cur.theoSmileYd}
+              strikes={cur.strikes ?? []}
+              displayLo={num(cur.displayLo)}
+              displayHi={num(cur.displayHi)}
+              spot={fwd}
+            />
+            <IvTermChart
+              expiries={expiries}
+              onPickExp={setExp}
+            />
+          </div>
+        )}
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <div className="min-h-0 flex-1 overflow-auto">
         {loading && (
           <div className="flex h-full items-center justify-center text-[11px] text-slate-500">更新中…</div>
@@ -656,6 +626,31 @@ export function TQuotePanel({ d, product, onProduct, pick, onPickContract }: {
             </tbody>
           </table>
         )}
+      </div>
+      {expiries.length > 0 && (
+        <div className="flex shrink-0 gap-1.5 overflow-x-auto px-1.5 py-1.5">
+          {expiries.map((e) => (
+            <button
+              key={e.exp}
+              type="button"
+              onClick={() => setExp(e.exp)}
+              className={cn(
+                "flex shrink-0 flex-col items-start rounded-md px-1.5 py-1 text-left tabular-nums",
+                cur?.exp === e.exp
+                  ? "bg-cyan-500/20 text-cyan-200 ring-1 ring-cyan-500/40"
+                  : "bg-slate-800/50 text-slate-300 hover:bg-slate-800 hover:text-slate-100",
+              )}
+              title={`到期日 ${e.expiryDate ?? "-"}`}
+            >
+              <span className="text-[11px] font-medium leading-tight">{expChipTitle(prodAlias, e.exp)}</span>
+              <span className={cn("text-[10px] leading-tight", cur?.exp === e.exp ? "text-cyan-400/80" : "text-slate-500")}>
+                {expMd(e.expiryDate)} 剩{e.dte != null && Number.isFinite(e.dte) ? Math.round(e.dte) : "-"}天
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+      </div>
       </div>
     </div>
   );

@@ -332,6 +332,25 @@ export function baselineOpts(base: number, glance = false, fmt?: ReturnType<type
   };
 }
 
+/** Arb spread: a line, no red/green baseline fill (spread is not around 0). */
+export function spreadLineOpts() {
+  return {
+    priceScaleId: "right",
+    color: "#67e8f9",
+    lineWidth: 2 as const,
+    lastValueVisible: true,
+    priceLineVisible: true,
+    priceLineColor: "#67e8f9",
+    priceLineWidth: 1 as const,
+    priceLineStyle: LineStyle.SparseDotted,
+    priceFormat: { type: "price" as const, precision: 2, minMove: 0.01 },
+    crosshairMarkerVisible: true,
+    crosshairMarkerRadius: 4,
+    crosshairMarkerBorderWidth: 1,
+    crosshairMarkerBorderColor: "#0b0f17",
+  };
+}
+
 export function overlayLineOpts(color: string, scaleId: string) {
   return {
     color,
@@ -747,12 +766,12 @@ const WM_INK = "rgba(200,205,214,0.22)";
 
 /** Pane watermark. Keep faint so the HUD / crosshair stay readable. */
 export function setPaneWatermark(
-  chart: IChartApi,
+  chart: { panes: () => unknown[] },
   apiRef: { current: ITextWatermarkPluginApi<Time> | null },
   text: string | readonly string[],
   fontSize = 80,
 ): void {
-  const pane = chart.panes()[0];
+  const pane = chart.panes()[0] as Parameters<typeof createTextWatermark>[0] | undefined;
   if (!pane) return;
   const parts = (typeof text === "string" ? [text] : [...text])
     .map((t) => t.trim())
@@ -779,7 +798,7 @@ export function setPaneWatermark(
   }
   if (!parts.length) return;
   try {
-    apiRef.current = createTextWatermark(pane, opts);
+    apiRef.current = createTextWatermark(pane, opts) as ITextWatermarkPluginApi<Time>;
   } catch {
     apiRef.current = null;
   }
@@ -913,10 +932,17 @@ export function resizeLcHost(chart: LcSizable, el: HTMLElement | null): void {
   chart.applyOptions({ autoSize: true });
 }
 
+export type LcPriceHover = {
+  x: number;
+  y: number | null;
+  px: number;
+  py: number;
+} | null;
+
 export function useLcPriceChart() {
   const ref = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<ReturnType<typeof createLcPriceChart> | null>(null);
-  const onHoverRef = useRef<(px: number | null) => void>(() => {});
+  const onHoverRef = useRef<(h: LcPriceHover) => void>(() => {});
   const [rev, setRev] = useState(0);
 
   useEffect(() => {
@@ -924,7 +950,21 @@ export function useLcPriceChart() {
     if (!el) return;
     let chart: ReturnType<typeof createLcPriceChart> | null = null;
     const onMove = (param: MouseEventParams<number>) => {
-      onHoverRef.current(hoverPxFromParam(param));
+      if (param.time == null || !param.point) {
+        onHoverRef.current(null);
+        return;
+      }
+      const x = Number(param.time);
+      if (!Number.isFinite(x)) {
+        onHoverRef.current(null);
+        return;
+      }
+      onHoverRef.current({
+        x,
+        y: hoverPxFromParam(param),
+        px: param.point.x,
+        py: param.point.y,
+      });
     };
     const boot = () => {
       if (chart) {

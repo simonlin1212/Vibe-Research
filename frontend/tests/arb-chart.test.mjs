@@ -15,7 +15,10 @@ test("SpreadChart 图容器首屏就挂着, pick 空不整卡 return", () => {
   assert.match(src, /useLcChart/);
   assert.match(src, /LcHoverTag/);
   assert.match(src, /useLcHoverTag/);
-  assert.match(src, /BaselineSeries/);
+  assert.match(src, /LineSeries/);
+  assert.match(src, /spreadLineOpts/);
+  assert.doesNotMatch(src, /BaselineSeries/);
+  assert.doesNotMatch(src, /baselineOpts/);
   assert.doesNotMatch(src, /echarts/);
   assert.doesNotMatch(src, /&& "hidden"/);
   assert.match(src, /className="h-full w-full"/);
@@ -84,6 +87,16 @@ test("现期只挂套利期现卡, A股宏观观察不再画", () => {
   assert.doesNotMatch(goods, /spotTable/);
   assert.doesNotMatch(goods, /chemSpot/);
   assert.doesNotMatch(goods, /\["spot", "现期"\]/);
+});
+
+test("股指配对默认日度升贴水, 不另开接口", () => {
+  const cockpit = readFileSync(join(root, "src/pages/ArbCockpit.tsx"), "utf8");
+  const basis = readFileSync(join(root, "src/components/arb/BasisPanel.tsx"), "utf8");
+  assert.match(src, /pick\?\.kind === "idx" \? "daily"/);
+  assert.match(src, /label: "升贴水"/);
+  assert.match(cockpit, /日度升贴水/);
+  assert.match(basis, /升贴水/);
+  assert.doesNotMatch(src, /api\.spotTable/);
 });
 
 test("parseLight 分时保留时分, 日K才收成日期", () => {
