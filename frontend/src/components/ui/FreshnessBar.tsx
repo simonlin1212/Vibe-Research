@@ -53,7 +53,7 @@ export function FreshnessBar({
           type="button"
           onClick={() => onAutoChange(!auto)}
           className={cn(
-            "btn-press inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5",
+            "btn-press inline-flex items-center gap-1 border px-1.5 py-0.5",
             auto
               ? "border-primary/40 bg-primary/10 text-primary"
               : "border-border/60 bg-muted/30 text-muted-foreground hover:text-foreground",
@@ -83,7 +83,7 @@ export function FreshnessBar({
           type="button"
           onClick={onRefresh}
           disabled={refreshing}
-          className="btn-press inline-flex items-center gap-1 rounded-lg border border-border/50 px-2 py-1 text-muted-foreground hover:bg-muted/40 hover:text-primary disabled:opacity-50"
+          className="btn-press inline-flex items-center gap-1 border border-[#333] px-1.5 py-0.5 text-[#aaa] hover:border-primary/50 hover:text-primary disabled:opacity-50"
           title="立即刷新"
         >
           <RefreshCw className={cn("h-3.5 w-3.5", refreshing && "animate-spin")} />

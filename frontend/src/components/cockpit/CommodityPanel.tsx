@@ -71,7 +71,7 @@ export function CommodityPanel() {
             onClick={() => setTab(k)}
             className={cn(
               "rounded px-1.5 py-0.5 text-[10px]",
-              tab === k ? "bg-cyan-500/15 text-cyan-300" : "text-slate-500 hover:text-slate-300",
+              tab === k ? "bg-primary/15 text-primary" : "text-slate-500 hover:text-slate-300",
             )}
           >
             {label}

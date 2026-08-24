@@ -304,7 +304,7 @@ export function AShareLightChart({
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <span
           className={cn(
-            "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[11px] font-medium",
+            "inline-flex items-center gap-1 border px-1.5 py-0.5 text-[11px] font-medium",
             sessionTone,
           )}
           title={session.hint}
@@ -465,7 +465,7 @@ export function AShareLightChart({
                         }}
                         className={cn(
                           "rounded px-1.5 py-0.5 text-[11px]",
-                          minuteDays === n ? "bg-cyan-500/15 text-cyan-200" : "text-slate-500 hover:text-slate-300",
+                          minuteDays === n ? "bg-primary/15 text-primary" : "text-slate-500 hover:text-slate-300",
                         )}
                       >
                         {lab}

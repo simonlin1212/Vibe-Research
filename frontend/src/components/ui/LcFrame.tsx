@@ -17,7 +17,7 @@ const TONE: Record<LcTone, string> = {
   muted: "text-slate-500",
   iv: "text-[#8b7cff]",
   oi: "text-[#f0b90b]",
-  px: "text-cyan-200",
+  px: "text-[#ffcc00]",
 };
 
 /** Inset well so the canvas reads like a TV pane, not a flat card. */
@@ -31,7 +31,7 @@ export function LcWell({
   return (
     <div
       className={cn(
-        "relative overflow-hidden rounded-lg bg-[#0b0f17] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.05)]",
+        "relative overflow-hidden bg-black shadow-[inset_0_0_0_1px_#2a2a2a]",
         className,
       )}
     >
@@ -109,7 +109,7 @@ export function LcSeg<T extends string>({
           onClick={() => onChange(r.v)}
           className={cn(
             "rounded px-2.5 py-1 font-mono text-[11px] tracking-wide",
-            value === r.v ? "bg-cyan-500/15 text-cyan-200" : "text-slate-500 hover:text-slate-300",
+            value === r.v ? "bg-primary/15 text-primary" : "text-slate-500 hover:text-slate-300",
           )}
         >
           {r.label}

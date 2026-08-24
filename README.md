@@ -26,7 +26,7 @@
 
 Vibe-Research 是一个开源的「个人 AI 投研看板」，**主推 A 股、兼看美股 / 港股**（A 股常要看隔夜外围脸色，数据配上更全）。它不替你做决定——把行情、研报、估值、财务、公告、资金面、资讯都配齐，放进一个干净的看板，再留一个能接入**你自己的 AI** 的接口。方向和结论，交给你自己配置的模型 / agent。
 
-**看板读法**：复盘页是一屏驾驶舱（桌面无需滚动，点面板放大）；手机底栏切主页面，A 股复盘/K线在顶下，浏览器可「添加到主屏幕」。K 线 / 美股 / 期权 / 套利 / 事件 / 持仓走同一套深蓝青顶栏，不再切主题、不再套玻璃卡片。
+**看板读法**：复盘页是一屏驾驶舱（桌面无需滚动，点面板放大）；手机底栏切主页面，A 股复盘/K线在顶下，浏览器可「添加到主屏幕」。K 线 / 美股 / 期权 / 套利 / 事件 / 持仓走同一套黑底看盘台（红涨绿跌、黄字高亮、格子拼贴），不再切主题。
 
 > *Vibe-Research: Your Personal Trading Research Agent. An open dashboard for China A-share (plus US / HK): it wires up all the data and plugs into **your own AI / agent** — it never recommends a stock. You bring the model, it brings the data.*
 

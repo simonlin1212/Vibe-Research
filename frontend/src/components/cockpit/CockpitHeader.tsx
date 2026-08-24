@@ -38,17 +38,17 @@ export function parseAShareTab(raw: string | null): string {
   return "review";
 }
 
-/** Recessed rail for page nav and 复盘/K线. */
+/** Flush rail for page nav and 复盘/K线. */
 export const NAV_RAIL_CLASS =
-  "flex min-w-0 items-center gap-px overflow-x-auto rounded-md bg-black/40 p-[3px] ring-1 ring-white/[0.08] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
+  "flex min-w-0 items-center gap-px overflow-x-auto bg-black [scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
 
-/** 12px chip: idle slate-300 (readable), active cyan fill. */
+/** 12px chip: idle gray, active yellow like THS tabs. */
 export function navChipClass(active: boolean): string {
   return cn(
-    "relative shrink-0 rounded-[5px] px-2.5 py-[5px] text-[12px] font-medium leading-none transition-colors duration-150",
+    "relative shrink-0 px-2 py-1 text-[12px] font-medium leading-none transition-colors duration-100",
     active
-      ? "bg-cyan-400/20 text-cyan-50 shadow-[0_0_0_1px_rgba(34,211,238,0.5),0_0_14px_rgba(34,211,238,0.14)]"
-      : "text-slate-300 hover:bg-white/[0.07] hover:text-white",
+      ? "bg-[#2a1a00] text-[#ffcc00]"
+      : "text-[#c8c8c8] hover:bg-[#1a1a1a] hover:text-white",
   );
 }
 
@@ -71,19 +71,19 @@ export function CockpitHeader({
   const week = ["日", "一", "二", "三", "四", "五", "六"][now.getDay()];
 
   return (
-    <header className="flex h-11 shrink-0 items-center gap-2 border-b border-white/[0.07] bg-background px-2 sm:gap-2.5 sm:px-3">
-      <Link to="/a-share" title="返回首页" className="flex shrink-0 items-center gap-2">
-        <span className="flex h-6 w-6 items-center justify-center rounded-[6px] bg-cyan-400/20 text-[12px] font-bold text-cyan-200 shadow-[0_0_14px_rgba(34,211,238,0.4)]">
+    <header className="flex h-8 shrink-0 items-center gap-1.5 border-b border-[#2a2a2a] bg-black px-1.5 sm:gap-2 sm:px-2">
+      <Link to="/a-share" title="返回首页" className="flex shrink-0 items-center gap-1.5">
+        <span className="flex h-5 w-5 items-center justify-center bg-[#e53935] text-[11px] font-bold text-white">
           V
         </span>
-        <h1 className="text-[14px] font-semibold tracking-wide text-slate-50">
+        <h1 className="text-[13px] font-semibold tracking-wide text-[#eee]">
           市场研究驾驶舱
-          <span className="ml-2 hidden text-[9px] font-medium tracking-[0.18em] text-cyan-400/70 xl:inline">
+          <span className="ml-2 hidden text-[9px] font-medium tracking-[0.16em] text-[#ffcc00]/70 xl:inline">
             MARKET RESEARCH COCKPIT
           </span>
         </h1>
       </Link>
-      <div className="mx-0.5 hidden h-5 w-px bg-white/[0.08] md:block" />
+      <div className="mx-0.5 hidden h-4 w-px bg-[#2a2a2a] md:block" />
       <nav className={cn(NAV_RAIL_CLASS, "hidden min-w-0 flex-1 md:flex")} aria-label="主导航">
         {PAGE_NAV.map((l) => {
           const active = l.match(pathname);
@@ -103,25 +103,25 @@ export function CockpitHeader({
       <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
         <div id="cockpit-header-actions" className="flex items-center gap-1.5" />
         {extra}
-        <span className="hidden items-center gap-1.5 text-[11px] font-medium text-emerald-400 sm:flex">
+        <span className="hidden items-center gap-1 text-[11px] font-medium text-[#00d26a] sm:flex">
           <span className="relative flex h-1.5 w-1.5">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
-            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#00d26a] opacity-60" />
+            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[#00d26a]" />
           </span>
           实时
         </span>
-        <span className="hidden text-[11px] tabular-nums text-slate-400 lg:inline">
+        <span className="hidden text-[11px] tabular-nums text-[#888] lg:inline">
           {dateStr} 星期{week}
         </span>
-        <span className="rounded-md border border-white/[0.08] bg-black/30 px-2 py-0.5 font-mono text-[12px] font-bold text-cyan-200">
+        <span className="border border-[#2a2a2a] bg-[#111] px-1.5 py-px font-mono text-[12px] font-bold text-[#ffcc00]">
           {hh}:{mm}
-          <span className="text-cyan-600">:{ss}</span>
+          <span className="text-[#886600]">:{ss}</span>
         </span>
         <button
           type="button"
           onClick={onToggleFullscreen}
           title={isFullscreen ? "退出全屏" : "全屏显示"}
-          className="flex h-7 w-7 items-center justify-center rounded-md border border-white/[0.08] bg-black/30 text-slate-300 hover:border-cyan-400/50 hover:text-cyan-200"
+          className="flex h-6 w-6 items-center justify-center border border-[#2a2a2a] bg-[#111] text-[#bbb] hover:border-primary/60 hover:text-primary"
         >
           {isFullscreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
         </button>

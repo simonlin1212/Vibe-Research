@@ -93,7 +93,7 @@ export const InfraRoiPanel = memo(function InfraRoiPanel({ className, panelId, i
     <Panel title="AI 基础设施资本出清与复合 ROI" icon={<Activity size={14} />} className={className} panelId={panelId} isZoomed={isZoomed} onToggleZoom={onToggleZoom}>
       <div className="flex h-full flex-col p-2 pt-1">
         <div className="flex shrink-0 flex-wrap items-center gap-x-2.5 gap-y-0.5 pb-1 text-[9px]">
-          <span className="flex items-center gap-1"><span className="inline-block h-[3px] w-3.5 rounded bg-[#38bdf8]" />售价</span>
+          <span className="flex items-center gap-1"><span className="inline-block h-[3px] w-3.5 rounded bg-[#ffcc00]" />售价</span>
           <span className="flex items-center gap-1"><span className="inline-block h-[3px] w-3.5 rounded bg-[#fb7185]" />生产成本</span>
           <span className="flex items-center gap-1"><span className="inline-block h-[3px] w-3.5 rounded bg-[#a78bfa]" />AI专项ROI</span>
           <span className="flex items-center gap-1"><span className="inline-block h-[3px] w-3.5 rounded bg-[#fbbf24]" />CapEx</span>
@@ -122,22 +122,22 @@ export const InfraRoiPanel = memo(function InfraRoiPanel({ className, panelId, i
               <text x={chart.X(5)} y={chart.PT + 7} fill="#fbbf24" fontSize={8} fontFamily="monospace" opacity={0.7}>预测→</text>
               {hover != null && <line x1={chart.X(hover)} y1={chart.PT} x2={chart.X(hover)} y2={size.h - chart.PB} stroke="rgba(148,163,184,0.5)" strokeWidth={0.8} />}
               <path d={chart.costPath.forecast} fill="none" stroke="#fb7185" strokeWidth={1.4} strokeDasharray="4 3" opacity={0.8} />
-              <path d={chart.pricePath.forecast} fill="none" stroke="#38bdf8" strokeWidth={1.4} strokeDasharray="4 3" opacity={0.8} />
+              <path d={chart.pricePath.forecast} fill="none" stroke="#ffcc00" strokeWidth={1.4} strokeDasharray="4 3" opacity={0.8} />
               <path d={chart.roiPath.forecast} fill="none" stroke="#a78bfa" strokeWidth={1.2} strokeDasharray="4 3" opacity={0.8} />
               <path d={chart.capexPath.forecast} fill="none" stroke="#fbbf24" strokeWidth={1.1} strokeDasharray="4 3" opacity={0.8} />
               <path d={chart.gridPath.forecast} fill="none" stroke="#34d399" strokeWidth={1.1} strokeDasharray="4 3" opacity={0.8} />
               <path d={chart.costPath.actual} fill="none" stroke="#fb7185" strokeWidth={1.6} />
-              <path d={chart.pricePath.actual} fill="none" stroke="#38bdf8" strokeWidth={1.6} />
+              <path d={chart.pricePath.actual} fill="none" stroke="#ffcc00" strokeWidth={1.6} />
               <path d={chart.roiPath.actual} fill="none" stroke="#a78bfa" strokeWidth={1.4} />
               <path d={chart.capexPath.actual} fill="none" stroke="#fbbf24" strokeWidth={1.3} />
               <path d={chart.gridPath.actual} fill="none" stroke="#34d399" strokeWidth={1.3} />
               <path d={chart.costPath.bridge} fill="none" stroke="#fb7185" strokeWidth={1.2} strokeDasharray="2 2" />
-              <path d={chart.pricePath.bridge} fill="none" stroke="#38bdf8" strokeWidth={1.2} strokeDasharray="2 2" />
+              <path d={chart.pricePath.bridge} fill="none" stroke="#ffcc00" strokeWidth={1.2} strokeDasharray="2 2" />
               <path d={chart.roiPath.bridge} fill="none" stroke="#a78bfa" strokeWidth={1.1} strokeDasharray="2 2" />
               {chart.lTicks.map((t) => <text key={`lt${t}`} x={chart.PL - 4} y={chart.lY(t) + 3} textAnchor="end" fill="#64748b" fontSize={8} fontFamily="monospace">{fmtM(t)}</text>)}
               {chart.rTicks.map((t) => <text key={`rt${t}`} x={size.w - chart.PR + 4} y={chart.rY(t) + 3} textAnchor="start" fill="#475569" fontSize={8} fontFamily="monospace">{t}</text>)}
               {chart.xLabels.map((xl, i) => <text key={`x${i}`} x={xl.x} y={size.h - 8} textAnchor="middle" fill="#94a3b8" fontSize={9} fontFamily="monospace">{xl.label}</text>)}
-              {hover != null && <circle cx={chart.X(hover)} cy={chart.lY(chart.pts[hover].pricePerM)} r={2.5} fill="#38bdf8" />}
+              {hover != null && <circle cx={chart.X(hover)} cy={chart.lY(chart.pts[hover].pricePerM)} r={2.5} fill="#ffcc00" />}
             </svg>
           )}
           {hover != null && chart && (
@@ -146,7 +146,7 @@ export const InfraRoiPanel = memo(function InfraRoiPanel({ className, panelId, i
                 {chart.pts[hover].year}{!chart.pts[hover].actual && <span className="ml-1 text-[8px] text-amber-400">预测</span>}
               </div>
               <div className="space-y-px text-[9px] leading-3">
-                <div className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-[#38bdf8]" /><span className="w-14 text-slate-400">售价</span><span className="ml-auto font-mono text-slate-200">${chart.pts[hover].pricePerM}/M</span></div>
+                <div className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-[#ffcc00]" /><span className="w-14 text-slate-400">售价</span><span className="ml-auto font-mono text-slate-200">${chart.pts[hover].pricePerM}/M</span></div>
                 <div className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-[#fb7185]" /><span className="w-14 text-slate-400">成本</span><span className="ml-auto font-mono text-slate-200">${chart.pts[hover].costPerM}/M</span></div>
                 <div className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-[#a78bfa]" /><span className="w-14 text-slate-400">ROI</span><span className={`ml-auto font-mono ${chart.pts[hover].roiPct >= 0 ? "text-emerald-400" : "text-red-400"}`}>{chart.pts[hover].roiPct}%</span></div>
                 <div className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-[#fbbf24]" /><span className="w-14 text-slate-400">CapEx</span><span className="ml-auto font-mono text-slate-200">${chart.pts[hover].capexB}B</span></div>

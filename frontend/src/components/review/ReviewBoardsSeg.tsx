@@ -38,7 +38,7 @@ export function ReviewBoardsSeg({ lhb, lhbDone }: Props) {
                   <tr key={`${s.code}-${s.reason}-${i}`}>
                     <td className="num text-muted-foreground/50">{i + 1}</td>
                     <td>
-                      <KlineLink code={s.code} className="hover:text-cyan-300">
+                      <KlineLink code={s.code} className="hover:text-primary">
                         <span className="font-medium">{s.name}</span>{" "}
                         <span className="text-slate-500">{s.code}</span>
                       </KlineLink>

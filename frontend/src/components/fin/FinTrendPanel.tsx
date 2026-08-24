@@ -40,7 +40,7 @@ function TrendChart({
             : []),
           { label: "营收同比", cls: "w-4 border-t-2 border-dashed border-sky-400" },
           { label: "净利同比", cls: "w-4 border-t-2 border-rose-400" },
-          { label: "合计净利", cls: "h-[6px] w-[6px] rotate-45 rounded-[1px] bg-cyan-400" },
+          { label: "合计净利", cls: "h-[6px] w-[6px] rotate-45 rounded-[1px] bg-primary" },
         ]
       : chart.mode === "quality"
         ? chart.series.map((s) => ({
@@ -50,7 +50,7 @@ function TrendChart({
           }))
         : [
             { label: "资产负债率", cls: "h-[7px] w-3 rounded-sm bg-amber-400/60" },
-            { label: "ROIC", cls: "w-4 border-t-2 border-cyan-400" },
+            { label: "ROIC", cls: "w-4 border-t-2 border-primary" },
             { label: "每股OCF", cls: "w-4 border-t-2 border-dashed border-emerald-400" },
           ];
 
@@ -89,7 +89,7 @@ function TrendChart({
               ? [
                   <span key="total" className="flex items-center gap-1.5 text-slate-400" style={TNUM}>
                     合计净利
-                    <b className={p.totalNet >= 0 ? "text-cyan-400" : "text-rose-400"}>{fmtYiYuan(p.totalNet)}</b>
+                    <b className={p.totalNet >= 0 ? "text-primary" : "text-rose-400"}>{fmtYiYuan(p.totalNet)}</b>
                     {p.totalNet < 0 && <i className="not-italic text-[8px] text-slate-500">主营外亏空</i>}
                   </span>,
                 ]

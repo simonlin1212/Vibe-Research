@@ -60,7 +60,7 @@ function Gauge({ it, compact }: { it: FearGreedItem; compact?: boolean }) {
   const two = lines.length > 1;
   return (
     <div
-      className={cn("flex min-w-0 flex-col items-center", compact ? "px-0 py-0" : "rounded-lg px-0.5 py-0.5 ring-1 ring-slate-800/80")}
+      className={cn("flex min-w-0 flex-col items-center", compact ? "px-0 py-0" : "px-0.5 py-0.5")}
       title={it.label ? `${it.title} ${score ?? "—"} ${it.label}` : it.title}
     >
       <p className={cn("truncate font-medium text-slate-100", compact ? "text-[10px] leading-3" : "text-[11px]")}>{it.title}</p>

@@ -36,30 +36,30 @@ export function Panel({
   return (
     <section
       className={cn(
-        "flex min-h-0 flex-col rounded-md border bg-card/90 shadow-[0_0_24px_rgba(0,0,0,0.35)] backdrop-blur transition-all duration-300",
+        "flex min-h-0 flex-col border bg-black transition-colors duration-150",
         isZoomed
-          ? "border-cyan-500/50 shadow-[0_0_32px_rgba(34,211,238,0.18)]"
-          : "border-slate-700/40",
+          ? "border-primary"
+          : "border-[#2a2a2a]",
         className,
       )}
     >
-      <header className="flex h-8 shrink-0 items-center gap-2 border-b border-slate-700/40 px-2.5">
+      <header className="flex h-6 shrink-0 items-center gap-1.5 border-b border-[#2a2a2a] bg-[#0d0d0d] px-1.5">
         <span
-          className="inline-block h-3.5 w-1 shrink-0 rounded-sm bg-cyan-400"
+          className="inline-block h-3 w-0.5 shrink-0 bg-primary"
           style={accent ? { background: accent } : undefined}
         />
         {icon && (
-          <span className="inline-flex shrink-0 items-center text-cyan-400" style={accent ? { color: accent } : undefined}>
+          <span className="inline-flex shrink-0 items-center text-primary" style={accent ? { color: accent } : undefined}>
             {icon}
           </span>
         )}
-        <h2 className="min-w-0 flex-1 truncate text-[12px] font-semibold tracking-wide text-slate-200">
+        <h2 className="min-w-0 flex-1 truncate text-[12px] font-semibold tracking-wide text-[#ffcc00]">
           {title}
           {hint && (
-            <span className="ml-1.5 font-normal text-[10px] text-slate-400">{hint}</span>
+            <span className="ml-1.5 font-normal text-[10px] text-[#888]">{hint}</span>
           )}
         </h2>
-        <div className="flex min-w-0 max-w-[min(240px,48vw)] shrink items-center justify-end gap-1 overflow-x-auto sm:max-w-none sm:shrink-0 sm:gap-2">
+        <div className="flex min-w-0 max-w-[min(240px,48vw)] shrink items-center justify-end gap-1 overflow-x-auto sm:max-w-none sm:shrink-0 sm:gap-1.5">
           {right}
           {panelId && onToggleZoom && (
             <button
@@ -67,10 +67,10 @@ export function Panel({
               onClick={() => onToggleZoom(panelId)}
               title={isZoomed ? "缩小" : "放大"}
               className={cn(
-                "flex h-[22px] w-[22px] items-center justify-center rounded border transition-colors",
+                "flex h-[18px] w-[18px] items-center justify-center border transition-colors",
                 isZoomed
-                  ? "border-cyan-500/60 bg-cyan-500/10 text-cyan-300"
-                  : "border-slate-700/60 bg-slate-800/40 text-slate-400 hover:border-cyan-500/60 hover:text-cyan-300",
+                  ? "border-primary/70 bg-primary/10 text-primary"
+                  : "border-[#333] bg-[#111] text-[#888] hover:border-primary/70 hover:text-primary",
               )}
             >
               {isZoomed ? <ZoomOut size={12} /> : <ZoomIn size={12} />}

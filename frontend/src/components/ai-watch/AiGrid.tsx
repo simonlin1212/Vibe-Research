@@ -23,7 +23,7 @@ export function AiGrid({ cells }: { cells: AiCellDef[] }) {
   const zoomed = zoomedId != null;
 
   return (
-    <main className="grid grid-cols-1 gap-1 p-1 lg:h-full lg:min-h-0 lg:flex-1 lg:grid-cols-3 lg:grid-rows-4 lg:overflow-hidden">
+    <main className="grid grid-cols-1 gap-px bg-[#2a2a2a] lg:h-full lg:min-h-0 lg:flex-1 lg:grid-cols-3 lg:grid-rows-4 lg:overflow-hidden">
       {cells.map((c) => (
         <div
           key={c.id}

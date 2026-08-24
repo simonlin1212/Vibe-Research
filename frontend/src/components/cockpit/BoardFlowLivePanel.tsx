@@ -70,7 +70,7 @@ export function BoardFlowLivePanel({
             setProgress((p) => (p >= 1 ? 0 : p));
             setPlaying((v) => !v);
           }}
-          className="rounded border border-slate-700/60 px-1.5 py-0.5 text-[10px] text-slate-400 hover:border-cyan-500/50 hover:text-cyan-300"
+          className="border border-[#333] px-1.5 py-0.5 text-[10px] text-[#aaa] hover:border-primary/50 hover:text-primary"
         >
           {label}
         </button>

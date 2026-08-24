@@ -11,7 +11,7 @@ export function PeriodTabs() {
           type="button"
           onClick={() => setPeriod(p.value)}
           className={`flex h-[22px] items-center rounded px-2 ${
-            period === p.value ? "bg-cyan-500/20 text-cyan-300" : "text-slate-400 hover:text-slate-200"
+            period === p.value ? "bg-primary/20 text-primary" : "text-slate-400 hover:text-slate-200"
           }`}
         >
           {p.label}

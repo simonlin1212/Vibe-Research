@@ -23,17 +23,17 @@ function TapeChip({ it }: { it: TapeItem }) {
   const up = it.pct > 0;
   const down = it.pct < 0;
   return (
-    <span className="mx-4 inline-flex items-baseline gap-1.5 whitespace-nowrap text-[11px] leading-7">
-      <span className="text-slate-400">{it.label}</span>
-      <span className="font-semibold tabular-nums text-slate-100">
+    <span className="mx-3 inline-flex items-baseline gap-1 whitespace-nowrap text-[11px] leading-6">
+      <span className="text-[#888]">{it.label}</span>
+      <span className="font-semibold tabular-nums text-[#eee]">
         {fmtPrice(it.price, it.digits)}
       </span>
       <span
         className={cn(
           "font-medium tabular-nums",
-          up && "text-red-400",
-          down && "text-emerald-400",
-          !up && !down && "text-slate-500",
+          up && "text-[#ff4d4f]",
+          down && "text-[#00d26a]",
+          !up && !down && "text-[#666]",
         )}
       >
         {fmtPct(it.pct)}
@@ -60,13 +60,13 @@ function renderChips(items: TapeItem[], suffix: string) {
 
 export function TickerTape({ items }: { items: TapeItem[] }) {
   if (!items.length) {
-    return <div className="h-7 shrink-0 border-b border-border bg-background" />;
+    return <div className="h-6 shrink-0 border-b border-[#2a2a2a] bg-black" />;
   }
 
   const unit = padUnit(items);
 
   return (
-    <div className="ticker-wrap relative h-7 shrink-0 overflow-hidden border-b border-border bg-background">
+    <div className="ticker-wrap relative h-6 shrink-0 overflow-hidden border-b border-[#2a2a2a] bg-black">
       <div className="ticker-track items-center">
         <div className="inline-flex">{renderChips(unit, "a")}</div>
         <div className="inline-flex" aria-hidden>{renderChips(unit, "b")}</div>

@@ -1,7 +1,7 @@
 // Trend chart math: stacked mainop / quality lines / leverage dual-axis.
 import type { FinMain, FinMainOpHist, FinReportRow } from "@/lib/api";
 
-export const SERIES = ["#22d3ee", "#fb7185", "#38bdf8", "#34d399", "#fbbf24", "#a78bfa", "#f5c542", "#94a3b8"] as const;
+export const SERIES = ["#ffcc00", "#ff4d4f", "#00d26a", "#f0b90b", "#fbbf24", "#a78bfa", "#f5c542", "#94a3b8"] as const;
 export const SEG_COLORS = ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#64748b"] as const;
 export const GRID = "#1e293b";
 export const AXIS = "#475569";

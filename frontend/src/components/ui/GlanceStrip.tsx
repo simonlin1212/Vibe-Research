@@ -35,7 +35,7 @@ const toneClass: Record<GlanceTone, string> = {
   up: "text-danger",
   down: "text-success",
   flat: "text-muted-foreground",
-  primary: "text-cyan-300",
+  primary: "text-primary",
   muted: "text-slate-100",
 };
 
@@ -71,7 +71,7 @@ export function GlanceStrip({
         : "grid-cols-2 sm:grid-cols-4 xl:grid-cols-8";
 
   return (
-    <div className={cn("mb-3 rounded-md border border-border/60 bg-card/90 p-2.5", className)}>
+    <div className={cn("mb-1 border border-[#2a2a2a] bg-black p-1.5", className)}>
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <div className="min-w-0">
           {title && <p className="text-[12px] font-semibold tracking-wide text-slate-200">{title}</p>}
@@ -82,7 +82,7 @@ export function GlanceStrip({
             <button
               type="button"
               onClick={onToggleAll}
-              className="inline-flex items-center gap-1 rounded border border-slate-700/60 px-2 py-1 text-[11px] text-slate-400 hover:border-cyan-500/50 hover:text-cyan-300"
+              className="inline-flex items-center gap-1 border border-[#333] px-1.5 py-0.5 text-[11px] text-[#aaa] hover:border-primary/50 hover:text-primary"
               title={allOpen ? "全部收起" : "全部展开"}
             >
               {allOpen ? <ChevronsDownUp className="h-3.5 w-3.5" /> : <ChevronsUpDown className="h-3.5 w-3.5" />}

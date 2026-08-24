@@ -143,7 +143,7 @@ export function QuoteStockRow({
       className="grid items-center gap-x-1"
       style={{
         gridTemplateColumns: `${showStar ? "14px " : ""}${rank != null ? "auto " : ""}72px minmax(0,1fr) minmax(0,1fr) ${hasAmt ? "64px" : "0px"} 60px`,
-        gridTemplateRows: "20px 16px",
+        gridTemplateRows: "18px 14px",
       }}
     >
       {showStar && (
@@ -215,7 +215,7 @@ export function QuoteStockRow({
       title={`${boardLine.industry}${boardLine.concepts ? ` · ${boardLine.concepts}` : ""}`}
     >
       <span className="truncate">
-        {boardLine.industry && <span className="text-cyan-500/80">{boardLine.industry}</span>}
+        {boardLine.industry && <span className="text-[#ffcc00]/80">{boardLine.industry}</span>}
         {boardLine.concepts && (
           <span className="text-slate-600">
             {boardLine.industry ? " · " : ""}
@@ -225,7 +225,7 @@ export function QuoteStockRow({
       </span>
     </div>
   );
-  const cls = "group block w-full rounded px-2 py-[4px] text-left transition-colors hover:bg-slate-800/40 hover:shadow-[inset_0_0_0_1px_rgba(34,211,238,0.22)]";
+  const cls = "group block w-full px-1.5 py-[2px] text-left transition-colors hover:bg-[#1a1400] hover:shadow-[inset_2px_0_0_#ffcc00]";
   return (
     <div ref={setEl}>
       {href ? (

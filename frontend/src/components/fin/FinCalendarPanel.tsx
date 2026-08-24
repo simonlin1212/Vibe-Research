@@ -110,7 +110,7 @@ export function FinCalendarPanel() {
                     width={bw}
                     height={bh}
                     rx={1.5}
-                    fill={isToday && !selDate ? "#fbbf24" : d.past ? "#64748b" : "#22d3ee"}
+                    fill={isToday && !selDate ? "#fbbf24" : d.past ? "#64748b" : "#ffcc00"}
                     opacity={isToday && !selDate ? 1 : d.past ? 0.5 : 0.4}
                     stroke={isSelected ? (isToday ? "#fbbf24" : "#e2e8f0") : "none"}
                     strokeWidth={isSelected ? 1 : 0}

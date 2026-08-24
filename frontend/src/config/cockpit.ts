@@ -22,7 +22,7 @@ export const WORLD_INDEX_DEFS: IndexDef[] = [
   { code: "usINX", label: "标普500", region: "US" },
   { code: "usVIX", label: "恐慌指数", region: "US" },
   { code: "usSOXX", label: "费城半导体", region: "US" },
-  { code: "jpN225", label: "日经225", region: "JP", accent: "#22d3ee" },
+  { code: "jpN225", label: "日经225", region: "JP", accent: "#ffcc00" },
   { code: "ksKOSPI", label: "韩国KOSPI", region: "KR", accent: "#4ade80" },
   { code: "whUSDCNY", label: "美元/人民币", region: "FX" },
 ];

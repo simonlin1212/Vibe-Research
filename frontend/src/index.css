@@ -4,43 +4,42 @@
 
 @layer base {
   /* ============================================================
-     Vibe-Research · TickFlow zinc dark
-     Page = #0A0A0B / cards = #18181B. Cyan stays on accents only.
+     Vibe-Research · Tonghuashun plane
+     Page = #000 / tiles = #0d0d0d / hairline #2a2a2a
+     Highlight yellow. A-share: danger=up red, success=down green.
      ============================================================ */
   :root {
-    --background: 240 5% 5%;
-    --foreground: 0 0% 98%;
-    --card: 240 7% 10%;
-    --card-foreground: 0 0% 98%;
+    --background: 0 0% 0%;
+    --foreground: 0 0% 96%;
+    --card: 0 0% 5%;
+    --card-foreground: 0 0% 96%;
 
-    --primary: 189 94% 43%;
-    --primary-foreground: 240 5% 5%;
-    --accent: 187 86% 53%;
-    --accent-foreground: 240 5% 5%;
+    --primary: 48 100% 50%;
+    --primary-foreground: 0 0% 0%;
+    --accent: 48 100% 50%;
+    --accent-foreground: 0 0% 0%;
 
-    --muted: 240 9% 14%;
-    --muted-foreground: 240 5% 58%;
-    --destructive: 0 72% 58%;
+    --muted: 0 0% 9%;
+    --muted-foreground: 0 0% 55%;
+    --destructive: 0 85% 55%;
     --destructive-foreground: 0 0% 100%;
-    --border: 240 5% 22%;
-    --radius: 0.375rem;
+    --border: 0 0% 16%;
+    --radius: 0px;
 
-    /* 语义色（涨跌配色由页面按 A股红涨绿跌自行选用 success/danger） */
-    --success: 152 67% 45%;
-    --danger: 4 87% 60%;
-    --warning: 32 95% 50%;
-    --info: 189 94% 43%;
+    /* A-share: danger = up red, success = down green */
+    --success: 130 90% 42%;
+    --danger: 0 88% 56%;
+    --warning: 42 100% 50%;
+    --info: 48 100% 50%;
 
-    /* 玻璃发丝边框 / 内高光（rgba，供 .glass 使用） */
-    --glass-fill-top: rgba(255, 255, 255, 0.04);
-    --glass-fill-bot: rgba(255, 255, 255, 0.01);
-    --glass-stroke: rgba(255, 255, 255, 0.08);
-    --glass-hi: rgba(255, 255, 255, 0.05);
+    --glass-fill-top: rgba(255, 255, 255, 0.02);
+    --glass-fill-bot: rgba(0, 0, 0, 0.35);
+    --glass-stroke: rgba(255, 255, 255, 0.10);
+    --glass-hi: rgba(255, 255, 255, 0.03);
 
-    /* Chart tokens */
-    --chart-grid: 240 5% 14%;
-    --chart-text: 240 5% 58%;
-    --chart-axis: 240 5% 22%;
+    --chart-grid: 0 0% 12%;
+    --chart-text: 0 0% 55%;
+    --chart-axis: 0 0% 16%;
   }
 
   .light {
@@ -85,7 +84,9 @@
     @apply bg-background text-foreground font-sans antialiased;
     font-feature-settings: "ss01" on, "cv11" on;
     font-variant-numeric: tabular-nums;
-    background-color: hsl(var(--background));
+    background-color: #000;
+    font-size: 12px;
+    line-height: 1.25;
   }
 
   .light body {
@@ -124,35 +125,24 @@
 }
 
 @layer components {
-  /* Solid data panel: default for tables / charts (no backdrop-filter cost). */
+  /* Solid data panel: flush tile, no radius. */
   .surface-panel {
-    background: hsl(var(--card) / 0.9);
-    border: 1px solid hsl(var(--border) / 0.6);
-    border-radius: 0.375rem;
+    background: #0d0d0d;
+    border: 1px solid #2a2a2a;
+    border-radius: 0;
   }
   .light .surface-panel {
     background: hsl(var(--card));
     box-shadow: 0 6px 18px hsl(220 40% 40% / 0.06);
   }
 
-  /* Featured solid panel: hairline accent, light corner wash, still no blur */
+  /* Featured tile: yellow hairline only */
   .surface-glow {
     position: relative;
     overflow: hidden;
-    box-shadow:
-      inset 0 1px 0 hsl(0 0% 100% / 0.04),
-      0 0 0 1px hsl(var(--primary) / 0.14);
+    box-shadow: inset 0 0 0 1px hsl(var(--primary) / 0.28);
   }
-  .surface-glow::before {
-    content: "";
-    position: absolute;
-    top: -45%;
-    right: -18%;
-    width: 180px;
-    height: 180px;
-    background: radial-gradient(circle, hsl(var(--primary) / 0.09), transparent 70%);
-    pointer-events: none;
-  }
+  .surface-glow::before { display: none; }
 
   /* Glass shell: sidebar / overlays only. Prefer .surface-panel on dense data. */
   .glass {
@@ -203,7 +193,7 @@
     @apply mb-1.5 block text-xs font-medium text-muted-foreground;
   }
   .field-input {
-    @apply w-full rounded-lg border border-border/80 bg-muted/35 px-3 py-2 text-sm text-foreground outline-none transition-[border-color,box-shadow,background-color] duration-200;
+    @apply w-full border border-border/80 bg-muted/35 px-2 py-1 text-[12px] text-foreground outline-none transition-[border-color,box-shadow,background-color] duration-200;
     @apply placeholder:text-muted-foreground/45;
   }
   .field-input:hover { @apply border-border; }
@@ -242,7 +232,7 @@
     width: 100%;
     border-collapse: separate;
     border-spacing: 0;
-    font-size: 0.75rem;
+    font-size: 11px;
     font-variant-numeric: tabular-nums;
   }
   .data-table thead th {
@@ -253,7 +243,7 @@
     color: hsl(var(--foreground) / 0.88);
     font-weight: 600;
     white-space: nowrap;
-    padding: 0.5rem 0.625rem;
+    padding: 0.18rem 0.35rem;
     text-align: left;
     border-bottom: 1px solid hsl(var(--border));
   }
@@ -279,7 +269,7 @@
     box-shadow: inset 2px 0 0 hsl(var(--primary));
   }
   .data-table td {
-    padding: 0.375rem 0.625rem;
+    padding: 0.1rem 0.35rem;
     white-space: nowrap;
     vertical-align: middle;
   }
@@ -314,10 +304,10 @@
   .data-table tbody tr:first-child td { border-top: none; }
   /* T 型报价: 链上多列, 比通用表更密 */
   .data-table.dense thead th {
-    padding: 0.28rem 0.4rem;
+    padding: 0.12rem 0.28rem;
   }
   .data-table.dense td {
-    padding: 0.2rem 0.4rem;
+    padding: 0.06rem 0.28rem;
   }
   .data-table tbody tr.spot-und,
   .data-table tbody tr.spot-und:nth-child(even),
@@ -328,18 +318,18 @@
 
   /* —— 市场概览表: 冻首列 + 稍大字号 —— */
   .market-table {
-    font-size: 0.9375rem; /* 15px */
+    font-size: 12px;
   }
   .market-table thead th {
-    background: hsl(var(--card) / 0.92);
-    font-size: 0.9375rem; /* 15px */
+    background: #0d0d0d;
+    font-size: 11px;
     font-weight: 600;
-    letter-spacing: 0.01em;
+    letter-spacing: 0;
     text-transform: none;
-    padding: 0.8rem 0.85rem;
+    padding: 0.22rem 0.4rem;
   }
   .market-table tbody td {
-    padding: 0.6rem 0.85rem;
+    padding: 0.14rem 0.4rem;
     vertical-align: middle;
   }
   .market-table thead th:first-child,
@@ -365,11 +355,11 @@
     display: inline-flex;
     min-width: 4rem;
     justify-content: flex-end;
-    border-radius: 999px;
-    padding: 0.15rem 0.55rem;
+    border-radius: 0;
+    padding: 0 0.28rem;
     font-variant-numeric: tabular-nums;
     font-weight: 600;
-    font-size: 0.8125rem;
+    font-size: 11px;
   }
   .market-table .pct-pill.up {
     color: hsl(var(--danger));
@@ -403,18 +393,18 @@
     gap: 0.75rem;
     border-bottom: 1px solid hsl(var(--border) / 0.55);
     background: linear-gradient(180deg, hsl(var(--muted) / 0.35), transparent);
-    padding: 0.75rem 1rem;
+    padding: 0.28rem 0.5rem;
   }
 
   /* Compact pct pill (index cards / rank lists, not only market-table) */
   .pct-chip {
     display: inline-flex;
     align-items: center;
-    border-radius: 999px;
-    padding: 0.1rem 0.5rem;
+    border-radius: 0;
+    padding: 0 0.28rem;
     font-variant-numeric: tabular-nums;
     font-weight: 600;
-    font-size: 0.6875rem;
+    font-size: 11px;
     letter-spacing: 0.01em;
   }
   .pct-chip.up {

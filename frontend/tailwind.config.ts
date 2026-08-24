@@ -20,7 +20,7 @@ export default {
         info: "hsl(var(--info))",
       },
       fontFamily: {
-        sans: ["Geist", "system-ui", "sans-serif"],
+        sans: ["Microsoft YaHei", "PingFang SC", "Geist", "system-ui", "sans-serif"],
         mono: ["JetBrains Mono Variable", "Geist Mono", "ui-monospace", "monospace"],
       },
       borderRadius: { lg: "var(--radius)", md: "calc(var(--radius) - 4px)", sm: "calc(var(--radius) - 8px)" },

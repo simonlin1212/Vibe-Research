@@ -61,15 +61,15 @@ export function Research() {
         title="研究桌"
         subtitle="Stooq / Baostock / pykrx · 相关热力图 · ETF 穿透 · 13F 环比。只呈现公开披露, 不推荐不预测。"
         actions={
-          <div className="flex rounded-lg bg-muted/40 p-0.5 text-xs">
+          <div className="flex border border-[#2a2a2a] bg-black p-px text-[12px]">
             {TABS.map((t) => (
               <button
                 key={t.id}
                 type="button"
                 onClick={() => setTab(t.id)}
                 className={cn(
-                  "rounded-md px-2.5 py-1 transition-colors",
-                  tab === t.id ? "bg-background text-cyan-200 shadow-sm" : "text-muted-foreground",
+                  "px-2 py-1",
+                  tab === t.id ? "bg-[#2a1a00] text-primary" : "text-[#888] hover:text-[#eee]",
                 )}
               >
                 {t.label}
@@ -154,7 +154,7 @@ function CorrPanel() {
         left: "center",
         bottom: 0,
         textStyle: { color: "#94a3b8", fontSize: 10 },
-        inRange: { color: ["#fb7185", "#1e293b", "#22d3ee"] },
+        inRange: { color: ["#fb7185", "#1e293b", "#ffcc00"] },
       },
       series: [
         {
@@ -208,7 +208,7 @@ function CorrPanel() {
         <button
           type="submit"
           disabled={loading}
-          className="inline-flex items-center gap-1 rounded border border-cyan-500/40 bg-cyan-500/10 px-2.5 py-1 text-[12px] text-cyan-200 disabled:opacity-50"
+          className="inline-flex items-center gap-1 rounded border border-primary/40 bg-primary/10 px-2.5 py-1 text-[12px] text-primary disabled:opacity-50"
         >
           <RefreshCw size={12} className={loading ? "animate-spin" : ""} />
           计算
@@ -278,7 +278,7 @@ function EtfPanel() {
         <button
           type="submit"
           disabled={loading}
-          className="rounded border border-cyan-500/40 bg-cyan-500/10 px-2.5 py-1 text-[12px] text-cyan-200 disabled:opacity-50"
+          className="rounded border border-primary/40 bg-primary/10 px-2.5 py-1 text-[12px] text-primary disabled:opacity-50"
         >
           穿透
         </button>
@@ -314,7 +314,7 @@ function EtfPanel() {
                   <tr key={`${h.symbol || h.ticker || h.cusip || i}`} className="border-t border-slate-800/80">
                     <td className="py-1 pr-2 font-mono text-slate-300">{h.symbol || h.ticker || h.cusip || "—"}</td>
                     <td className="py-1 pr-2 text-slate-200">{h.name || "—"}</td>
-                    <td className="py-1 pr-2 text-right tabular-nums text-cyan-200">
+                    <td className="py-1 pr-2 text-right tabular-nums text-primary">
                       {fmtPct(h.pct_of_net_assets, 3)}
                     </td>
                     <td className="py-1 text-right tabular-nums text-slate-400">
@@ -374,7 +374,7 @@ function ThirteenFPanel() {
               onClick={() => setMode(m)}
               className={cn(
                 "rounded-md px-2 py-0.5",
-                mode === m ? "bg-background text-cyan-200" : "text-slate-500",
+                mode === m ? "bg-background text-primary" : "text-slate-500",
               )}
             >
               {m === "manager" ? "管理人" : "标的持有人"}
@@ -390,7 +390,7 @@ function ThirteenFPanel() {
         <button
           type="submit"
           disabled={loading}
-          className="rounded border border-cyan-500/40 bg-cyan-500/10 px-2.5 py-1 text-[12px] text-cyan-200 disabled:opacity-50"
+          className="rounded border border-primary/40 bg-primary/10 px-2.5 py-1 text-[12px] text-primary disabled:opacity-50"
         >
           查询
         </button>
@@ -417,7 +417,7 @@ function ThirteenFPanel() {
                   <td className="py-1">
                     <button
                       type="button"
-                      className="font-mono text-cyan-300 hover:underline"
+                      className="font-mono text-primary hover:underline"
                       onClick={() => {
                         setMode("manager");
                         setInput(m.cik);
@@ -459,7 +459,7 @@ function ThirteenFPanel() {
                         {h.put_call ? <span className="ml-1 text-slate-500">{h.put_call}</span> : null}
                       </td>
                       <td className="py-1 text-right tabular-nums text-slate-400">{fmtNum(h.shares, 0)}</td>
-                      <td className="py-1 text-right tabular-nums text-cyan-200">{fmtYi(h.value_usd)}</td>
+                      <td className="py-1 text-right tabular-nums text-primary">{fmtYi(h.value_usd)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -488,7 +488,7 @@ function ThirteenFPanel() {
                       <td
                         className={cn(
                           "py-1",
-                          c.action === "new" || c.action === "increased" ? "text-cyan-300" : "text-rose-300",
+                          c.action === "new" || c.action === "increased" ? "text-primary" : "text-rose-300",
                         )}
                       >
                         {c.action}
@@ -610,7 +610,7 @@ function KlinePanel({ sources }: { sources: ResearchSources | null }) {
         <button
           type="submit"
           disabled={loading}
-          className="rounded border border-cyan-500/40 bg-cyan-500/10 px-2.5 py-1 text-[12px] text-cyan-200 disabled:opacity-50"
+          className="rounded border border-primary/40 bg-primary/10 px-2.5 py-1 text-[12px] text-primary disabled:opacity-50"
         >
           拉取
         </button>

@@ -15,8 +15,8 @@ export function GlassCard({ children, className, onClick }: Props) {
     <div
       onClick={onClick}
       className={cn(
-        "rounded-md border border-border/60 bg-card/90 p-3",
-        onClick && "cursor-pointer transition-colors hover:border-cyan-500/40",
+        "border border-[#2a2a2a] bg-black p-2",
+        onClick && "cursor-pointer transition-colors hover:border-primary/50",
         className,
       )}
     >

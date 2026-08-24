@@ -34,15 +34,15 @@ export function CollapsibleSection({
   const [open, setOpen] = useSectionOpen(storageKey, defaultOpen);
 
   return (
-    <section className={cn("mb-4", className)}>
-      <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1.5">
+    <section className={cn("mb-1", className)}>
+      <div className="mb-1 flex flex-wrap items-center gap-x-2 gap-y-1">
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
-          className="flex min-w-0 flex-1 items-center gap-2 rounded-lg py-1 text-left transition-colors hover:bg-muted/25"
+          className="flex min-w-0 flex-1 items-center gap-1.5 py-0.5 text-left hover:bg-[#1a1400]"
           aria-expanded={open}
         >
-          <span className="inline-flex h-6 w-1 shrink-0 rounded-full bg-primary/70" aria-hidden />
+          <span className="inline-flex h-3.5 w-0.5 shrink-0 bg-primary" aria-hidden />
           <h3 className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
             {icon}
             {title}

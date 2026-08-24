@@ -272,7 +272,7 @@ export function AskAiButton({ context, getContext, suggestions = [], label = "�
   const panel = open ? createPortal(
         <div className="fixed inset-0 z-[100] flex justify-end">
           <div className="absolute inset-0 bg-black/50" onClick={close} />
-          <aside className="relative flex h-full w-full flex-col border border-cyan-500/30 bg-card pt-[env(safe-area-inset-top)] shadow-[0_0_32px_rgba(34,211,238,0.12)] md:m-3 md:h-[calc(100%-1.5rem)] md:max-w-md md:rounded-md md:pt-0">
+          <aside className="relative flex h-full w-full flex-col border border-[#2a2a2a] bg-black pt-[env(safe-area-inset-top)] md:m-2 md:h-[calc(100%-1rem)] md:max-w-md md:pt-0">
             <div className="flex items-center justify-between border-b border-border/60 p-4">
               <span className="flex items-center gap-2 font-semibold">
                 <Sparkles className="h-4 w-4 text-primary" /> 问 AI · 本页上下文
@@ -396,9 +396,9 @@ export function AskAiButton({ context, getContext, suggestions = [], label = "�
     <>
       <button
         onClick={() => setOpen(true)}
-        className="btn-press inline-flex items-center gap-1.5 rounded-lg bg-primary/15 px-3 py-1.5 text-sm font-medium text-primary ring-1 ring-primary/25 hover:bg-primary/25"
+        className="btn-press inline-flex items-center gap-1 border border-primary/40 bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary hover:bg-primary/20"
       >
-        <Sparkles className="h-4 w-4" />
+        <Sparkles className="h-3 w-3" />
         {label}
       </button>
       {panel}

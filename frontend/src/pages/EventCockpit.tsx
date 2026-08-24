@@ -134,7 +134,7 @@ export function EventCockpit() {
           title: "实时新闻",
           hint: "财联社 / 新浪见闻 / 金十 · 与复盘同一口",
           icon: <Rss size={14} />,
-          accent: "#38bdf8",
+          accent: "#ffcc00",
           defaultW: 0.40,
           mobileH: "h-[56vh]",
           right: (
@@ -153,7 +153,7 @@ export function EventCockpit() {
           title: "Polymarket",
           hint: tab === "watch" ? "本机监控 · 粘贴事件链接加入" : "24h 成交额 · 点 + 加入监控",
           icon: <Percent size={14} />,
-          accent: "#e879f9",
+          accent: "#ffcc00",
           defaultW: 0.60,
           mobileH: "h-[70vh]",
           right: (
@@ -161,14 +161,14 @@ export function EventCockpit() {
               <button
                 type="button"
                 onClick={() => { setTab("watch"); setQ(""); }}
-                className={cn("rounded px-1.5 py-0.5 text-[10px]", tab === "watch" ? "bg-cyan-500/15 text-cyan-300" : "text-slate-400 hover:text-slate-200")}
+                className={cn("rounded px-1.5 py-0.5 text-[10px]", tab === "watch" ? "bg-primary/15 text-primary" : "text-slate-400 hover:text-slate-200")}
               >
                 监控{watch.length ? ` ${watch.length}` : ""}
               </button>
               <button
                 type="button"
                 onClick={() => setTab("hot")}
-                className={cn("rounded px-1.5 py-0.5 text-[10px]", tab === "hot" ? "bg-cyan-500/15 text-cyan-300" : "text-slate-400 hover:text-slate-200")}
+                className={cn("rounded px-1.5 py-0.5 text-[10px]", tab === "hot" ? "bg-primary/15 text-primary" : "text-slate-400 hover:text-slate-200")}
               >
                 热门
               </button>
@@ -182,7 +182,7 @@ export function EventCockpit() {
               <button
                 type="button"
                 onClick={addFromDraft}
-                className="h-6 rounded border border-slate-700/60 px-1.5 text-[10px] text-slate-300 hover:border-cyan-500/50 hover:text-cyan-300"
+                className="h-6 rounded border border-slate-700/60 px-1.5 text-[10px] text-slate-300 hover:border-primary/50 hover:text-primary"
               >
                 加入
               </button>
@@ -214,7 +214,7 @@ export function EventCockpit() {
         type="button"
         onClick={() => setTick((n) => n + 1)}
         className={cn(
-          "inline-flex h-6 items-center gap-1 rounded border border-slate-700/60 px-2 text-[11px] text-slate-400 transition-colors hover:border-cyan-500/50 hover:text-cyan-300",
+          "inline-flex h-6 items-center gap-1 rounded border border-slate-700/60 px-2 text-[11px] text-slate-400 transition-colors hover:border-primary/50 hover:text-primary",
         )}
         title="重拉 Polymarket"
       >

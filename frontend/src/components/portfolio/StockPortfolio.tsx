@@ -97,7 +97,7 @@ export function StockPortfolio() {
           <>
             <Link
               to={`/backtest?codes=${holdings.map((h) => h.code).filter(Boolean).slice(0, 100).join(",")}&from=portfolio&autostart=1`}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-sm text-cyan-200 hover:bg-cyan-500/20"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/10 px-3 py-1.5 text-sm text-primary hover:bg-primary/20"
             >
               <FlaskConical className="h-4 w-4" />
               回测这些

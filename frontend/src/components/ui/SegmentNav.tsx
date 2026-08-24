@@ -42,7 +42,7 @@ export function SegmentNav({ items, value, onChange, sticky = true, className, s
   return (
     <div
       className={cn(
-        "mb-3 rounded-md border border-border bg-card/90 p-0.5",
+        "mb-1 border border-[#2a2a2a] bg-black p-px",
         sticky && "sticky top-0 z-20",
         className,
       )}
@@ -61,7 +61,7 @@ export function SegmentNav({ items, value, onChange, sticky = true, className, s
               className={cn(
                 "inline-flex shrink-0 items-center gap-1 rounded px-2 py-1 text-[11px]",
                 active
-                  ? "bg-cyan-500/15 font-medium text-cyan-300"
+                  ? "bg-primary/15 font-medium text-primary"
                   : "text-slate-500 hover:text-slate-200",
               )}
             >

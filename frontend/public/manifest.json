@@ -4,8 +4,8 @@
   "description": "个人投研看板: 配齐公开行情和复盘材料, 结论由你自己的 AI 写",
   "start_url": "/a-share",
   "display": "standalone",
-  "background_color": "#0A0A0B",
-  "theme_color": "#0A0A0B",
+  "background_color": "#000000",
+  "theme_color": "#000000",
   "icons": [
     {
       "src": "/favicon.svg",

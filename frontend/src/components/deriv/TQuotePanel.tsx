@@ -461,7 +461,7 @@ export function TQuotePanel({ d, product, onProduct, pick, onPickContract }: {
             onClick={toggleHideItm}
             className={cn(
               "relative inline-flex h-3.5 w-6 shrink-0 items-center rounded-full transition-colors",
-              hideItm ? "bg-cyan-500/70" : "bg-slate-700/70",
+              hideItm ? "bg-primary/70" : "bg-slate-700/70",
             )}
           >
             <span
@@ -474,7 +474,7 @@ export function TQuotePanel({ d, product, onProduct, pick, onPickContract }: {
         </span>
         {cur?.lastTime && (
           <span
-            className="shrink-0 rounded border border-cyan-500/30 bg-cyan-500/10 px-1.5 py-0.5 text-[12px] font-medium tabular-nums text-cyan-300"
+            className="shrink-0 rounded border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[12px] font-medium tabular-nums text-primary"
             title={`上游更新 ${cur.lastTime}`}
           >
             更新 {cur.lastTime.slice(11, 19) || cur.lastTime}
@@ -510,7 +510,7 @@ export function TQuotePanel({ d, product, onProduct, pick, onPickContract }: {
           </span>
           {skew !== null && (
             <span title="虚值沽IV - 虚值购IV, 正=沽更贵">
-              偏度 <span className={cn(skew > 0.5 ? "text-amber-300" : skew < -0.5 ? "text-sky-300" : "text-slate-300")}>
+              偏度 <span className={cn(skew > 0.5 ? "text-amber-300" : skew < -0.5 ? "text-primary" : "text-slate-300")}>
                 {skew > 0 ? "沽+" : skew < 0 ? "购+" : ""}{Math.abs(skew).toFixed(1)}
               </span>
             </span>
@@ -637,13 +637,13 @@ export function TQuotePanel({ d, product, onProduct, pick, onPickContract }: {
               className={cn(
                 "flex shrink-0 flex-col items-start rounded-md px-1.5 py-1 text-left tabular-nums",
                 cur?.exp === e.exp
-                  ? "bg-cyan-500/20 text-cyan-200 ring-1 ring-cyan-500/40"
+                  ? "bg-primary/20 text-primary ring-1 ring-primary/40"
                   : "bg-slate-800/50 text-slate-300 hover:bg-slate-800 hover:text-slate-100",
               )}
               title={`到期日 ${e.expiryDate ?? "-"}`}
             >
               <span className="text-[11px] font-medium leading-tight">{expChipTitle(prodAlias, e.exp)}</span>
-              <span className={cn("text-[10px] leading-tight", cur?.exp === e.exp ? "text-cyan-400/80" : "text-slate-500")}>
+              <span className={cn("text-[10px] leading-tight", cur?.exp === e.exp ? "text-primary/80" : "text-slate-500")}>
                 {expMd(e.expiryDate)} 剩{e.dte != null && Number.isFinite(e.dte) ? Math.round(e.dte) : "-"}天
               </span>
             </button>

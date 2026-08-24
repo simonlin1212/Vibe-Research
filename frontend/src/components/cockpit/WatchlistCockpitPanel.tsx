@@ -29,7 +29,7 @@ export function WatchlistCockpitPanel() {
         onFocus={() => s.hits.length && s.setOpen(true)}
         onKeyDown={(e) => s.onKeyDown(e, (h) => pick(h.code), pick)}
         placeholder="搜名称 / 代码 / 拼音, 回车加入"
-        className="h-6 w-full rounded bg-slate-800/60 px-2 text-[11px] text-slate-200 placeholder:text-[9px] placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-cyan-500/50"
+        className="h-6 w-full rounded bg-slate-800/60 px-2 text-[11px] text-slate-200 placeholder:text-[9px] placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-primary/50"
       />
       {s.open && (
         <SuggestHits

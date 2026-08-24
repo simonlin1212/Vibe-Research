@@ -97,7 +97,7 @@ export function DailyReview() {
           title: "行情观察",
           hint: "全球关键指数 + 宏观观察",
           icon: <Globe size={14} />,
-          accent: "#38bdf8",
+          accent: "#ffcc00",
           defaultW: 0.43,
           mobileH: "h-[64vh]",
           right: <span className="text-[10px] tabular-nums text-slate-500">5s</span>,
@@ -116,7 +116,7 @@ export function DailyReview() {
           id: "sentiment",
           title: "涨跌分布 / 广度",
           icon: <BarChart3 size={14} />,
-          accent: "#818cf8",
+          accent: "#ffcc00",
           defaultW: 0.24,
           mobileH: "h-[380px]",
           right: (
@@ -138,7 +138,7 @@ export function DailyReview() {
           id: "watch",
           title: "自选",
           icon: <Star size={14} />,
-          accent: "#fbbf24",
+          accent: "#ffcc00",
           defaultW: 0.33,
           mobileH: "h-[400px]",
           right: (
@@ -157,7 +157,7 @@ export function DailyReview() {
           id: "flow",
           title: "板块资金流向",
           icon: <Activity size={14} />,
-          accent: "#f43f5e",
+          accent: "#ff4d4f",
           defaultW: 0.2,
           mobileH: "h-[380px]",
           right: flowRight,
@@ -173,7 +173,7 @@ export function DailyReview() {
           id: "moneyflow",
           title: "主力净流入排行",
           icon: <ArrowLeftRight size={14} />,
-          accent: "#fb7185",
+          accent: "#ff4d4f",
           defaultW: 0.18,
           mobileH: "h-[380px]",
           right: moneyRight,
@@ -189,7 +189,7 @@ export function DailyReview() {
           id: "rank",
           title: "个股榜单",
           icon: <ListOrdered size={14} />,
-          accent: "#fbbf24",
+          accent: "#ffcc00",
           defaultW: 0.2,
           mobileH: "h-[380px]",
           right: <RankTabBar tab={rankTab} onTab={setRankTab} />,
@@ -200,7 +200,7 @@ export function DailyReview() {
           title: "市场板块实时热点",
           hint: "点击板块看个股列表",
           icon: <Layers size={14} />,
-          accent: "#22d3ee",
+          accent: "#00d26a",
           defaultW: 0.42,
           mobileH: "h-[420px]",
           right: (
@@ -227,7 +227,7 @@ export function DailyReview() {
           id: "risk",
           title: "涨跌停",
           icon: <Flame size={14} />,
-          accent: "#fb7185",
+          accent: "#ff4d4f",
           defaultW: chainOn ? 0.22 : 0.28,
           mobileH: "h-[380px]",
           right: (
@@ -244,7 +244,7 @@ export function DailyReview() {
           id: "detail",
           title: "龙虎 / 资金 / 产业链",
           icon: <ScrollText size={14} />,
-          accent: "#a78bfa",
+          accent: "#ffcc00",
           defaultW: chainOn ? 0.78 : 0.72,
           mobileH: "h-[520px]",
           maxZoomW: 0.82,
@@ -284,7 +284,7 @@ export function DailyReview() {
         type="button"
         onClick={d.refreshTopRows}
         disabled={d.topRefreshing}
-        className="inline-flex items-center gap-1 rounded border border-slate-700/60 bg-slate-800/40 px-1.5 py-0.5 text-[10px] text-slate-400 hover:border-cyan-500/50 hover:text-cyan-300 disabled:opacity-50"
+        className="inline-flex items-center gap-1 border border-[#333] bg-[#111] px-1.5 py-0.5 text-[10px] text-[#aaa] hover:border-primary/50 hover:text-primary disabled:opacity-50"
       >
         <RefreshCw className={`h-3 w-3 ${d.topRefreshing ? "animate-spin" : ""}`} />
         刷新
@@ -293,7 +293,7 @@ export function DailyReview() {
         type="button"
         onClick={() => { setAiOpen(true); void runReview(); }}
         disabled={reviewLoading}
-        className="inline-flex items-center gap-1 rounded border border-cyan-500/40 bg-cyan-500/10 px-1.5 py-0.5 text-[10px] text-cyan-300 hover:bg-cyan-500/20 disabled:opacity-50"
+        className="inline-flex items-center gap-1 border border-primary/40 bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary hover:bg-primary/20 disabled:opacity-50"
       >
         {reviewLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
         AI 复盘
@@ -316,10 +316,10 @@ export function DailyReview() {
       <CockpitLayout rows={rows} />
 
       {showReviewPanel && (
-        <div className="absolute inset-x-2 top-10 z-30 max-h-[70%] overflow-auto rounded-md border border-cyan-500/40 bg-card p-3 shadow-[0_0_32px_rgba(34,211,238,0.18)] sm:inset-x-8">
+        <div className="absolute inset-x-2 top-8 z-30 max-h-[70%] overflow-auto border border-primary/40 bg-black p-3 sm:inset-x-8">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className="flex items-center gap-1.5 text-sm font-semibold text-slate-100">
-              <Sparkles className="h-4 w-4 text-cyan-400" /> AI 当日复盘
+            <h3 className="flex items-center gap-1.5 text-sm font-semibold text-[#eee]">
+              <Sparkles className="h-4 w-4 text-primary" /> AI 当日复盘
             </h3>
             <div className="flex items-center gap-2">
               {reviewLoading && (
@@ -330,7 +330,7 @@ export function DailyReview() {
               <button
                 type="button"
                 onClick={() => setAiOpen(false)}
-                className="rounded border border-slate-700/60 p-1 text-slate-400 hover:text-cyan-300"
+                className="border border-[#333] p-1 text-[#888] hover:text-primary"
                 title="关闭"
               >
                 <X className="h-3.5 w-3.5" />
@@ -343,7 +343,7 @@ export function DailyReview() {
           {needConfig && (
             <div className="mt-3 flex items-center gap-2 rounded border border-warning/30 bg-warning/5 p-3 text-sm text-slate-400">
               <AlertCircle className="h-4 w-4 shrink-0 text-warning" />
-              还没接入 AI。<Link to="/settings" className="text-cyan-400">先去接入你的 AI</Link>，之后一键出复盘。
+              还没接入 AI。<Link to="/settings" className="text-primary">先去接入你的 AI</Link>，之后一键出复盘。
             </div>
           )}
           {reviewErr && (

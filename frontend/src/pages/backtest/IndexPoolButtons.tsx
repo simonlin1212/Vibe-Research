@@ -27,7 +27,7 @@ export function IndexPoolButtons({
           key={p.id}
           type="button"
           disabled={!!busy}
-          className="text-cyan-400 hover:text-cyan-200 disabled:opacity-50"
+          className="text-primary hover:text-primary disabled:opacity-50"
           onClick={() => {
             setBusy(p.id);
             void api.backtestIndexPool(p.id, false, true).then((row) => {

@@ -341,7 +341,7 @@ function toMarks(
       time: lcTime(p.i),
       position: "aboveBar" as const,
       shape: "circle" as const,
-      color: "#67e8f9",
+      color: "#ffcc00",
       text: p.text,
     };
   });
@@ -724,7 +724,7 @@ export function OptionChartCard({ pick, mode, tick, alerts = NO_ALERTS }: {
                 onClick={() => setAndSaveDays(n)}
                 className={cn(
                   "rounded px-1.5 py-0.5",
-                  days === n ? "bg-cyan-500/15 text-cyan-200" : "text-slate-600 hover:text-slate-400",
+                  days === n ? "bg-primary/15 text-primary" : "text-slate-600 hover:text-slate-400",
                 )}
               >
                 {lab}

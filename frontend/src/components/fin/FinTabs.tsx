@@ -36,8 +36,8 @@ export function PeerModeTabs() {
   const { peerMode, setPeerMode } = useFin();
   return (
     <ChipGroup>
-      <Chip accent="violet" active={peerMode === "radar"} onClick={() => setPeerMode("radar")}>雷达</Chip>
-      <Chip accent="violet" active={peerMode === "table"} onClick={() => setPeerMode("table")}>表格</Chip>
+      <Chip active={peerMode === "radar"} onClick={() => setPeerMode("radar")}>雷达</Chip>
+      <Chip active={peerMode === "table"} onClick={() => setPeerMode("table")}>表格</Chip>
     </ChipGroup>
   );
 }

@@ -319,8 +319,8 @@ function EquityChart({ result, compare }: { result: BacktestResult; compare?: Ba
           yAxisIndex: 0,
           data: eq,
           showSymbol: false,
-          lineStyle: { color: "#22d3ee", width: 1.6 },
-          areaStyle: { color: "rgba(34,211,238,0.12)" },
+          lineStyle: { color: "#ffcc00", width: 1.6 },
+          areaStyle: { color: "rgba(255,204,0,0.12)" },
           markLine: result.oos?.split
             ? {
                 symbol: "none",
@@ -539,7 +539,7 @@ export function Backtest() {
               type="button"
               onClick={() => void run()}
               disabled={running}
-              className="inline-flex items-center gap-1.5 rounded border border-cyan-500/40 bg-cyan-500/15 px-3 py-1 text-[12px] font-semibold text-cyan-200 hover:bg-cyan-500/25 disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded border border-primary/40 bg-primary/15 px-3 py-1 text-[12px] font-semibold text-primary hover:bg-primary/25 disabled:opacity-50"
             >
               <Play className="h-3.5 w-3.5" />
               {running ? jobText(job, "在跑…") : "跑回测"}
@@ -555,7 +555,7 @@ export function Backtest() {
             onClick={() => setTab(k)}
             className={cn(
               "rounded border px-2.5 py-1 text-[11px]",
-              tab === k ? "border-cyan-500/50 bg-cyan-500/10 text-cyan-200" : "border-slate-700 text-slate-400 hover:text-slate-200",
+              tab === k ? "border-primary/50 bg-primary/10 text-primary" : "border-slate-700 text-slate-400 hover:text-slate-200",
             )}
           >
             {lab}
@@ -599,7 +599,7 @@ export function Backtest() {
                 }}
                 className={cn(
                   "shrink-0 rounded border px-2 py-1 text-left text-[10px]",
-                  active ? "border-cyan-500/50 bg-cyan-500/10 text-cyan-100" : overlay ? "border-violet-500/50 bg-violet-500/10 text-violet-100" : "border-slate-700 text-slate-400 hover:text-slate-200",
+                  active ? "border-primary/50 bg-primary/10 text-primary" : overlay ? "border-violet-500/50 bg-violet-500/10 text-violet-100" : "border-slate-700 text-slate-400 hover:text-slate-200",
                 )}
               >
                 <div className="flex items-center gap-2">
@@ -654,7 +654,7 @@ export function Backtest() {
               <span className="flex gap-2">
                 <button
                   type="button"
-                  className="inline-flex items-center gap-1 text-cyan-400 hover:text-cyan-200"
+                  className="inline-flex items-center gap-1 text-primary hover:text-primary"
                   onClick={() => patch({ codes: loadWatch().slice(0, maxCodes).join(" "), indexId: "", pitMembers: false })}
                 >
                   <Star className="h-3 w-3" />
@@ -662,7 +662,7 @@ export function Backtest() {
                 </button>
                 <button
                   type="button"
-                  className="inline-flex items-center gap-1 text-cyan-400 hover:text-cyan-200"
+                  className="inline-flex items-center gap-1 text-primary hover:text-primary"
                   onClick={() => {
                     void api.portfolio().then((p) => {
                       const got = (p.holdings || []).map((h) => h.code).filter(Boolean);
@@ -692,7 +692,7 @@ export function Backtest() {
               value={draft.codes}
               onChange={(e) => patch({ codes: e.target.value, indexId: "", pitMembers: false })}
               rows={3}
-              className="w-full resize-y rounded border border-slate-700 bg-slate-950/60 px-2 py-1.5 font-mono text-[12px] text-slate-100 outline-none focus:border-cyan-500/50"
+              className="w-full resize-y rounded border border-slate-700 bg-slate-950/60 px-2 py-1.5 font-mono text-[12px] text-slate-100 outline-none focus:border-primary/50"
               placeholder="600519 000858 300750"
             />
             <p className="mt-1 text-[10px] text-slate-500">
@@ -709,7 +709,7 @@ export function Backtest() {
                 ? ` · 标的池 ${cover.universe.covered}/${cover.universe.codes}`
                 : ""}
               {" · "}
-              <Link to="/data" className="text-cyan-400 hover:text-cyan-200">
+              <Link to="/data" className="text-primary hover:text-primary">
                 去数据页补齐
               </Link>
             </p>
@@ -757,7 +757,7 @@ export function Backtest() {
                   className={cn(
                     "rounded border px-2.5 py-1 text-[11px]",
                     draft.lookback === k
-                      ? "border-cyan-500/50 bg-cyan-500/10 text-cyan-200"
+                      ? "border-primary/50 bg-primary/10 text-primary"
                       : "border-slate-700 text-slate-400 hover:text-slate-200",
                   )}
                 >
@@ -783,7 +783,7 @@ export function Backtest() {
                   className={cn(
                     "rounded border px-2.5 py-1 text-[11px]",
                     draft.oosMode === k
-                      ? "border-cyan-500/50 bg-cyan-500/10 text-cyan-200"
+                      ? "border-primary/50 bg-primary/10 text-primary"
                       : "border-slate-700 text-slate-400 hover:text-slate-200",
                   )}
                 >
@@ -821,7 +821,7 @@ export function Backtest() {
                 className={cn(
                   "w-full rounded border px-2.5 py-2 text-left",
                   draft.strategy === s.id
-                    ? "border-cyan-500/50 bg-cyan-500/10"
+                    ? "border-primary/50 bg-primary/10"
                     : "border-slate-700/70 hover:border-slate-500",
                 )}
               >
@@ -861,7 +861,7 @@ export function Backtest() {
               value={draft.events}
               onChange={(e) => patch({ events: e.target.value })}
               rows={4}
-              className="w-full rounded border border-slate-700 bg-slate-950/60 px-2 py-1.5 font-mono text-[11px] text-slate-100 outline-none focus:border-cyan-500/50"
+              className="w-full rounded border border-slate-700 bg-slate-950/60 px-2 py-1.5 font-mono text-[11px] text-slate-100 outline-none focus:border-primary/50"
               placeholder={"600519 buy 2024-03-01\n600519 sell 2024-06-01"}
             />
           )}
@@ -890,7 +890,7 @@ export function Backtest() {
                   className={cn(
                     "rounded border px-2 py-0.5 text-[10px]",
                     draft.fill === f
-                      ? "border-cyan-500/50 text-cyan-200"
+                      ? "border-primary/50 text-primary"
                       : "border-slate-700 text-slate-500",
                   )}
                 >
@@ -913,10 +913,10 @@ export function Backtest() {
           )}
           {running && (
             <GlassCard className="space-y-2 p-3">
-              <p className="text-[12px] text-cyan-100">{jobText(job, "在跑…")}</p>
+              <p className="text-[12px] text-primary">{jobText(job, "在跑…")}</p>
               {job?.note ? <p className="text-[10px] text-slate-500">{job.note}</p> : null}
               <div className="h-1.5 overflow-hidden rounded bg-slate-800">
-                <div className="h-full bg-cyan-500/80 transition-[width]" style={{ width: `${jobPct(job)}%` }} />
+                <div className="h-full bg-primary/80 transition-[width]" style={{ width: `${jobPct(job)}%` }} />
               </div>
             </GlassCard>
           )}
@@ -972,7 +972,7 @@ export function Backtest() {
                     <button
                       type="button"
                       onClick={() => applyResult(result)}
-                      className="inline-flex items-center gap-1 text-[11px] text-cyan-400 hover:text-cyan-200"
+                      className="inline-flex items-center gap-1 text-[11px] text-primary hover:text-primary"
                     >
                       <RotateCcw className="h-3 w-3" />
                       填回表单
@@ -981,7 +981,7 @@ export function Backtest() {
                       type="button"
                       onClick={() => void rerunResult(result)}
                       disabled={running}
-                      className="inline-flex items-center gap-1 text-[11px] text-cyan-400 hover:text-cyan-200 disabled:opacity-50"
+                      className="inline-flex items-center gap-1 text-[11px] text-primary hover:text-primary disabled:opacity-50"
                     >
                       <Play className="h-3 w-3" />
                       按这组再跑
@@ -989,7 +989,7 @@ export function Backtest() {
                     <button
                       type="button"
                       onClick={() => void copySummary()}
-                      className="inline-flex items-center gap-1 text-[11px] text-cyan-400 hover:text-cyan-200"
+                      className="inline-flex items-center gap-1 text-[11px] text-primary hover:text-primary"
                     >
                       <Copy className="h-3 w-3" />
                       {copied ? "已复制" : "复制给 AI"}
@@ -1174,7 +1174,7 @@ function NumField({
         step={step}
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full rounded border border-slate-700 bg-slate-950/60 px-2 py-1 font-mono text-[12px] text-slate-100 outline-none focus:border-cyan-500/50"
+        className="w-full rounded border border-slate-700 bg-slate-950/60 px-2 py-1 font-mono text-[12px] text-slate-100 outline-none focus:border-primary/50"
       />
     </label>
   );

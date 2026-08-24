@@ -31,7 +31,7 @@ export function FinStockRankPanel() {
               onClick={() => select(s.code, s.name)}
               className={cn(
                 "relative grid w-full grid-cols-[18px_1fr_56px_48px_40px] items-center gap-1 rounded px-1 py-0.5 text-left",
-                company.code === s.code ? "ring-1 ring-cyan-500/40" : "hover:bg-slate-800/40",
+                company.code === s.code ? "ring-1 ring-primary/40" : "hover:bg-slate-800/40",
               )}
             >
               <span

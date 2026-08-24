@@ -103,7 +103,7 @@ export function ArbCockpit() {
           title: "跨期价差",
           hint: "近月 - 次月",
           icon: <ArrowLeftRight size={14} />,
-          accent: "#38bdf8",
+          accent: "#ffcc00",
           defaultW: 0.38,
           mobileH: "h-[56vh]",
           right: <FreshTag updated={d.updated} extra={mqttHint} />,
@@ -118,7 +118,7 @@ export function ArbCockpit() {
           title: "跨品种价差",
           hint: "近月对近月 1:1",
           icon: <GitCompare size={14} />,
-          accent: "#34d399",
+          accent: "#00d26a",
           defaultW: 0.30,
           mobileH: "h-[48vh]",
           right: <FreshTag updated={d.updated} />,
@@ -133,7 +133,7 @@ export function ArbCockpit() {
           title: "期现基差",
           hint: "股指走报价中心 · 现期走生意社",
           icon: <Table2 size={14} />,
-          accent: "#f59e0b",
+          accent: "#ffcc00",
           defaultW: 0.32,
           mobileH: "h-[52vh]",
           right: <FreshTag updated={d.updated} />,
@@ -149,7 +149,7 @@ export function ArbCockpit() {
           title: pick?.kind === "idx" ? "日度升贴水" : "价差图",
           hint: pick?.kind === "idx" ? "期货−现货 · 零轴=平水" : "两腿相减 · 零轴=平水",
           icon: <CandlestickChart size={14} />,
-          accent: "#e879f9",
+          accent: "#ffcc00",
           defaultW: 0.78,
           maxZoomW: 0.92,
           mobileH: "h-[48vh]",
@@ -161,7 +161,7 @@ export function ArbCockpit() {
           title: "两腿 / 仓单",
           hint: pick ? pick.label : "点上排一对",
           icon: <Table2 size={14} />,
-          accent: "#f472b6",
+          accent: "#ff4d4f",
           defaultW: 0.22,
           mobileH: "h-[40vh]",
           body: <LegCard pick={pick} near={legs.near} next={legs.next} a={legs.a} b={legs.b} />,
@@ -178,7 +178,7 @@ export function ArbCockpit() {
         onClick={d.refresh}
         disabled={d.refreshing}
         className={cn(
-          "inline-flex h-6 items-center gap-1 rounded border border-slate-700/60 px-2 text-[11px] text-slate-400 transition-colors hover:border-cyan-500/50 hover:text-cyan-300 disabled:opacity-50",
+          "inline-flex h-6 items-center gap-1 rounded border border-slate-700/60 px-2 text-[11px] text-slate-400 transition-colors hover:border-primary/50 hover:text-primary disabled:opacity-50",
         )}
         title="重拉 arb-board"
       >

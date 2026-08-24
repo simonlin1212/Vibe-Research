@@ -47,7 +47,7 @@ export function FinCompanyPanel() {
             pick(digits, hit?.name || digits);
           })}
           placeholder="输入代码/名称"
-          className="h-6 w-full rounded bg-slate-800/60 px-2 text-[11px] text-slate-200 placeholder:text-[9px] placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-cyan-500/50"
+          className="h-6 w-full rounded bg-slate-800/60 px-2 text-[11px] text-slate-200 placeholder:text-[9px] placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-primary/50"
         />
         {s.open && (
           <SuggestHits
@@ -68,7 +68,7 @@ export function FinCompanyPanel() {
               className={cn(
                 "shrink-0 rounded border px-1.5 text-[9px] leading-[14px]",
                 c.code === company.code
-                  ? "border-cyan-500/60 bg-cyan-500/10 text-cyan-300"
+                  ? "border-primary/60 bg-primary/10 text-primary"
                   : "border-slate-700/60 text-slate-400",
               )}
             >
@@ -106,7 +106,7 @@ export function FinCompanyPanel() {
                 <div className="flex items-center gap-2 px-0.5 pb-0.5 pt-1.5 text-[9px] font-medium uppercase tracking-widest text-slate-500">
                   主营构成
                   <span className="flex items-center gap-1 text-[8px] normal-case tracking-normal text-slate-600">
-                    <span className="inline-block h-[3px] w-2 rounded bg-cyan-500/60" />收入
+                    <span className="inline-block h-[3px] w-2 rounded bg-primary/60" />收入
                     <span className="inline-block h-[3px] w-2 rounded bg-amber-500/60" />利润
                   </span>
                 </div>
@@ -114,7 +114,7 @@ export function FinCompanyPanel() {
                   <div key={m.name} className="flex h-[18px] items-center gap-1.5 px-0.5 text-[10px]">
                     <span className="w-[72px] shrink-0 truncate text-slate-300">{m.name}</span>
                     <span className="flex h-[8px] min-w-0 flex-1 items-center gap-[2px]">
-                      <span className="h-[6px] rounded-sm bg-cyan-500/50" style={{ width: `${Math.min(100, (m.income_ratio ?? 0) * 100)}%` }} />
+                      <span className="h-[6px] rounded-sm bg-primary/50" style={{ width: `${Math.min(100, (m.income_ratio ?? 0) * 100)}%` }} />
                       <span className="h-[6px] rounded-sm bg-amber-500/50" style={{ width: `${Math.min(100, (m.profit_ratio ?? 0) * 100)}%` }} />
                     </span>
                     <span className="w-[52px] shrink-0 text-right text-slate-400" style={TNUM}>{fmtYiYuan(m.income)}</span>

@@ -124,7 +124,7 @@ export function IndexFutPanel({ d, nightOnly = false, onPickProduct }: {
               <NightMoon show={Number(row.has_night_trading) === 1} />
               <span className="w-[3.8rem] shrink-0 leading-tight">
                 <span className="block truncate text-[12px] font-medium text-slate-200">{label}</span>
-                <span className="block truncate font-mono text-[10px] text-cyan-500/70">
+                <span className="block truncate font-mono text-[10px] text-primary/70">
                   {code || "-"}
                 </span>
               </span>

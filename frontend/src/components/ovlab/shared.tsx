@@ -255,7 +255,7 @@ export function TrendPreviewCell({ series, loading, base, und }: {
       </div>
       {hover && !empty && pos && createPortal(
         <div
-          className="pointer-events-none fixed z-[100] w-[280px] rounded-xl border border-border/70 bg-background p-3 shadow-xl"
+          className="pointer-events-none fixed z-[100] w-[280px] border border-[#2a2a2a] bg-black p-2"
           style={{ top: pos.top, left: pos.left }}
         >
           <div className="mb-2 flex items-center justify-between gap-2 text-[11px]">

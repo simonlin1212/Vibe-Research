@@ -197,7 +197,7 @@ export function AShareLcPane({
         time: lcTime(m.i),
         position: "aboveBar" as const,
         shape: "circle" as const,
-        color: "#67e8f9",
+        color: "#ffcc00",
         text: m.text,
       })));
       if (!lastOnly) showSession(chart, cats.length);
@@ -320,17 +320,17 @@ export function AShareLcPane({
       </div>
       <LcWell className="min-h-[220px] flex-1">
         {!code && (
-          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 bg-[#0b0f17]/88 px-6 text-center">
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 bg-black/88 px-6 text-center">
             <p className="text-sm text-slate-400">{emptyHint}</p>
           </div>
         )}
         {err && code && (
-          <div className="absolute inset-0 z-20 flex items-center justify-center gap-2 bg-[#0b0f17]/88 px-4 text-sm text-destructive">
+          <div className="absolute inset-0 z-20 flex items-center justify-center gap-2 bg-black/88 px-4 text-sm text-destructive">
             <AlertCircle className="h-4 w-4 shrink-0" /> {err}
           </div>
         )}
         {loading && code && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center bg-[#0b0f17]/40">
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/40">
             <Loader2 className="h-5 w-5 animate-spin text-slate-500" />
           </div>
         )}

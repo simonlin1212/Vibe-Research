@@ -55,7 +55,7 @@ function pctRatio(v: number | null | undefined) {
 
 function Metric({ k, v }: { k: string; v: string }) {
   return (
-    <div className="rounded-lg bg-muted/30 p-2.5">
+    <div className="border border-[#2a2a2a] bg-black p-1.5">
       <p className="text-[11px] text-muted-foreground">{k}</p>
       <p className="mt-0.5 font-mono text-sm font-semibold tabular-nums">{v}</p>
     </div>
@@ -352,7 +352,7 @@ export function UsMarket() {
         }
       />
 
-      <FearGreedPanel className="rounded-xl bg-slate-950/40 ring-1 ring-slate-800/70" />
+      <FearGreedPanel className="border border-[#2a2a2a] bg-black" />
 
       <GlanceStrip
         title="美股一眼"
@@ -414,7 +414,7 @@ export function UsMarket() {
                     className={cn(
                     "group flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition-colors",
                     active
-                      ? "bg-white/[0.04] text-foreground shadow-[inset_2px_0_0_#22d3ee]"
+                      ? "bg-white/[0.04] text-foreground shadow-[inset_2px_0_0_#ffcc00]"
                       : "hover:bg-white/[0.03]",
                   )}
                 >
@@ -461,7 +461,7 @@ export function UsMarket() {
                   {chartMeta?.adjust === "qfq" ? "qfq" : "D"}
                 </span>
                 {hovering ? (
-                  <span className="font-mono text-[10px] tracking-wide text-cyan-400/80">CROSSHAIR</span>
+                  <span className="font-mono text-[10px] tracking-wide text-primary/80">CROSSHAIR</span>
                 ) : null}
               </div>
               <div className="mt-1 flex flex-wrap items-baseline gap-3">
@@ -491,12 +491,12 @@ export function UsMarket() {
 
           <LcWell className="h-[480px]">
             {chartErr ? (
-              <div className="absolute inset-0 z-20 flex items-center gap-2 bg-[#0b0f17]/88 px-4 text-sm text-destructive">
+              <div className="absolute inset-0 z-20 flex items-center gap-2 bg-black/88 px-4 text-sm text-destructive">
                 <AlertCircle className="h-4 w-4 shrink-0" /> {chartErr}
               </div>
             ) : null}
             {chartLoading && (
-              <div className="absolute inset-0 z-10 flex items-center justify-center bg-[#0b0f17]/40">
+              <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/40">
                 <Loader2 className="h-5 w-5 animate-spin text-slate-500" />
               </div>
             )}

@@ -57,8 +57,8 @@ export const OI_COLOR = "#f0b90b";
 
 const INK = "#c8cdd6";
 const GRID = "rgba(255,255,255,0.045)";
-const HAIR = "rgba(34,211,238,0.42)";
-const TAG = "#1a2330";
+const HAIR = "rgba(255,204,0,0.55)";
+const TAG = "#1a1400";
 const FONT = '"Geist Mono", ui-monospace, monospace';
 
 /** Logical unix seconds so lunch/night gaps stay one bar, not hours of empty axis. */
@@ -328,7 +328,7 @@ export function baselineOpts(base: number, glance = false, fmt?: ReturnType<type
     crosshairMarkerVisible: true,
     crosshairMarkerRadius: glance ? 3 : 4,
     crosshairMarkerBorderWidth: 1,
-    crosshairMarkerBorderColor: "#0b0f17",
+    crosshairMarkerBorderColor: "#000",
   };
 }
 
@@ -336,18 +336,18 @@ export function baselineOpts(base: number, glance = false, fmt?: ReturnType<type
 export function spreadLineOpts() {
   return {
     priceScaleId: "right",
-    color: "#67e8f9",
+    color: "#ffcc00",
     lineWidth: 2 as const,
     lastValueVisible: true,
     priceLineVisible: true,
-    priceLineColor: "#67e8f9",
+    priceLineColor: "#ffcc00",
     priceLineWidth: 1 as const,
     priceLineStyle: LineStyle.SparseDotted,
     priceFormat: { type: "price" as const, precision: 2, minMove: 0.01 },
     crosshairMarkerVisible: true,
     crosshairMarkerRadius: 4,
     crosshairMarkerBorderWidth: 1,
-    crosshairMarkerBorderColor: "#0b0f17",
+    crosshairMarkerBorderColor: "#000",
   };
 }
 

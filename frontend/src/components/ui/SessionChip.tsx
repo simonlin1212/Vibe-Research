@@ -21,7 +21,7 @@ export function SessionChip({ session, className, showHint = false }: Props) {
     <span className={cn("inline-flex min-w-0 items-center gap-1.5", className)}>
       <span
         className={cn(
-          "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[11px] font-medium",
+          "inline-flex items-center gap-1 border px-1.5 py-0.5 text-[11px] font-medium",
           tone,
         )}
         title={session.hint}

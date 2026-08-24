@@ -362,7 +362,7 @@ export function CtpPortfolio() {
     const cText = `hsl(${css("--muted-foreground", "215 16% 57%")})`;
     const cAxis = `hsl(${css("--border", "217 20% 22%")})`;
     const cGrid = `hsl(${css("--border", "217 20% 22%")})`;
-    const cLine = "#22d3ee";
+    const cLine = "#ffcc00";
     if (!raw.length) {
       inst.clear();
       inst.setOption({

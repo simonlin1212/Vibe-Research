@@ -164,15 +164,15 @@ export function ExpiryCalendar({ data }: { data: OvlabProductExp[] }) {
   }, [tip]);
 
   return (
-    <div className="flex h-full min-h-0 flex-col px-1.5 py-1">
-      <div className="mb-0.5 flex shrink-0 items-center justify-between gap-1">
-        <span className="text-[11px] tabular-nums text-slate-500">{monthDays} 个到期日</span>
-        <div className="flex items-center gap-0.5">
-          <button type="button" onClick={prevMonth} className="rounded p-1.5 text-slate-500 hover:bg-slate-800/60 hover:text-slate-200">
+    <div className="flex h-full min-h-0 flex-col bg-black">
+      <div className="flex h-6 shrink-0 items-center justify-between gap-1 border-b border-[#2a2a2a] px-1.5">
+        <span className="text-[11px] tabular-nums text-[#888]">{monthDays} 个到期日</span>
+        <div className="flex items-center gap-px">
+          <button type="button" onClick={prevMonth} className="p-1 text-[#888] hover:bg-[#1a1400] hover:text-primary">
             <ChevronLeft className="h-3.5 w-3.5" />
           </button>
-          <span className="min-w-[88px] text-center text-[12px] font-semibold tabular-nums text-slate-200">{monthLabel}</span>
-          <button type="button" onClick={nextMonth} className="rounded p-1.5 text-slate-500 hover:bg-slate-800/60 hover:text-slate-200">
+          <span className="min-w-[84px] text-center text-[12px] font-semibold tabular-nums text-[#ffcc00]">{monthLabel}</span>
+          <button type="button" onClick={nextMonth} className="p-1 text-[#888] hover:bg-[#1a1400] hover:text-primary">
             <ChevronRight className="h-3.5 w-3.5" />
           </button>
           <button
@@ -181,26 +181,27 @@ export function ExpiryCalendar({ data }: { data: OvlabProductExp[] }) {
               setTip(null);
               setView({ y: new Date().getFullYear(), m: new Date().getMonth() });
             }}
-            className="ml-0.5 rounded border border-slate-700/60 px-2 py-1 text-[11px] text-slate-400 hover:bg-slate-800/50 hover:text-slate-200"
+            className="ml-0.5 border border-[#333] px-1.5 py-px text-[11px] text-[#aaa] hover:border-primary/50 hover:text-primary"
           >
             今日
           </button>
         </div>
       </div>
-      <div className="grid grid-cols-7 text-center text-[10px]">
+      <div className="grid grid-cols-7 border-b border-[#2a2a2a] text-center text-[10px]">
         {WEEKDAYS.map((w, idx) => (
-          <div key={w} className={cn("py-px font-medium", idx === 0 || idx === 6 ? "text-red-400" : "text-slate-300")}>{w}</div>
+          <div key={w} className={cn("py-px font-medium", idx === 0 || idx === 6 ? "text-[#ff4d4f]" : "text-[#888]")}>{w}</div>
         ))}
       </div>
-      <div className="grid min-h-0 flex-1 grid-cols-7 grid-rows-6 gap-px">
+      <div className="grid min-h-0 flex-1 grid-cols-7 grid-rows-6 gap-px bg-[#2a2a2a]">
         {cells.map((d, i) => {
-          if (d === null) return <div key={i} />;
+          if (d === null) return <div key={i} className="bg-black" />;
           const ds = fmtD(d);
           const list = byDate.get(ds) ?? [];
           const isToday = ds === today;
           const hasExpiry = list.length > 0;
           const daysLeft = daysLeftOf(ds, today);
           const hot = hasExpiry && daysLeft <= 7;
+          const weekend = i % 7 === 0 || i % 7 === 6;
           const exNames = hasExpiry ? cellExNames(list) : [];
           return (
             <div
@@ -214,28 +215,23 @@ export function ExpiryCalendar({ data }: { data: OvlabProductExp[] }) {
                 showTip(e.currentTarget, ds, list);
               }}
               className={cn(
-                "relative flex min-h-0 flex-col items-center justify-center overflow-hidden rounded-sm border px-px text-[12px] leading-none",
-                !hasExpiry && !isToday && "border-transparent text-slate-600",
-                hasExpiry && !isToday && (hot
-                  ? "cursor-pointer border-red-500/25 bg-red-500/5 text-red-300/80 active:bg-red-500/10"
-                  : "cursor-pointer border-slate-700/50 bg-slate-800/30 text-slate-300 active:bg-slate-700/50"),
-                isToday && !hasExpiry && "border-sky-400/25 bg-sky-500/10 text-sky-200",
-                isToday && hasExpiry && "cursor-pointer border-sky-400/30 bg-sky-500/10 text-sky-200 active:bg-sky-500/20",
-                hasExpiry && tip?.ds === ds && "ring-1 ring-cyan-400/70",
+                "relative flex min-h-0 flex-col items-center justify-center overflow-hidden bg-black px-px text-[12px] leading-none",
+                weekend && !isToday && !hot && "text-[#ff4d4f]",
+                !weekend && !hasExpiry && !isToday && "text-[#555]",
+                hasExpiry && !isToday && !hot && "cursor-pointer text-[#eee]",
+                hot && !isToday && "cursor-pointer bg-[#1a0808] text-[#ff4d4f]",
+                isToday && "bg-[#1a1400] text-[#ffcc00] shadow-[inset_0_0_0_1px_#ffcc00]",
+                hasExpiry && isToday && "cursor-pointer",
+                hasExpiry && tip?.ds === ds && "shadow-[inset_0_0_0_1px_#ffcc00]",
               )}
             >
-              <span
-                className={cn(
-                  "shrink-0 tabular-nums",
-                  isToday && "rounded-full bg-sky-500/40 px-1.5 py-px text-[11px] font-bold leading-none text-sky-50",
-                )}
-              >
+              <span className={cn("shrink-0 tabular-nums", isToday && "font-bold")}>
                 {d}
               </span>
               {hasExpiry && (
                 <span className={cn(
-                  "mt-px max-h-[22px] w-full overflow-hidden text-center text-[9px] leading-[11px] tracking-tight opacity-80",
-                  isToday && "text-sky-200/70",
+                  "mt-px max-h-[22px] w-full overflow-hidden text-center text-[9px] leading-[11px] tracking-tight",
+                  isToday ? "text-[#ffcc00]/70" : hot ? "text-[#ff4d4f]/80" : "text-[#888]",
                 )}>
                   {exNames.join(" ")}
                 </span>
@@ -247,26 +243,26 @@ export function ExpiryCalendar({ data }: { data: OvlabProductExp[] }) {
       {tip && createPortal(
         <div
           ref={popRef}
-          className="fixed z-[80] w-[min(252px,calc(100vw-16px))] rounded-md border border-cyan-500/35 bg-slate-950/95 p-2.5 shadow-[0_12px_40px_rgba(0,0,0,0.55),0_0_24px_rgba(34,211,238,0.12)] backdrop-blur-sm"
+          className="fixed z-[80] w-[min(252px,calc(100vw-16px))] border border-[#2a2a2a] bg-black p-2"
           style={{ top: tip.top, left: tip.left }}
         >
-          <div className="mb-2 flex items-baseline justify-between gap-2 border-b border-slate-800/80 pb-1.5">
-            <span className="text-[12px] font-semibold tracking-wide text-slate-100">{fmtLongDate(tip.ds)}</span>
-            <span className="shrink-0 text-[10px] tabular-nums text-cyan-400/90">{tip.list.length} 个标的</span>
+          <div className="mb-1.5 flex items-baseline justify-between gap-2 border-b border-[#2a2a2a] pb-1">
+            <span className="text-[12px] font-semibold tracking-wide text-[#ffcc00]">{fmtLongDate(tip.ds)}</span>
+            <span className="shrink-0 text-[10px] tabular-nums text-[#888]">{tip.list.length} 个标的</span>
           </div>
-          <div className="max-h-[min(280px,50vh)] space-y-2 overflow-y-auto">
+          <div className="max-h-[min(280px,50vh)] space-y-1.5 overflow-y-auto">
             {groupByEx(tip.list).map((g) => (
               <div key={g.ex}>
-                <div className="mb-1 text-[10px] font-medium text-teal-300/90">{g.name}</div>
-                <div className="flex flex-wrap gap-1">
+                <div className="mb-0.5 text-[10px] font-medium text-[#ffcc00]">{g.name}</div>
+                <div className="flex flex-wrap gap-px">
                   {g.items.map((p, i) => (
                     <span
                       key={`${p.und}-${i}`}
-                      className="inline-flex items-center rounded border border-slate-700/70 bg-slate-800/70 px-1.5 py-0.5 text-[10px] leading-tight text-slate-200"
+                      className="inline-flex items-center border border-[#2a2a2a] bg-[#0d0d0d] px-1.5 py-0.5 text-[10px] leading-tight text-[#eee]"
                     >
                       {p.alias || p.und}
                       {p.alias && p.und && p.alias !== p.und ? (
-                        <span className="ml-1 font-mono text-[9px] text-slate-500">{p.und}</span>
+                        <span className="ml-1 font-mono text-[9px] text-[#888]">{p.und}</span>
                       ) : null}
                     </span>
                   ))}

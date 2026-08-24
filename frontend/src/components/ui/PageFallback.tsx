@@ -6,7 +6,7 @@ export function PageFallback() {
     <div className="space-y-4" role="status" aria-label="页面加载中">
       <Skeleton className="h-8 w-40" />
       <Skeleton className="h-3.5 w-64" />
-      <SkeletonTable rows={6} cols={5} className="rounded-xl border border-border/40" />
+      <SkeletonTable rows={6} cols={5} className="border border-[#2a2a2a]" />
     </div>
   );
 }

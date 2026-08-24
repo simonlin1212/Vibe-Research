@@ -30,11 +30,11 @@ export function CockpitLayout({ rows }: { rows: CockpitRow[] }) {
   const { isZoomed, toggle, layout } = usePanelZoom(zoomRows);
 
   return (
-    <div className="flex flex-col gap-1 p-1 lg:h-full lg:min-h-0 lg:flex-1">
+    <div className="flex flex-col gap-px bg-[#2a2a2a] lg:h-full lg:min-h-0 lg:flex-1">
       {rows.map((row, rowIdx) => (
         <div
           key={row.panels.map((p) => p.id).join("-")}
-          className="flex flex-col gap-1 transition-all duration-300 lg:h-[var(--row-h)] lg:min-h-0 lg:flex-row"
+          className="flex flex-col gap-px transition-all duration-300 lg:h-[var(--row-h)] lg:min-h-0 lg:flex-row"
           style={{ "--row-h": `${layout.rowHeights[rowIdx] * 100}%` } as React.CSSProperties}
         >
           {row.panels.map((panel, panelIdx) => (

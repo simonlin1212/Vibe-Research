@@ -113,7 +113,7 @@ export function SuggestHits({
           onClick={() => onPick(s)}
           className={cn(
             "flex h-6 w-full items-center gap-2 px-2 text-left",
-            i === hi ? "bg-cyan-500/15" : "hover:bg-slate-800/50",
+            i === hi ? "bg-primary/15" : "hover:bg-slate-800/50",
           )}
         >
           <span className="w-14 font-mono text-[10px] text-slate-500">{s.code}</span>

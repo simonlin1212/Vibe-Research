@@ -15,7 +15,7 @@ import {
   type ISeriesApi, type ITextWatermarkPluginApi, type Time,
 } from "@/lib/lcChart";
 
-const box = "overflow-hidden rounded-md border border-border/60 bg-card/80";
+const box = "overflow-hidden border border-[#2a2a2a] bg-black";
 
 interface Props {
   etfShares: EtfShares | null;
@@ -69,7 +69,7 @@ export function ReviewMoneySeg({
     const cText = cssHsl("--chart-text", "#94a3b8");
     const cAxis = cssHsl("--chart-axis", "#475569");
     const cGrid = cssHsl("--chart-grid", "#334155");
-    const cPrimary = cssHsl("--primary", "#22d3ee");
+    const cPrimary = cssHsl("--primary", "#ffcc00");
     const step = Math.max(1, Math.floor(pts.length / 40));
     const sampled = pts.filter((_, i) => i % step === 0 || i === pts.length - 1);
     chart.setOption({
@@ -107,7 +107,7 @@ export function ReviewMoneySeg({
         showSymbol: false,
         smooth: 0.25,
         lineStyle: { color: cPrimary, width: 2 },
-        areaStyle: { color: "rgba(34,211,238,0.10)" },
+        areaStyle: { color: "rgba(255,204,0,0.10)" },
       }],
     }, { notMerge: true });
     requestAnimationFrame(() => chart?.resize());
@@ -125,7 +125,7 @@ export function ReviewMoneySeg({
       <EtfShareBlock items={etfSharesList} fallback={etfShares} />
       <div>
         <SectionHeader
-          icon={<TrendingUp className="h-3.5 w-3.5 text-cyan-400" />}
+          icon={<TrendingUp className="h-3.5 w-3.5 text-primary" />}
           title="ETF 资金流"
           hint="东财 · 主力净流入(亿)"
           meta={etfFlow?.rows?.length ? `${etfFlow.rows.length} 只` : (moneyDone ? "暂无" : "加载中…")}
@@ -155,7 +155,7 @@ export function ReviewMoneySeg({
                     <tr key={r.code}>
                       <td className="num text-muted-foreground/50">{i + 1}</td>
                       <td className="font-mono text-xs">
-                        <KlineLink code={r.code} className="hover:text-cyan-300">{r.code}</KlineLink>
+                        <KlineLink code={r.code} className="hover:text-primary">{r.code}</KlineLink>
                       </td>
                       <td className="font-medium">{r.name}</td>
                       <td className="num"><PctChip pct={r.change_pct} /></td>
@@ -180,7 +180,7 @@ export function ReviewMoneySeg({
 
       <div>
         <SectionHeader
-          icon={<Activity className="h-3.5 w-3.5 text-cyan-400" />}
+          icon={<Activity className="h-3.5 w-3.5 text-primary" />}
           title="利率 · LPR / 国债"
           hint="中国货币网 · 中债登"
           meta={
@@ -262,7 +262,7 @@ export function ReviewMoneySeg({
 
       <div>
         <SectionHeader
-          icon={<ShieldAlert className="h-3.5 w-3.5 text-cyan-400" />}
+          icon={<ShieldAlert className="h-3.5 w-3.5 text-primary" />}
           title="股东 / 高管增减持"
           hint="东财披露 · 客观呈现"
           meta={shChg?.rows?.length ? `${shChg.rows.length} 条` : (moneyDone ? "暂无" : "加载中…")}
@@ -292,7 +292,7 @@ export function ReviewMoneySeg({
                     <tr key={`${r.code}-${r.date}-${r.person}-${i}`}>
                       <td className="font-mono text-xs text-muted-foreground">{r.date}</td>
                       <td className="font-mono text-xs">
-                        <KlineLink code={r.code} className="hover:text-cyan-300">{r.code}</KlineLink>
+                        <KlineLink code={r.code} className="hover:text-primary">{r.code}</KlineLink>
                       </td>
                       <td className="font-medium">{r.name}</td>
                       <td className="max-w-[6rem] truncate">{r.person || "—"}</td>
@@ -317,7 +317,7 @@ export function ReviewMoneySeg({
   );
 }
 
-const ETF_SHARE_COLORS = ["#38bdf8", "#22d3ee", "#f59e0b", "#a78bfa", "#34d399", "#f472b6"] as const;
+const ETF_SHARE_COLORS = ["#ffcc00", "#f0b90b", "#f59e0b", "#a78bfa", "#00d26a", "#ff4d4f"] as const;
 
 const ETF_LINE = {
   lineWidth: 2 as const,
@@ -441,7 +441,7 @@ function EtfShareTip({
   const top = Math.max(8, Math.min(y - 10, 200 - h - 8));
   return (
     <div
-      className="pointer-events-none absolute z-20 rounded-md border border-white/10 bg-[#0b0f17]/94 px-2 py-1.5 font-mono text-[10px] shadow-[0_8px_24px_rgba(0,0,0,0.45)] backdrop-blur-sm"
+      className="pointer-events-none absolute z-20 border border-[#2a2a2a] bg-black px-2 py-1.5 font-mono text-[10px]"
       style={{ left, top, width: w }}
     >
       <div className="mb-1 text-[10px] text-slate-400">{date}</div>
@@ -490,7 +490,7 @@ function EtfShareBlock({ items, fallback }: { items: EtfShares[]; fallback: EtfS
   return (
     <div>
       <SectionHeader
-        icon={<Activity className="h-3.5 w-3.5 text-cyan-400" />}
+        icon={<Activity className="h-3.5 w-3.5 text-primary" />}
         title="ETF 份额"
         hint="上交所/深交所日频 · 亿份"
         meta={asOf ? `${asOf} · ${dates.length} 日` : "加载中…"}

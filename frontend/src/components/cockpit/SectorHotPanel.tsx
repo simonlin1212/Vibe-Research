@@ -31,7 +31,7 @@ export function SectorHotBar({
         value={q}
         onChange={(e) => onQuery(e.target.value)}
         placeholder="搜索板块"
-        className="h-6 w-20 rounded border border-slate-700/50 bg-slate-800/40 px-1.5 text-[11px] text-slate-200 outline-none placeholder:text-slate-600 focus:border-cyan-500/50"
+        className="h-6 w-20 rounded border border-slate-700/50 bg-slate-800/40 px-1.5 text-[11px] text-slate-200 outline-none placeholder:text-slate-600 focus:border-primary/50"
       />
       <ChipGroup className="border-0 bg-transparent p-0">
         <Chip active={kind === "01"} onClick={() => onKind("01")}>行业</Chip>
@@ -67,7 +67,7 @@ function BoardRow({
       onClick={onClick}
       className={cn(
         "grid w-full grid-cols-[24px_1fr_52px_72px] items-center gap-1.5 rounded px-1.5 py-1 text-left",
-        active ? "bg-cyan-500/10 ring-1 ring-cyan-500/40" : "hover:bg-slate-800/40",
+        active ? "bg-primary/10 ring-1 ring-primary/40" : "hover:bg-[#1a1400]",
       )}
     >
       <span className="text-[10px] tabular-nums text-slate-600">
@@ -168,7 +168,7 @@ function StockPane({
   return (
     <div className="min-h-0 min-w-0 flex-1 overflow-y-auto p-1">
       <div className="mb-1 flex items-baseline justify-between gap-2 px-1.5 pt-1">
-        <span className="truncate text-[12px] font-semibold text-cyan-300">{board.name}</span>
+        <span className="truncate text-[12px] font-semibold text-primary">{board.name}</span>
         <div className="flex shrink-0 items-center gap-2">
           <span className={cn("font-mono text-[12px] font-semibold tabular-nums", pctColor(board.pct))}>
             {fmtPct(board.pct)}

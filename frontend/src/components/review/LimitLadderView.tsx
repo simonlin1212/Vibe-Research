@@ -30,7 +30,7 @@ function tierText(n: number, side: Side): string {
 
 function boardTag(code: string): { label: string; cls: string } | null {
   if (/^(300|301)/.test(code)) return { label: "创", cls: "text-orange-400" };
-  if (/^688/.test(code)) return { label: "科", cls: "text-cyan-400" };
+  if (/^688/.test(code)) return { label: "科", cls: "text-primary" };
   if (/^(8|4)\d{5}$/.test(code)) return { label: "北", cls: "text-violet-400" };
   return null;
 }
@@ -134,7 +134,7 @@ export function LimitLadderView({
                         key={s.code || s.name}
                         code={s.code}
                         title={s.industry || s.code}
-                        className="inline-flex max-w-[5.5rem] items-baseline gap-0.5 rounded px-0.5 py-px text-[11px] text-slate-200 hover:bg-slate-800/70 hover:text-cyan-200"
+                        className="inline-flex max-w-[5.5rem] items-baseline gap-0.5 rounded px-0.5 py-px text-[11px] text-slate-200 hover:bg-slate-800/70 hover:text-primary"
                       >
                         <span className="truncate">{s.name}</span>
                         {tag && <span className={cn("shrink-0 text-[9px]", tag.cls)}>{tag.label}</span>}

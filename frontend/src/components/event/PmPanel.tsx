@@ -47,7 +47,7 @@ function Bar({ pct }: { pct: number | null | undefined }) {
   const w = pct == null ? 0 : Math.max(0, Math.min(100, pct));
   return (
     <div className="h-1.5 overflow-hidden rounded-full bg-slate-800">
-      <div className="h-full rounded-full bg-cyan-400" style={{ width: `${w}%` }} />
+      <div className="h-full rounded-full bg-primary" style={{ width: `${w}%` }} />
     </div>
   );
 }
@@ -59,7 +59,7 @@ function MarketRow({ m }: { m: PmMarket }) {
     <div className={cn("rounded px-1.5 py-1", m.closed && "opacity-50")}>
       <div className="flex items-baseline justify-between gap-2">
         <span className="min-w-0 truncate text-[11px] text-slate-300">{m.title}</span>
-        <span className="shrink-0 font-mono text-[11px] tabular-nums text-cyan-200">
+        <span className="shrink-0 font-mono text-[11px] tabular-nums text-primary">
           {label ? `${label} ` : ""}{fmtPct(pct)}
           {m.chg != null && Number.isFinite(m.chg) ? (
             <span className={cn("ml-1", m.chg >= 0 ? "text-rose-400" : "text-emerald-400")}>
@@ -92,14 +92,14 @@ function EventCard({
     <article
       className={cn(
         "rounded border-l-2 px-2 py-1.5",
-        open || watched ? "border-cyan-400 bg-cyan-500/5" : "border-slate-700/50",
+        open || watched ? "border-primary bg-primary/5" : "border-slate-700/50",
       )}
     >
       <div className="flex items-start gap-1.5">
         <button type="button" onClick={() => onPick(open ? "" : ev.slug)} className="min-w-0 flex-1 text-left">
           <div className="flex items-start justify-between gap-2">
             <p className="min-w-0 text-[12px] font-semibold leading-5 text-slate-200">{ev.title}</p>
-            <span className="shrink-0 font-mono text-[12px] tabular-nums text-cyan-200">
+            <span className="shrink-0 font-mono text-[12px] tabular-nums text-primary">
               {fmtPct(feat?.pct)}
             </span>
           </div>
@@ -120,8 +120,8 @@ function EventCard({
           className={cn(
             "mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded border text-[11px]",
             watched
-              ? "border-cyan-500/40 text-cyan-300 hover:border-rose-400/50 hover:text-rose-300"
-              : "border-slate-700/60 text-slate-400 hover:border-cyan-500/50 hover:text-cyan-300",
+              ? "border-primary/40 text-primary hover:border-rose-400/50 hover:text-rose-300"
+              : "border-slate-700/60 text-slate-400 hover:border-primary/50 hover:text-primary",
           )}
         >
           {watched ? <X size={12} /> : <Plus size={12} />}
@@ -140,7 +140,7 @@ function EventCard({
             href={`https://polymarket.com/event/${ev.slug}`}
             target="_blank"
             rel="noreferrer"
-            className="mt-1 inline-flex items-center gap-1 px-1.5 text-[10px] text-cyan-400/80 hover:text-cyan-300"
+            className="mt-1 inline-flex items-center gap-1 px-1.5 text-[10px] text-primary/80 hover:text-primary"
           >
             打开 Polymarket <ExternalLink size={10} />
           </a>

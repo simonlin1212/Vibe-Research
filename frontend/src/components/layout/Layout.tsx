@@ -87,7 +87,7 @@ export function Layout() {
       <NewsToastHost />
       {pathname.startsWith("/a-share") && (
         <nav
-          className={cn(NAV_RAIL_CLASS, "mx-2 mt-1 shrink-0")}
+          className={cn(NAV_RAIL_CLASS, "shrink-0 border-b border-[#2a2a2a] px-1")}
           aria-label="A股页签"
         >
           {A_SHARE_TABS.map((t) => {
@@ -134,7 +134,7 @@ export function Layout() {
         aria-label="主导航"
       >
         {moreOpen && (
-          <div className="absolute bottom-full left-2 right-2 mb-2 rounded-md border border-white/[0.08] bg-card p-1.5 shadow-lg">
+          <div className="absolute bottom-full left-2 right-2 mb-2 border border-[#2a2a2a] bg-black p-1">
             {MORE_NAV.map((l) => {
               const Icon = NAV_ICONS[l.to];
               const active = l.match(pathname);
@@ -144,7 +144,7 @@ export function Layout() {
                   to={l.to}
                   className={cn(
                     "flex items-center gap-2 rounded-md px-3 py-2.5 text-[13px] font-medium",
-                    active ? "bg-cyan-400/15 text-cyan-100" : "text-slate-200 hover:bg-white/[0.05]",
+                    active ? "bg-[#2a1a00] text-[#ffcc00]" : "text-[#ddd] hover:bg-[#1a1a1a]",
                   )}
                 >
                   {Icon ? <Icon className="h-4 w-4" /> : null}
@@ -165,12 +165,12 @@ export function Layout() {
                 aria-current={active ? "page" : undefined}
                 className={cn(
                   "flex min-w-[52px] flex-col items-center justify-center gap-0.5 py-1 text-[11px] font-medium",
-                  active ? "text-cyan-100" : "text-slate-300",
+                  active ? "text-[#ffcc00]" : "text-[#c8c8c8]",
                 )}
               >
                 <span className={cn(
-                  "flex h-7 w-7 items-center justify-center rounded-lg",
-                  active && "bg-cyan-400/20 shadow-[0_0_0_1px_rgba(34,211,238,0.35)]",
+                  "flex h-7 w-7 items-center justify-center",
+                  active && "bg-[#2a1a00]",
                 )}>
                   {Icon ? <Icon className="h-[18px] w-[18px]" /> : null}
                 </span>
@@ -183,14 +183,14 @@ export function Layout() {
             onClick={() => setMoreOpen((v) => !v)}
             className={cn(
               "flex min-w-[52px] flex-col items-center justify-center gap-0.5 py-1 text-[11px] font-medium",
-              moreOpen || moreActive ? "text-cyan-100" : "text-slate-300",
+              moreOpen || moreActive ? "text-[#ffcc00]" : "text-[#c8c8c8]",
             )}
             aria-expanded={moreOpen}
             aria-label="更多页面"
           >
             <span className={cn(
-              "flex h-7 w-7 items-center justify-center rounded-lg",
-              (moreOpen || moreActive) && "bg-cyan-400/20 shadow-[0_0_0_1px_rgba(34,211,238,0.35)]",
+              "flex h-7 w-7 items-center justify-center",
+              (moreOpen || moreActive) && "bg-[#2a1a00]",
             )}>
               <MoreHorizontal className="h-[18px] w-[18px]" />
             </span>

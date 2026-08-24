@@ -66,11 +66,11 @@ export function NewsToastHost() {
         return (
           <article
             key={t.id}
-            className="pointer-events-auto rounded-md border border-cyan-400/25 bg-[#121214]/95 px-2.5 py-2 shadow-[0_8px_28px_rgba(0,0,0,0.45)] ring-1 ring-white/[0.04] backdrop-blur-md"
+            className="pointer-events-auto border border-[#2a2a2a] bg-black px-2 py-1.5"
           >
             <div className="flex items-center gap-1.5">
               <span className="font-mono text-[10px] tabular-nums text-slate-500">{toastTime(t.time)}</span>
-              <span className="text-[9px] text-cyan-300/80">{NEWS_SRC_LABEL[t.source]}</span>
+              <span className="text-[9px] text-primary/80">{NEWS_SRC_LABEL[t.source]}</span>
               {labels.map((label) => (
                 <span
                   key={label}
@@ -89,7 +89,7 @@ export function NewsToastHost() {
                 <X className="h-3.5 w-3.5" />
               </button>
             </div>
-            <Link to="/a-share" className="mt-1 block text-[12px] font-semibold leading-5 text-slate-100 hover:text-cyan-100">
+            <Link to="/a-share" className="mt-1 block text-[12px] font-semibold leading-5 text-slate-100 hover:text-primary">
               {t.title}
             </Link>
             {t.content && (

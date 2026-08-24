@@ -133,7 +133,7 @@ export function NightMoon({ show }: { show?: boolean }) {
     <span className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center">
       {show ? (
         <span
-          className="flex h-3.5 w-3.5 items-center justify-center rounded-[3px] border border-sky-400/50 bg-sky-400/10 text-[10px] leading-none text-sky-400/90"
+          className="flex h-3.5 w-3.5 items-center justify-center border border-primary/50 bg-primary/10 text-[10px] leading-none text-primary"
           aria-label="夜盘"
         >
           夜
@@ -156,7 +156,7 @@ export function NightOnlySwitch({ on, onChange }: { on: boolean; onChange: (v: b
         onClick={() => onChange(!on)}
         className={cn(
           "relative inline-flex h-3.5 w-6 shrink-0 items-center rounded-full transition-colors",
-          on ? "bg-sky-500/70" : "bg-slate-700/70",
+          on ? "bg-primary/70" : "bg-slate-700/70",
         )}
       >
         <span
@@ -173,7 +173,7 @@ export function NightOnlySwitch({ on, onChange }: { on: boolean; onChange: (v: b
 type DerivSession = { label: string; tone: string; live: boolean };
 const SESSION_DAY: DerivSession = { label: "日盘", tone: "text-emerald-400", live: true };
 const SESSION_NOON: DerivSession = { label: "午休", tone: "text-amber-400", live: false };
-const SESSION_NIGHT: DerivSession = { label: "夜盘", tone: "text-sky-400", live: true };
+const SESSION_NIGHT: DerivSession = { label: "夜盘", tone: "text-primary", live: true };
 const SESSION_CLOSED: DerivSession = { label: "休市", tone: "text-slate-500", live: false };
 
 /** Coarse futures session from local time: 日盘 09:00-15:00 (午休 11:30-13:30), 夜盘 21:00-02:30. */
@@ -293,7 +293,7 @@ export function SortableHd<K extends string>({
       onClick={() => onSort(k)}
       className={cn(
         "inline-flex shrink-0 items-center gap-0.5 select-none hover:text-slate-100",
-        active ? "text-cyan-300" : "text-slate-300",
+        active ? "text-primary" : "text-slate-300",
         className,
       )}
     >
@@ -507,7 +507,7 @@ export function ProdSearchSelect({
                 className={cn(
                   "flex w-full px-2 py-1 text-left text-[11px]",
                   i === hi ? "bg-slate-800 text-slate-100" : "text-slate-300 hover:bg-slate-800/60",
-                  o.value === value && "text-cyan-300",
+                  o.value === value && "text-primary",
                 )}
               >
                 <span className="truncate">{o.label}</span>

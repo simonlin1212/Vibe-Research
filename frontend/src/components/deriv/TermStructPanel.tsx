@@ -166,8 +166,8 @@ function ReceiptStrip({
     );
   }
   return (
-    <div className="flex shrink-0 items-center gap-2 border-y border-cyan-500/25 bg-cyan-400/[0.06] px-2 py-1 text-[12px] tabular-nums">
-      <span className="shrink-0 font-semibold text-cyan-300">仓单</span>
+    <div className="flex shrink-0 items-center gap-2 border-y border-primary/25 bg-primary/[0.06] px-2 py-1 text-[12px] tabular-nums">
+      <span className="shrink-0 font-semibold text-primary">仓单</span>
       {body}
     </div>
   );
@@ -342,8 +342,8 @@ export function TermStructPanel({ d }: { d: DerivData }) {
             data: selCurve.map((p) => p.fwd),
             symbol: "circle",
             symbolSize: 4,
-            lineStyle: { color: "#22d3ee", width: 1.6 },
-            itemStyle: { color: "#22d3ee" },
+            lineStyle: { color: "#ffcc00", width: 1.6 },
+            itemStyle: { color: "#ffcc00" },
             label: {
               show: true,
               position: "top",

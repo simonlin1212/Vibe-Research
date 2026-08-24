@@ -171,14 +171,14 @@ export function ModelPanel({
           type="button"
           onClick={() => void run()}
           disabled={running}
-          className="inline-flex items-center gap-1.5 rounded border border-cyan-500/40 bg-cyan-500/15 px-3 py-1 text-[12px] font-semibold text-cyan-200 hover:bg-cyan-500/25 disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 rounded border border-primary/40 bg-primary/15 px-3 py-1 text-[12px] font-semibold text-primary hover:bg-primary/25 disabled:opacity-50"
         >
           <Play className="h-3.5 w-3.5" />
           {running ? jobText(job, "在训…") : "跑模型"}
         </button>
         {running && (
           <div className="h-1.5 overflow-hidden rounded bg-slate-800">
-            <div className="h-full bg-cyan-500/80" style={{ width: `${jobPct(job)}%` }} />
+            <div className="h-full bg-primary/80" style={{ width: `${jobPct(job)}%` }} />
           </div>
         )}
         {error && <p className="text-[12px] text-rose-300">{error}</p>}
@@ -188,7 +188,7 @@ export function ModelPanel({
               <div key={r.id} className="flex items-center justify-between text-[10px] text-slate-400">
                 <button
                   type="button"
-                  className="font-mono hover:text-cyan-200"
+                  className="font-mono hover:text-primary"
                   onClick={() => {
                     void api.backtestRunGet(r.id).then((row) => setResult(row as BacktestModelResult)).catch((e) => {
                       setError(e instanceof ApiError ? e.message : "读实验失败");

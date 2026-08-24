@@ -148,7 +148,7 @@ export function DerivCockpit() {
           id: "main-board",
           title: "行情观察",
           icon: <LineChart size={14} />,
-          accent: "#38bdf8",
+          accent: "#ffcc00",
           defaultW: 0.36,
           mobileH: "h-[64vh]",
           right: (
@@ -204,7 +204,7 @@ export function DerivCockpit() {
           id: "expiry-cal",
           title: "临期期权日历",
           icon: <CalendarDays size={14} />,
-          accent: "#2dd4bf",
+          accent: "#ffcc00",
           defaultW: 0.20,
           mobileH: "h-[56vh]",
           right: d.exps ? <span className="font-mono text-[10px] text-slate-500">{d.exps.length}品种</span> : undefined,
@@ -215,7 +215,7 @@ export function DerivCockpit() {
           title: "期限结构",
           hint: "远期曲线 · 仓单",
           icon: <TrendingUp size={14} />,
-          accent: "#34d399",
+          accent: "#00d26a",
           defaultW: 0.22,
           mobileH: "h-[44vh]",
           right: <FreshTag updated={d.marketUpdated} />,
@@ -225,7 +225,7 @@ export function DerivCockpit() {
           id: "alert",
           title: "异动",
           icon: <Zap size={14} />,
-          accent: "#f59e0b",
+          accent: "#ffcc00",
           defaultW: 0.22,
           mobileH: "h-[50vh]",
           right: <FreshTag updated={d.alertUpdated} />,
@@ -241,7 +241,7 @@ export function DerivCockpit() {
           title: "T 型报价",
           hint: "理论价=Black-76",
           icon: <Table size={14} />,
-          accent: "#e879f9",
+          accent: "#ffcc00",
           defaultW: 0.68,
           maxZoomW: 0.88,
           mobileH: "h-[56vh]",
@@ -260,7 +260,7 @@ export function DerivCockpit() {
           title: "日K / 分时",
           hint: optPick ? optPick.name : "点行情观察或 T 表",
           icon: <CandlestickChart size={14} />,
-          accent: "#f472b6",
+          accent: "#ff4d4f",
           defaultW: 0.32,
           mobileH: "h-[40vh]",
           bodyClassName: "overflow-hidden",
@@ -297,7 +297,7 @@ export function DerivCockpit() {
         onClick={d.refresh}
         disabled={d.refreshing}
         className={cn(
-          "inline-flex h-6 items-center gap-1 rounded border border-slate-700/60 px-2 text-[11px] text-slate-400 transition-colors hover:border-cyan-500/50 hover:text-cyan-300 disabled:opacity-50",
+          "inline-flex h-6 items-center gap-1 rounded border border-slate-700/60 px-2 text-[11px] text-slate-400 transition-colors hover:border-primary/50 hover:text-primary disabled:opacity-50",
         )}
         title="重拉 market / 异动"
       >
@@ -308,7 +308,7 @@ export function DerivCockpit() {
         type="button"
         onClick={() => { setAiOpen(true); void runReview(); }}
         disabled={reviewLoading}
-        className="inline-flex h-6 items-center gap-1 rounded border border-cyan-500/40 bg-cyan-500/10 px-2 text-[11px] text-cyan-300 hover:bg-cyan-500/20 disabled:opacity-50"
+        className="inline-flex h-6 items-center gap-1 rounded border border-primary/40 bg-primary/10 px-2 text-[11px] text-primary hover:bg-primary/20 disabled:opacity-50"
       >
         {reviewLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
         AI 复盘
@@ -333,10 +333,10 @@ export function DerivCockpit() {
       <CockpitLayout rows={rows} />
 
       {showReviewPanel && (
-        <div className="absolute inset-x-2 top-10 z-30 max-h-[70%] overflow-auto rounded-md border border-cyan-500/40 bg-card p-3 shadow-[0_0_32px_rgba(34,211,238,0.18)] sm:inset-x-8">
+        <div className="absolute inset-x-2 top-8 z-30 max-h-[70%] overflow-auto border border-primary/40 bg-black p-3 sm:inset-x-8">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="flex items-center gap-1.5 text-sm font-semibold text-slate-100">
-              <Sparkles className="h-4 w-4 text-cyan-400" /> AI 衍生品复盘
+              <Sparkles className="h-4 w-4 text-primary" /> AI 衍生品复盘
             </h3>
             <div className="flex items-center gap-2">
               {reviewLoading && (
@@ -347,7 +347,7 @@ export function DerivCockpit() {
               <button
                 type="button"
                 onClick={() => setAiOpen(false)}
-                className="rounded border border-slate-700/60 p-1 text-slate-400 hover:text-cyan-300"
+                className="rounded border border-slate-700/60 p-1 text-slate-400 hover:text-primary"
                 title="关闭"
               >
                 <X className="h-3.5 w-3.5" />
@@ -360,7 +360,7 @@ export function DerivCockpit() {
           {needConfig && (
             <div className="mt-3 flex items-center gap-2 rounded border border-warning/30 bg-warning/5 p-3 text-sm text-slate-400">
               <AlertCircle className="h-4 w-4 shrink-0 text-warning" />
-              还没接入 AI。<Link to="/settings" className="text-cyan-400">先去接入你的 AI</Link>，之后一键出复盘。
+              还没接入 AI。<Link to="/settings" className="text-primary">先去接入你的 AI</Link>，之后一键出复盘。
             </div>
           )}
           {reviewErr && (

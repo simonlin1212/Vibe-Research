@@ -15,7 +15,7 @@ export function SectionHeader({ icon, title, hint, meta, actions, className }: P
   return (
     <div className={cn("mb-1.5 flex flex-wrap items-center gap-x-2 gap-y-1", className)}>
       <div className="flex min-w-0 items-center gap-2">
-        <span className="inline-flex h-3.5 w-0.5 shrink-0 rounded-sm bg-cyan-400" aria-hidden />
+        <span className="inline-flex h-3.5 w-0.5 shrink-0 bg-primary" aria-hidden />
         <h3 className="flex items-center gap-1.5 text-[12px] font-semibold tracking-wide text-slate-200">
           {icon}
           {title}
@@ -39,7 +39,7 @@ interface ChipGroupProps {
 
 export function ChipGroup({ children, className }: ChipGroupProps) {
   return (
-    <div className={cn("inline-flex flex-wrap items-center gap-0.5 rounded border border-slate-700/50 bg-slate-900/40 p-0.5", className)}>
+    <div className={cn("inline-flex flex-wrap items-center gap-px border border-[#2a2a2a] bg-black p-px", className)}>
       {children}
     </div>
   );
@@ -64,7 +64,7 @@ export function Chip({ active, onClick, children, accent = "cyan" }: ChipProps) 
             ? "bg-amber-500/20 font-medium text-amber-300"
             : accent === "violet"
               ? "bg-violet-500/20 font-medium text-violet-300"
-              : "bg-cyan-500/15 font-medium text-cyan-300"
+              : "bg-primary/15 font-medium text-primary"
           : "text-slate-500 hover:text-slate-200",
       )}
     >

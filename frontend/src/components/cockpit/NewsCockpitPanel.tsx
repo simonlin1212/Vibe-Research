@@ -31,7 +31,7 @@ function TagPills({
         );
       })}
       {isNew && (
-        <span className="rounded-sm bg-cyan-500/20 px-1 py-px text-[9px] leading-none text-cyan-300">NEW</span>
+        <span className="bg-primary/20 px-1 py-px text-[9px] leading-none text-primary">NEW</span>
       )}
     </span>
   );
@@ -43,8 +43,8 @@ function NewsRow({ it, isNew }: { it: ClsTelegraphItem; isNew: boolean }) {
   return (
     <article
       className={cn(
-        "rounded border-l-2 px-2 py-1.5",
-        isNew ? "border-cyan-400 bg-cyan-500/5" : "border-slate-700/50",
+        "border-l-2 px-2 py-1",
+        isNew ? "border-primary bg-primary/5" : "border-[#2a2a2a]",
       )}
     >
       <div className="flex items-center gap-1.5">
@@ -85,7 +85,7 @@ export function NewsFeedBar({
           onClick={() => onSource(k)}
           className={cn(
             "rounded px-1.5 py-0.5",
-            source === k ? "bg-cyan-500/15 text-cyan-300" : "text-slate-400 hover:text-slate-200",
+            source === k ? "bg-primary/15 text-primary" : "text-slate-400 hover:text-slate-200",
           )}
         >
           {label}
@@ -97,7 +97,7 @@ export function NewsFeedBar({
           type="checkbox"
           checked={auto}
           onChange={(e) => onAuto(e.target.checked)}
-          className="accent-cyan-400"
+          className="accent-primary"
         />
         自动滚动{count != null ? ` · ${count}条` : ""}
       </label>

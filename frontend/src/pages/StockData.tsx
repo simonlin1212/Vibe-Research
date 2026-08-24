@@ -324,7 +324,7 @@ export function StockData({
       {!hideSearch ? (
         <div className={cn(
           "mb-5 flex flex-wrap items-center gap-2",
-          embedded && "rounded-xl border border-border/50 bg-muted/15 px-3.5 py-3",
+          embedded && "border border-[#2a2a2a] bg-black px-2 py-1.5",
         )}>
           {embedded && (
             <div className="mr-1 hidden min-w-0 sm:block">
@@ -916,7 +916,7 @@ export function StockData({
             </div>
             {headerBoard && (
               <p className="mb-2 truncate text-[11px] leading-none" title={`${headerBoard.industry}${headerBoard.concepts ? ` · ${headerBoard.concepts}` : ""}`}>
-                {headerBoard.industry && <span className="text-cyan-500/80">{headerBoard.industry}</span>}
+                {headerBoard.industry && <span className="text-primary/80">{headerBoard.industry}</span>}
                 {headerBoard.concepts && (
                   <span className="text-muted-foreground">
                     {headerBoard.industry ? " · " : ""}

@@ -74,7 +74,7 @@ function FactorCharts({ result }: { result: BacktestFactorResult }) {
     });
     const navDates = result.group_nav.map((p) => String(p.date));
     const groups = result.group_stats.map((g) => g.label);
-    const colors = ["#64748b", "#38bdf8", "#22d3ee", "#a78bfa", "#f87171", "#fbbf24"];
+    const colors = ["#64748b", "#ffcc00", "#f0b90b", "#a78bfa", "#f87171", "#00d26a"];
     nav.setOption({
       backgroundColor: "transparent",
       animation: false,
@@ -237,7 +237,7 @@ export function FactorPanel({
                 }}
                 className={cn(
                   "shrink-0 rounded border px-2 py-1 text-left text-[10px]",
-                  active ? "border-cyan-500/50 bg-cyan-500/10 text-cyan-100" : "border-slate-700 text-slate-400 hover:text-slate-200",
+                  active ? "border-primary/50 bg-primary/10 text-primary" : "border-slate-700 text-slate-400 hover:text-slate-200",
                   opening === r.id && "opacity-60",
                 )}
               >
@@ -294,7 +294,7 @@ export function FactorPanel({
               onCodes(e.target.value);
             }}
             rows={2}
-            className="w-full resize-y rounded border border-slate-700 bg-slate-950/60 px-2 py-1.5 font-mono text-[12px] text-slate-100 outline-none focus:border-cyan-500/50"
+            className="w-full resize-y rounded border border-slate-700 bg-slate-950/60 px-2 py-1.5 font-mono text-[12px] text-slate-100 outline-none focus:border-primary/50"
             placeholder="600519 000858 300750"
           />
           <p className="mt-1 text-[10px] text-slate-500">
@@ -329,7 +329,7 @@ export function FactorPanel({
                 onClick={() => setRebalance(k)}
                 className={cn(
                   "rounded border px-2 py-1 text-[11px]",
-                  rebalance === k ? "border-cyan-500/50 bg-cyan-500/10 text-cyan-200" : "border-slate-700 text-slate-400",
+                  rebalance === k ? "border-primary/50 bg-primary/10 text-primary" : "border-slate-700 text-slate-400",
                 )}
               >
                 {k === "monthly" ? "月" : k === "weekly" ? "周" : "日"}
@@ -362,7 +362,7 @@ export function FactorPanel({
                 onClick={() => setPool(k)}
                 className={cn(
                   "rounded border px-2 py-1 text-[11px]",
-                  pool === k ? "border-cyan-500/50 bg-cyan-500/10 text-cyan-200" : "border-slate-700 text-slate-400",
+                  pool === k ? "border-primary/50 bg-primary/10 text-primary" : "border-slate-700 text-slate-400",
                 )}
               >
                 {lab}
@@ -380,7 +380,7 @@ export function FactorPanel({
                 onClick={() => setDirection(k)}
                 className={cn(
                   "rounded border px-2 py-1 text-[11px]",
-                  direction === k ? "border-cyan-500/50 bg-cyan-500/10 text-cyan-200" : "border-slate-700 text-slate-400",
+                  direction === k ? "border-primary/50 bg-primary/10 text-primary" : "border-slate-700 text-slate-400",
                 )}
               >
                 {lab}
@@ -398,7 +398,7 @@ export function FactorPanel({
                 onClick={() => setNGroups(n)}
                 className={cn(
                   "rounded border px-2 py-1 text-[11px]",
-                  nGroups === n ? "border-cyan-500/50 bg-cyan-500/10 text-cyan-200" : "border-slate-700 text-slate-400",
+                  nGroups === n ? "border-primary/50 bg-primary/10 text-primary" : "border-slate-700 text-slate-400",
                 )}
               >
                 {n}
@@ -416,7 +416,7 @@ export function FactorPanel({
                 onClick={() => setWeight(k)}
                 className={cn(
                   "rounded border px-2 py-1 text-[11px]",
-                  weight === k ? "border-cyan-500/50 bg-cyan-500/10 text-cyan-200" : "border-slate-700 text-slate-400",
+                  weight === k ? "border-primary/50 bg-primary/10 text-primary" : "border-slate-700 text-slate-400",
                 )}
               >
                 {lab}
@@ -428,7 +428,7 @@ export function FactorPanel({
           type="button"
           onClick={() => void run()}
           disabled={running}
-          className="inline-flex items-center gap-1.5 rounded border border-cyan-500/40 bg-cyan-500/15 px-3 py-1 text-[12px] font-semibold text-cyan-200 hover:bg-cyan-500/25 disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 rounded border border-primary/40 bg-primary/15 px-3 py-1 text-[12px] font-semibold text-primary hover:bg-primary/25 disabled:opacity-50"
         >
           <Play className="h-3.5 w-3.5" />
           {running ? jobText(job, "在算…") : "跑因子"}
@@ -464,7 +464,7 @@ export function FactorPanel({
             }).finally(() => setRunning(false));
           }}
           disabled={running}
-          className="rounded border border-slate-600 px-3 py-1 text-[12px] text-slate-200 hover:border-cyan-500/40 disabled:opacity-50"
+          className="rounded border border-slate-600 px-3 py-1 text-[12px] text-slate-200 hover:border-primary/40 disabled:opacity-50"
         >
           对照已勾选
         </button>
@@ -485,7 +485,7 @@ export function FactorPanel({
               }}
               className={cn(
                 "rounded border px-1.5 py-0.5 text-[10px]",
-                on ? "border-cyan-500/40 bg-cyan-500/10 text-cyan-100" : "border-slate-800 text-slate-500",
+                on ? "border-primary/40 bg-primary/10 text-primary" : "border-slate-800 text-slate-500",
               )}
             >
               {f.label}
@@ -496,10 +496,10 @@ export function FactorPanel({
       {error && <p className="text-[12px] text-rose-300">{error}</p>}
       {running && (
         <GlassCard className="space-y-2 p-3">
-          <p className="text-[12px] text-cyan-100">{jobText(job, "在算 Rank IC / 五档")}</p>
+          <p className="text-[12px] text-primary">{jobText(job, "在算 Rank IC / 五档")}</p>
           {job?.note ? <p className="text-[10px] text-slate-500">{job.note}</p> : null}
           <div className="h-1.5 overflow-hidden rounded bg-slate-800">
-            <div className="h-full bg-cyan-500/80 transition-[width]" style={{ width: `${jobPct(job)}%` }} />
+            <div className="h-full bg-primary/80 transition-[width]" style={{ width: `${jobPct(job)}%` }} />
           </div>
         </GlassCard>
       )}

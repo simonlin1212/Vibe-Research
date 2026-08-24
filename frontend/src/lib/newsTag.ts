@@ -7,7 +7,7 @@ const MACRO = [
 
 const TAG_COLOR: Record<string, string> = {
   重要: "#fb7185",
-  股票: "#22d3ee",
+  股票: "#ffcc00",
   宏观: "#fbbf24",
   英文: "#a78bfa",
   预告: "#94a3b8",
@@ -15,7 +15,7 @@ const TAG_COLOR: Record<string, string> = {
 };
 
 export function tagColor(label: string): string {
-  return TAG_COLOR[label] ?? "#22d3ee";
+  return TAG_COLOR[label] ?? "#ffcc00";
 }
 
 /** Tag a headline by chain keywords, then macro, then policy. */

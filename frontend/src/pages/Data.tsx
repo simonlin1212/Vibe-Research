@@ -95,7 +95,7 @@ export function Data() {
               type="button"
               onClick={() => void fillUniverse()}
               disabled={syncing || syncState === "running"}
-              className="inline-flex items-center gap-1 rounded border border-cyan-700/60 px-2 py-1 text-[11px] text-cyan-200 hover:text-cyan-100 disabled:opacity-50"
+              className="inline-flex items-center gap-1 rounded border border-primary/60 px-2 py-1 text-[11px] text-primary hover:text-primary disabled:opacity-50"
             >
               {syncState === "running" ? "补齐中…" : "补齐近3年"}
             </button>
@@ -109,7 +109,7 @@ export function Data() {
                 }).finally(() => setPitBusy(""));
               }}
               disabled={!!pitBusy}
-              className="inline-flex items-center gap-1 rounded border border-cyan-700/60 px-2 py-1 text-[11px] text-cyan-200 hover:text-cyan-100 disabled:opacity-50"
+              className="inline-flex items-center gap-1 rounded border border-primary/60 px-2 py-1 text-[11px] text-primary hover:text-primary disabled:opacity-50"
             >
               {pitBusy === "members" ? "成分…" : "补齐按日成分"}
             </button>
@@ -123,7 +123,7 @@ export function Data() {
                 }).finally(() => setPitBusy(""));
               }}
               disabled={!!pitBusy}
-              className="inline-flex items-center gap-1 rounded border border-cyan-700/60 px-2 py-1 text-[11px] text-cyan-200 hover:text-cyan-100 disabled:opacity-50"
+              className="inline-flex items-center gap-1 rounded border border-primary/60 px-2 py-1 text-[11px] text-primary hover:text-primary disabled:opacity-50"
             >
               {pitBusy === "fund" ? "财务…" : "补齐财务PIT"}
             </button>
@@ -229,7 +229,7 @@ export function Data() {
                         key={s.symbol}
                         className={cn(
                           "cursor-pointer border-b border-slate-800/70 hover:bg-slate-800/40",
-                          peekSym === s.symbol && "bg-cyan-500/10",
+                          peekSym === s.symbol && "bg-primary/10",
                         )}
                         onClick={() => void openPeek(s.symbol)}
                       >
@@ -287,7 +287,7 @@ export function Data() {
                       <li key={r.id}>
                         <Link
                           to="/backtest"
-                          className="font-mono text-[11px] text-cyan-400 hover:text-cyan-200"
+                          className="font-mono text-[11px] text-primary hover:text-primary"
                         >
                           {r.id}
                         </Link>
@@ -298,7 +298,7 @@ export function Data() {
                     ))}
                   </ul>
                 )}
-                <Link to="/backtest" className="mt-2 inline-block text-[11px] text-cyan-400 hover:text-cyan-200">
+                <Link to="/backtest" className="mt-2 inline-block text-[11px] text-primary hover:text-primary">
                   去回测
                 </Link>
               </GlassCard>

@@ -22,7 +22,7 @@ const RULE_HINT: Record<string, string> = {
 
 const RULE_TONE: Record<string, string> = {
   r001_single_trade: "text-amber-400",
-  r002_1m_pct_move: "text-sky-400",
+  r002_1m_pct_move: "text-primary",
   r003_repeated_aggressive_burst: "text-fuchsia-400",
 };
 
@@ -240,7 +240,7 @@ function RuleCheck({
         type="checkbox"
         checked={on}
         onChange={onToggle}
-        className="accent-cyan-400"
+        className="accent-primary"
       />
       <span className={cn("text-[11px] font-medium", on ? tone : "text-slate-600")}>{label}</span>
     </label>
@@ -349,7 +349,7 @@ export function AlertPanel({ d }: { d: DerivData }) {
                 <RuleCheck
                   on={thresh.on.r002}
                   label="走势异动"
-                  tone="text-sky-400"
+                  tone="text-primary"
                   onToggle={() => toggleOn("r002")}
                 />
                 <ThreshField
@@ -395,7 +395,7 @@ export function AlertPanel({ d }: { d: DerivData }) {
         <button
           type="button"
           onClick={() => setAutoTop((v) => !v)}
-          className={cn("text-[11px]", autoTop ? "text-cyan-400" : "text-slate-600 hover:text-slate-400")}
+          className={cn("text-[11px]", autoTop ? "text-primary" : "text-slate-600 hover:text-slate-400")}
           title="新异动自动滚到顶"
         >
           滚顶{autoTop ? "开" : "关"}
@@ -430,7 +430,7 @@ export function AlertPanel({ d }: { d: DerivData }) {
                     key={k}
                     className={cn(
                       "border-b border-slate-800/40",
-                      isNew && "bg-cyan-500/[0.04] shadow-[inset_2px_0_0_#22d3ee]",
+                      isNew && "bg-primary/[0.04] shadow-[inset_2px_0_0_#ffcc00]",
                     )}
                     title={triggerHint(a)}
                   >

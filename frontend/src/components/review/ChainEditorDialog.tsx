@@ -40,7 +40,7 @@ export function ChainEditorDialog({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="flex max-h-[86vh] w-[640px] max-w-[96vw] flex-col rounded-md border border-cyan-400/35 bg-[#0a1220] shadow-[0_0_42px_rgba(34,211,238,0.18)]">
+      <div className="flex max-h-[86vh] w-[640px] max-w-[96vw] flex-col border border-[#2a2a2a] bg-black">
         <div className="flex items-center justify-between border-b border-slate-700/45 px-4 py-3">
           <div>
             <div className="text-[15px] font-semibold text-slate-100">
@@ -66,7 +66,7 @@ export function ChainEditorDialog({
               onChange={(e) => onChange({ ...editor, name: e.target.value })}
               readOnly={editor.mode === "update"}
               placeholder="例如: 固态电池"
-              className="h-8 w-full rounded border border-slate-700 bg-slate-950/80 px-3 text-[13px] text-slate-100 outline-none placeholder:text-slate-600 focus:border-cyan-400/70"
+              className="h-8 w-full rounded border border-slate-700 bg-slate-950/80 px-3 text-[13px] text-slate-100 outline-none placeholder:text-slate-600 focus:border-primary/70"
             />
           </label>
           <div className="flex justify-end">
@@ -85,7 +85,7 @@ export function ChainEditorDialog({
               value={editor.content}
               onChange={(e) => onChange({ ...editor, content: e.target.value })}
               placeholder={PLACEHOLDER}
-              className="h-[220px] w-full resize-none rounded border border-slate-700 bg-slate-950/80 px-3 py-2 text-[12px] leading-6 text-slate-200 outline-none placeholder:text-slate-600 focus:border-cyan-400/70"
+              className="h-[220px] w-full resize-none rounded border border-slate-700 bg-slate-950/80 px-3 py-2 text-[12px] leading-6 text-slate-200 outline-none placeholder:text-slate-600 focus:border-primary/70"
             />
           </label>
           {parseState.error && (
@@ -111,7 +111,7 @@ export function ChainEditorDialog({
             type="button"
             onClick={onSubmit}
             disabled={parseState.loading}
-            className="rounded border border-cyan-400/50 bg-cyan-500/15 px-3 py-1.5 text-[12px] font-semibold text-cyan-200 hover:bg-cyan-500/25 disabled:opacity-50"
+            className="rounded border border-primary/50 bg-primary/15 px-3 py-1.5 text-[12px] font-semibold text-primary hover:bg-primary/25 disabled:opacity-50"
           >
             {parseState.loading ? "处理中..." : editor.mode === "add" ? "创建并保存" : "整理并保存"}
           </button>

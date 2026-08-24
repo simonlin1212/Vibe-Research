@@ -165,7 +165,7 @@ export function WatchPanel({ d, onPick, compact = false }: {
           value={kw}
           onChange={(e) => onSearch(e.target.value)}
           placeholder="加自选: 合约代码, 如 IM2609"
-          className="w-full rounded border border-slate-700/60 bg-slate-900/40 px-2 py-1 text-[12px] text-slate-200 outline-none placeholder:text-slate-600 focus:border-cyan-500/50"
+          className="w-full rounded border border-slate-700/60 bg-slate-900/40 px-2 py-1 text-[12px] text-slate-200 outline-none placeholder:text-slate-600 focus:border-primary/50"
         />
         {kw.trim() && (
           <div className="absolute inset-x-2 top-full z-20 mt-0.5 overflow-hidden rounded border border-slate-700/70 bg-slate-900 shadow-xl">
@@ -178,7 +178,7 @@ export function WatchPanel({ d, onPick, compact = false }: {
                 onClick={() => add(String(h.ticker ?? ""))}
                 className="flex w-full items-center gap-2 px-2 py-1 text-left text-[12px] text-slate-300 hover:bg-slate-800/60"
               >
-                <Plus className="h-3 w-3 shrink-0 text-cyan-400" />
+                <Plus className="h-3 w-3 shrink-0 text-primary" />
                 <span className="shrink-0 tabular-nums">{String(h.ticker ?? "")}</span>
                 <span className="min-w-0 flex-1 truncate text-slate-500">{String(h.name ?? h.description ?? "")}</span>
               </button>
@@ -210,7 +210,7 @@ export function WatchPanel({ d, onPick, compact = false }: {
                 } : undefined}
                 className="flex min-w-0 flex-1 items-center gap-2 text-left"
               >
-                <span className="shrink-0 text-[12px] font-medium tabular-nums text-cyan-300/90">{code}</span>
+                <span className="shrink-0 text-[12px] font-medium tabular-nums text-primary/90">{code}</span>
                 {compact ? (
                   <span className="min-w-0 flex-1" />
                 ) : (

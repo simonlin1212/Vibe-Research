@@ -33,17 +33,17 @@ export function Portfolio() {
         subtitle="CTP 期货只读查询 · A股本地录入 · 不荐股不下单"
       />
 
-      <div className="mb-3 flex flex-wrap gap-0.5 rounded-md border border-border bg-card/90 p-0.5">
+      <div className="mb-1 flex flex-wrap gap-px border border-[#2a2a2a] bg-black p-px">
         {TABS.map(({ key, label, icon: Icon }) => (
           <button
             key={key}
             type="button"
             onClick={() => setTab(key)}
             className={cn(
-              "inline-flex items-center gap-1 rounded px-2 py-1 text-[11px]",
+              "inline-flex items-center gap-1 px-2 py-1 text-[11px]",
               tab === key
-                ? "bg-cyan-500/15 font-medium text-cyan-300"
-                : "text-slate-500 hover:text-slate-200",
+                ? "bg-[#2a1a00] font-medium text-primary"
+                : "text-[#888] hover:text-[#eee]",
             )}
           >
             <Icon className="h-3 w-3" />

@@ -380,7 +380,7 @@ export function ChainPanel() {
         <button
           type="button"
           onClick={() => openEditor("update")}
-          className="rounded border border-cyan-500/25 bg-cyan-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-cyan-300 hover:bg-cyan-500/20"
+          className="rounded border border-primary/25 bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary hover:bg-primary/20"
         >
           更新
         </button>

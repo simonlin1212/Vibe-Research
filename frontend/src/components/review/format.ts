@@ -4,7 +4,7 @@ export const pctColor = (p: number) =>
   p > 0 ? "text-danger" : p < 0 ? "text-success" : "text-muted-foreground";
 
 export const bgChg = (p: number) =>
-  p > 0 ? "bg-rose-500/15 text-rose-300" : p < 0 ? "bg-emerald-500/15 text-emerald-300" : "bg-slate-500/15 text-slate-300";
+  p > 0 ? "bg-[#ff4d4f]/20 text-[#ff4d4f]" : p < 0 ? "bg-[#00d26a]/20 text-[#00d26a]" : "bg-[#333] text-[#888]";
 
 export function fmtPrice(v: number | null | undefined): string {
   if (v == null || !Number.isFinite(v)) return "—";

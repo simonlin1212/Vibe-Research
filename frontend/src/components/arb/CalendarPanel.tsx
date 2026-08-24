@@ -62,7 +62,7 @@ export function CalendarPanel({
             })}
             className={cn(
               "flex w-full items-center gap-1.5 px-2 py-0.5 text-left text-[11px] hover:bg-white/[0.04]",
-              active && "bg-cyan-500/10",
+              active && "bg-primary/10",
             )}
           >
             <span className="min-w-0 flex-1 truncate text-slate-200">{r.label}</span>
