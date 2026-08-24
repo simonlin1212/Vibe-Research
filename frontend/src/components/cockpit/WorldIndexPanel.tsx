@@ -12,7 +12,7 @@ const KLINE_SYMS = PANEL_DEFS
   .filter((d) => /^(sh|sz|us|wh)/i.test(d.code))
   .map((d) => d.code);
 
-/** A + US + FX. HK / JP / KR draw in 宏观观察 标的. */
+/** A + US + FX. HK / JP / KR draw in 行情观察 under NQ. */
 export function WorldIndexPanel() {
   const hub = useQuotes(INDEX_CODES);
   const minutes = useMinutes(KLINE_SYMS);

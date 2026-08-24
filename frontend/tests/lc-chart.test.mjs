@@ -25,8 +25,13 @@ test("lcChart 是 K/分时共用封装, 不画 TradingView logo", () => {
   assert.match(src, /cancelAnimationFrame/);
   assert.match(src, /styleVolOverlay/);
   assert.match(src, /export function styleVolPane/);
+  assert.match(src, /export function pinVolFromZero/);
+  assert.match(src, /minValue: 0/);
+  assert.match(src, /mode: PriceScaleMode.Normal/);
   assert.match(src, /export function styleOiPane/);
   assert.match(src, /export function volPaneOpts/);
+  assert.match(src, /autoscaleInfoProvider: pinVolFromZero/);
+  assert.match(src, /panes\(\)\[0\]/);
   assert.match(src, /MagnetOHLC/);
   assert.match(src, /"desk" \| "glance"/);
   assert.match(src, /rightPriceScale:/);
@@ -107,11 +112,13 @@ test("四张 K/分时卡走 LC, 不直接 echarts.init", () => {
   assert.match(pane, /volUp/);
   assert.match(pane, /barOpenForVol/);
   assert.match(pane, /concatDaySlots/);
+  assert.match(pane, /isFuturesCode\(code\)/);
   assert.match(pane, /tradingDaysOf/);
   assert.match(pane, /mdhm/);
   assert.match(pane, /showSession/);
   assert.match(pane, /paintHist/);
   assert.match(pane, /sessionMarkIdxs/);
+  assert.match(pane, /m\.text !== "开"/);
   assert.match(pane, /styleVolPane/);
   assert.match(pane, /volPaneOpts\(\), 1/);
   assert.match(pane, /成交额/);
@@ -123,6 +130,15 @@ test("四张 K/分时卡走 LC, 不直接 echarts.init", () => {
   assert.doesNotMatch(pane, /距今/);
   assert.match(src, /export function vsRefPct/);
   assert.match(src, /export function hoverPxPct/);
+  assert.match(src, /export function minuteScaleRange/);
+  assert.match(src, /export function styleMinuteSymScale/);
+  assert.match(src, /scaleMargins: \{ top: 0\.02, bottom: 0\.02 \}/);
+  assert.match(src, /minimumWidth: 40/);
+  assert.match(pane, /minuteScaleRange/);
+  assert.match(pane, /styleMinuteSymScale/);
+  assert.match(pane, /!isDaily && legend\.length/);
+  assert.match(pane, /axis\.maxPx/);
+  assert.match(pane, /bottom-\[24%\]/);
   assert.match(pane, /LcHoverTag/);
   assert.doesNotMatch(pane, /styleVolOverlay/);
   assert.match(src, /export function volUp/);
@@ -153,6 +169,18 @@ test("四张 K/分时卡走 LC, 不直接 echarts.init", () => {
   assert.match(ashare, /"量比"/);
   assert.match(ashare, /"PE\(TTM\)"/);
   assert.doesNotMatch(ashare, /echarts\.init/);
+});
+
+test("pinVolFromZero 量轴从 0 起, 半量日子还有一半高", () => {
+  function pinVolFromZero(original) {
+    const info = original();
+    if (!info?.priceRange) return info;
+    return { ...info, priceRange: { minValue: 0, maxValue: Math.max(0, info.priceRange.maxValue) } };
+  }
+  const out = pinVolFromZero(() => ({ priceRange: { minValue: 80, maxValue: 100 } }));
+  assert.equal(out.priceRange.minValue, 0);
+  assert.equal(out.priceRange.maxValue, 100);
+  assert.equal(pinVolFromZero(() => null), null);
 });
 
 const LC_ORIGIN = 1_700_000_000;
@@ -283,6 +311,20 @@ function httpDetail(detail, status) {
   return `HTTP ${status}`;
 }
 
+function minuteScaleRange(prices, prev, minPct = 0.01) {
+  const finite = prices.filter((p) => p != null && Number.isFinite(p));
+  if (!finite.length) return null;
+  const hi = Math.max(...finite);
+  const lo = Math.min(...finite);
+  const base = prev != null && Number.isFinite(prev) && prev > 0 ? prev : null;
+  if (base == null) {
+    const pad = Math.max((hi - lo) * 0.08, Math.abs(hi) * minPct, 1e-6);
+    return { min: lo - pad, max: hi + pad, prev: (hi + lo) / 2 };
+  }
+  const span = Math.max(hi - base, base - lo, base * minPct);
+  return { min: base - span, max: base + span, prev: base };
+}
+
 function vsRefPct(price, ref) {
   if (price == null || ref == null || !Number.isFinite(price) || !Number.isFinite(ref) || ref === 0) return null;
   return ((price - ref) / ref) * 100;
@@ -306,6 +348,15 @@ test("guardLc 吞掉 LC Value is null, 不把图打翻", () => {
   let n = 0;
   guardLc(() => { n = 1; });
   assert.equal(n, 1);
+});
+
+test("minuteScaleRange 绕昨收对称, 至少 1%", () => {
+  assert.deepEqual(minuteScaleRange([10.2, 9.9], 10), { min: 9.8, max: 10.2, prev: 10 });
+  const tight = minuteScaleRange([10.01], 10);
+  assert.equal(tight.prev, 10);
+  assert.equal(tight.max, 10.1);
+  assert.equal(tight.min, 9.9);
+  assert.equal(minuteScaleRange([], 10), null);
 });
 
 test("vsRefPct 是相对昨收/昨结, 不是距今", () => {

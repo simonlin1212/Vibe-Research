@@ -1,4 +1,7 @@
-import { api, type AShareLightKline } from "@/lib/api";
+import { COMMODITIES, COMMODITY_CODES } from "@/config/cockpit";
+import { api, type AShareLightKline, type FutureDaily } from "@/lib/api";
+import { hmOf } from "@/lib/derivMinuteAxis";
+import { isFuturesCode } from "@/lib/quoteHub";
 import { fetchDirectMinute, withFallback } from "@/lib/tencentDirect";
 
 function toTencentSym(code: string): string {
@@ -18,24 +21,72 @@ function hasBars(kl: AShareLightKline | null | undefined): boolean {
   return (kl?.bars?.length ?? 0) >= 2;
 }
 
+function futureName(code: string): string | undefined {
+  const key = code.toLowerCase();
+  return COMMODITIES.find((c) => c.code.toLowerCase() === key)?.label;
+}
+
 function minuteToKline(code: string, prec: number, points: Array<{ t: string; p: number }>): AShareLightKline | null {
-  const valid = points.filter((p) => p.p > 0 && p.t);
+  const valid = points.filter((p) => p.p > 0 && p.t && hmOf(p.t));
   if (valid.length < 2) return null;
   const d = new Date();
   const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   return {
     code,
+    name: futureName(code),
     resolution: "1",
     prev_close: prec || null,
-    bars: valid.map((p) => {
-      const hh = p.t.slice(0, 2);
-      const mm = p.t.slice(2, 4);
-      return {
-        datetime: `${day} ${hh}:${mm}`,
-        open: p.p, high: p.p, low: p.p, close: p.p, volume: 0,
-      };
-    }),
+    bars: valid.map((p) => ({
+      datetime: `${day} ${hmOf(p.t)}`,
+      open: p.p, high: p.p, low: p.p, close: p.p, volume: 0,
+    })),
   };
+}
+
+function futureDailyToKline(code: string, d: FutureDaily): AShareLightKline {
+  const pts = d.points || [];
+  return {
+    code,
+    name: futureName(code),
+    resolution: "1D",
+    adjust: "none",
+    source: d.source || "sina",
+    prev_close: pts.length >= 2 ? pts[pts.length - 2].c : null,
+    bars: pts.filter((p) => p.t && Number.isFinite(p.c) && p.c > 0).map((p) => ({
+      datetime: p.t.length <= 10 ? `${p.t} 00:00` : p.t,
+      open: p.o, high: p.h, low: p.l, close: p.c, volume: p.v,
+    })),
+  };
+}
+
+function pickFutureMinute(
+  map: Record<string, { prec: number; points: Array<{ t: string; p: number }> } | null> | null | undefined,
+  code: string,
+) {
+  if (!map) return null;
+  if (map[code]) return map[code];
+  const key = Object.keys(map).find((k) => k.toLowerCase() === code.toLowerCase());
+  return key ? map[key] : null;
+}
+
+/** Same commodity_minutes key as 宏观观察 / warmup. Sina 1d only. */
+async function loadFutureKline(
+  code: string,
+  resolution: string,
+  num: number,
+): Promise<AShareLightKline> {
+  if (resolution === "1D") {
+    const d = await api.futureDaily(code, num);
+    const kl = futureDailyToKline(code, d);
+    if (!hasBars(kl)) throw new Error("future daily empty");
+    return kl;
+  }
+  const map = await api.commodityMinutes(COMMODITY_CODES);
+  const row = pickFutureMinute(map, code);
+  const kl = row ? minuteToKline(code, row.prec, row.points || []) : null;
+  if (!kl) throw new Error("future minute empty");
+  kl.source = "sina";
+  return kl;
 }
 
 async function directKline(code: string): Promise<AShareLightKline> {
@@ -89,10 +140,12 @@ export function loadLightKline(
     try {
       const again = cache.get(key);
       if (again && Date.now() - again.at < TTL_MS) return again.data;
-      const data = await withFallback(
-        () => api.ashareLightKline(code, resolution, num),
-        resolution === "1" && canDirectMinute(code) ? () => directKline(code) : undefined,
-      );
+      const data = isFuturesCode(code)
+        ? await loadFutureKline(code, resolution, num)
+        : await withFallback(
+          () => api.ashareLightKline(code, resolution, num),
+          resolution === "1" && canDirectMinute(code) ? () => directKline(code) : undefined,
+        );
       cache.set(key, { at: Date.now(), data });
       return data;
     } finally {

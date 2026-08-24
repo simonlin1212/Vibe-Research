@@ -207,6 +207,8 @@ export function peekChartCode(raw: string): string {
   if (cn) return `${cn[1].toLowerCase()}${cn[2]}`;
   const ext = s.match(/^(hk|us|wh|jp|ks)([A-Za-z0-9]+)$/i);
   if (ext) return `${ext[1].toLowerCase()}${ext[2]}`;
+  const fut = s.match(/^(hf_|nf_)([A-Za-z0-9]{1,12})$/i);
+  if (fut) return `${fut[1].toLowerCase()}${fut[2]}`;
   return "";
 }
 

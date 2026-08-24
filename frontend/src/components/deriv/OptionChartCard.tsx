@@ -100,7 +100,7 @@ export function minuteFrame(
   now = new Date(),
 ): typeof EMPTY_MIN {
   const stamp = `${ymdOf(now)} ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:00`;
-  const tds = frameTradingDays(all.map((b) => b.t), days, now);
+  const tds = frameTradingDays(all.map((b) => b.t), days, now, und);
   if (tds.length === 0) return { ...EMPTY_MIN, days };
   const want = new Set(tds);
   const bars = all.filter((b) => want.has(tradingDayOf(b.t)));
@@ -403,7 +403,7 @@ export function OptionChartCard({ pick, mode, tick, alerts = NO_ALERTS }: {
       if (!pick || mode !== "minute") return Promise.resolve(null);
       const code = pick.code;
       const now = Math.floor(Date.now() / 1000);
-      const from = now - (days === 2 ? 5 : 2) * 24 * 3600;
+      const from = now - 5 * 24 * 3600;
       return Promise.all([
         api.ovlabKlineHistory(code, "1", from, now),
         api.ovlabAtmvolHistory(code, "1", from, now).catch(() => null),

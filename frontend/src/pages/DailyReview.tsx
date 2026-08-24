@@ -3,8 +3,8 @@ import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import {
   Sparkles, Loader2, AlertCircle, RefreshCw, X,
-  ArrowLeftRight, ListOrdered, Globe, Layers, BarChart3,
-  Activity, Star, Flame, ScrollText,
+  ListOrdered, Globe, Layers, BarChart3,
+  Activity, Star, Flame, ScrollText, LineChart,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -92,9 +92,9 @@ export function DailyReview() {
     moneyDone: d.moneyDone,
   };
 
-  const rows: CockpitRow[] = [
+  const topRows: CockpitRow[] = [
     {
-      defaultH: 0.36,
+      defaultH: 1,
       panels: [
         {
           id: "market-watch",
@@ -102,7 +102,7 @@ export function DailyReview() {
           hint: "全球关键指数 + 宏观观察",
           icon: <Globe size={14} />,
           accent: "#ffcc00",
-          defaultW: 0.34,
+          defaultW: 0.30,
           mobileH: "h-[64vh]",
           right: <span className="text-[10px] tabular-nums text-slate-500">5s</span>,
           body: (
@@ -121,7 +121,7 @@ export function DailyReview() {
           title: "涨跌分布 / 广度",
           icon: <BarChart3 size={14} />,
           accent: "#ffcc00",
-          defaultW: 0.20,
+          defaultW: 0.16,
           mobileH: "h-[380px]",
           right: (
             <span className="flex items-center gap-1.5 text-[10px] tabular-nums text-slate-500">
@@ -139,78 +139,12 @@ export function DailyReview() {
           ),
         },
         {
-          id: "watch",
-          title: "自选 / K线",
-          hint: "点行出分时和日K",
-          icon: <Star size={14} />,
-          accent: "#ffcc00",
-          defaultW: 0.46,
-          mobileH: "h-[520px]",
-          right: (
-            <span className="text-[10px] tabular-nums text-slate-500">
-              {d.watchCodes.length}只 · 5s
-            </span>
-          ),
-          body: (
-            <Suspense fallback={<PageFallback />}>
-              <AShareLightChart embedded />
-            </Suspense>
-          ),
-        },
-      ],
-    },
-    {
-      defaultH: 0.32,
-      panels: [
-        {
-          id: "flow",
-          title: "板块资金流向",
-          icon: <Activity size={14} />,
-          accent: "#ff4d4f",
-          defaultW: 0.2,
-          mobileH: "h-[380px]",
-          right: flowRight,
-          body: (
-            <BoardFlowLivePanel
-              selected={flowSector}
-              onSelect={setFlowSector}
-              onRight={setFlowRight}
-            />
-          ),
-        },
-        {
-          id: "moneyflow",
-          title: "主力净流入排行",
-          icon: <ArrowLeftRight size={14} />,
-          accent: "#ff4d4f",
-          defaultW: 0.18,
-          mobileH: "h-[380px]",
-          right: moneyRight,
-          body: (
-            <MoneyFlowRankPanel
-              sectorFilter={flowSector}
-              onClearSector={() => setFlowSector(null)}
-              onRight={setMoneyRight}
-            />
-          ),
-        },
-        {
-          id: "rank",
-          title: "个股榜单",
-          icon: <ListOrdered size={14} />,
-          accent: "#ffcc00",
-          defaultW: 0.2,
-          mobileH: "h-[380px]",
-          right: <RankTabBar tab={rankTab} onTab={setRankTab} />,
-          body: <StockRankPanel tab={rankTab} />,
-        },
-        {
           id: "sectors",
           title: "市场板块实时热点",
           hint: "点击板块看个股列表",
           icon: <Layers size={14} />,
           accent: "#00d26a",
-          defaultW: 0.42,
+          defaultW: 0.27,
           mobileH: "h-[420px]",
           right: (
             <SectorHotBar
@@ -227,17 +161,101 @@ export function DailyReview() {
             />
           ),
         },
+        {
+          id: "flow",
+          title: "板块资金流向",
+          icon: <Activity size={14} />,
+          accent: "#ff4d4f",
+          defaultW: 0.27,
+          mobileH: "h-[380px]",
+          right: flowRight,
+          body: (
+            <BoardFlowLivePanel
+              selected={flowSector}
+              onSelect={setFlowSector}
+              onRight={setFlowRight}
+            />
+          ),
+        },
+      ],
+    },
+  ];
+
+  const bottomLeft: CockpitRow[] = [
+    {
+      defaultH: 1,
+      panels: [
+        {
+          id: "watch",
+          title: "自选",
+          hint: "点行出中间分时和日K",
+          icon: <Star size={14} />,
+          accent: "#ffcc00",
+          defaultW: 1,
+          mobileH: "h-[380px]",
+          right: (
+            <span className="text-[10px] tabular-nums text-slate-500">
+              {d.watchCodes.length}只 · 5s
+            </span>
+          ),
+          body: (
+            <Suspense fallback={<PageFallback />}>
+              <AShareLightChart embedded pane="table" />
+            </Suspense>
+          ),
+        },
+      ],
+    },
+  ];
+
+  const bottomCenter: CockpitRow[] = [
+    {
+      defaultH: 1,
+      panels: [
+        {
+          id: "ashare-chart",
+          title: "分时 / 日K",
+          hint: "上分时下日K, 点自选或榜单出图",
+          icon: <LineChart size={14} />,
+          accent: "#ffcc00",
+          defaultW: 1,
+          mobileH: "h-[640px]",
+          bodyClassName: "!overflow-hidden p-0",
+          body: (
+            <Suspense fallback={<PageFallback />}>
+              <AShareLightChart embedded pane="charts" />
+            </Suspense>
+          ),
+        },
+      ],
+    },
+  ];
+
+  const bottomRight: CockpitRow[] = [
+    {
+      defaultH: 0.32,
+      panels: [
+        {
+          id: "rank",
+          title: "个股榜单",
+          icon: <ListOrdered size={14} />,
+          accent: "#ffcc00",
+          defaultW: 1,
+          mobileH: "h-[380px]",
+          right: <RankTabBar tab={rankTab} onTab={setRankTab} />,
+          body: <StockRankPanel tab={rankTab} />,
+        },
       ],
     },
     {
-      defaultH: 0.32,
+      defaultH: 0.68,
       panels: [
         {
           id: "risk",
           title: "涨跌停",
           icon: <Flame size={14} />,
           accent: "#ff4d4f",
-          defaultW: chainOn ? 0.22 : 0.28,
+          defaultW: chainOn ? 0.28 : 0.32,
           mobileH: "h-[380px]",
           right: (
             <span className="text-[10px] tabular-nums text-slate-500">盘中 90s</span>
@@ -251,26 +269,36 @@ export function DailyReview() {
         },
         {
           id: "detail",
-          title: "龙虎 / 资金 / 产业链",
+          title: "主力 / 龙虎 / 资金 / 产业链",
           icon: <ScrollText size={14} />,
           accent: "#ffcc00",
-          defaultW: chainOn ? 0.78 : 0.72,
+          defaultW: chainOn ? 0.72 : 0.68,
           mobileH: "h-[520px]",
           maxZoomW: 0.82,
           right: (
-            <ChipGroup>
-              {([
-                ["boards", "龙虎"],
-                ["money", "资金"],
-                ["chain", "产业链"],
-              ] as const).map(([k, label]) => (
-                <Chip key={k} active={d.seg === k} onClick={() => d.setSeg(k)}>{label}</Chip>
-              ))}
-            </ChipGroup>
+            <div className="flex items-center gap-1.5">
+              {d.seg === "inflow" ? moneyRight : null}
+              <ChipGroup>
+                {([
+                  ["inflow", "主力"],
+                  ["boards", "龙虎"],
+                  ["money", "资金"],
+                  ["chain", "产业链"],
+                ] as const).map(([k, label]) => (
+                  <Chip key={k} active={d.seg === k} onClick={() => d.setSeg(k)}>{label}</Chip>
+                ))}
+              </ChipGroup>
+            </div>
           ),
           body: (
             <div className="h-full min-h-0 overflow-auto p-1">
-              {d.seg === "boards" ? (
+              {d.seg === "inflow" ? (
+                <MoneyFlowRankPanel
+                  sectorFilter={flowSector}
+                  onClearSector={() => setFlowSector(null)}
+                  onRight={setMoneyRight}
+                />
+              ) : d.seg === "boards" ? (
                 <ReviewBoardsSeg
                   lhb={d.lhb}
                   lhbDone={d.lhbDone}
@@ -322,7 +350,22 @@ export function DailyReview() {
   return (
     <div className="relative flex flex-col bg-background lg:h-full lg:min-h-0 lg:flex-1 lg:overflow-hidden">
       {headerSlot ? createPortal(headerActions, headerSlot) : null}
-      <CockpitLayout rows={rows} />
+      <div className="flex min-h-0 flex-1 flex-col gap-px bg-[#2a2a2a] lg:h-full">
+        <div className="flex min-h-0 flex-col lg:h-[30%]">
+          <CockpitLayout rows={topRows} />
+        </div>
+        <div className="flex min-h-0 flex-1 flex-col gap-px lg:h-[70%] lg:flex-row">
+          <div className="flex min-h-0 flex-col lg:h-full lg:w-[30%]">
+            <CockpitLayout rows={bottomLeft} />
+          </div>
+          <div className="flex min-h-0 flex-col lg:h-full lg:w-[43%]">
+            <CockpitLayout rows={bottomCenter} />
+          </div>
+          <div className="flex min-h-0 flex-col lg:h-full lg:w-[27%]">
+            <CockpitLayout rows={bottomRight} />
+          </div>
+        </div>
+      </div>
 
       {showReviewPanel && (
         <div className="absolute inset-x-2 top-8 z-30 max-h-[70%] overflow-auto border border-primary/40 bg-black p-3 sm:inset-x-8">

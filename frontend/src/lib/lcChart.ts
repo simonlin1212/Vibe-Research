@@ -242,6 +242,25 @@ export function vsRefPct(price: number | null | undefined, ref: number | null | 
   return ((price - ref) / ref) * 100;
 }
 
+/** Symmetric 分时 scale around prev close. Corners: max px/% red, min px/% green. */
+export function minuteScaleRange(
+  prices: Array<number | null | undefined>,
+  prev: number | null | undefined,
+  minPct = 0.01,
+): { min: number; max: number; prev: number } | null {
+  const finite = prices.filter((p): p is number => p != null && Number.isFinite(p));
+  if (!finite.length) return null;
+  const hi = Math.max(...finite);
+  const lo = Math.min(...finite);
+  const base = prev != null && Number.isFinite(prev) && prev > 0 ? prev : null;
+  if (base == null) {
+    const pad = Math.max((hi - lo) * 0.08, Math.abs(hi) * minPct, 1e-6);
+    return { min: lo - pad, max: hi + pad, prev: (hi + lo) / 2 };
+  }
+  const span = Math.max(hi - base, base - lo, base * minPct);
+  return { min: base - span, max: base + span, prev: base };
+}
+
 /** Right-edge crosshair tag. Price dark on white; pct is the bar's own move vs ref. */
 export function hoverPxPct(
   price: number | null | undefined,
@@ -319,12 +338,25 @@ export function candleOpts(_glance = false, fmt?: ReturnType<typeof priceFormatO
   };
 }
 
+/** Volume histogram must start at 0. LC default min=visible-low makes 半量日子看起来像没量. */
+export function pinVolFromZero<T extends { priceRange?: { minValue: number; maxValue: number } } | null>(
+  original: () => T,
+): T {
+  const info = original();
+  if (!info?.priceRange) return info;
+  return {
+    ...info,
+    priceRange: { minValue: 0, maxValue: Math.max(0, info.priceRange.maxValue) },
+  };
+}
+
 export function volOpts() {
   return {
     lastValueVisible: false,
     priceLineVisible: false,
     priceScaleId: "vol",
     priceFormat: { type: "volume" as const },
+    autoscaleInfoProvider: pinVolFromZero,
   };
 }
 
@@ -335,6 +367,7 @@ export function volPaneOpts() {
     priceLineVisible: false,
     priceScaleId: "right",
     priceFormat: { type: "volume" as const },
+    autoscaleInfoProvider: pinVolFromZero,
   };
 }
 
@@ -514,6 +547,21 @@ export function styleLastTag(
   });
 }
 
+/** 分时: equal pad so +pct and -pct sit the same distance from 昨收. */
+export function styleMinuteSymScale(chart: IChartApi): void {
+  try {
+    chart.priceScale("right").applyOptions({
+      scaleMargins: { top: 0.02, bottom: 0.02 },
+      ensureEdgeTickMarksVisible: false,
+      alignLabels: false,
+      ticksVisible: false,
+      minimumWidth: 40,
+    });
+  } catch {
+    /* scale already gone */
+  }
+}
+
 /** Separate volume pane under price. share is vol height / total (0.16-0.36). */
 export function styleVolPane(chart: IChartApi, share = 0.22): void {
   const s = Math.max(0.16, Math.min(0.36, share));
@@ -523,16 +571,6 @@ export function styleVolPane(chart: IChartApi, share = 0.22): void {
     });
   } catch {
     /* chart already gone */
-  }
-  try {
-    chart.priceScale("right").applyOptions({
-      visible: true,
-      borderVisible: true,
-      ticksVisible: true,
-      scaleMargins: { top: 0.06, bottom: 0.08 },
-    });
-  } catch {
-    /* right scale always exists */
   }
   const panes = chart.panes();
   const main = panes[0];
@@ -545,11 +583,22 @@ export function styleVolPane(chart: IChartApi, share = 0.22): void {
     /* pane API */
   }
   try {
+    main.priceScale("right").applyOptions({
+      visible: true,
+      borderVisible: true,
+      ticksVisible: true,
+      scaleMargins: { top: 0.06, bottom: 0.08 },
+    });
+  } catch {
+    /* main scale */
+  }
+  try {
     vol.priceScale("right").applyOptions({
       visible: true,
       borderVisible: true,
       ticksVisible: true,
-      scaleMargins: { top: 0.12, bottom: 0.04 },
+      mode: PriceScaleMode.Normal,
+      scaleMargins: { top: 0.06, bottom: 0.02 },
     });
   } catch {
     /* pane scale */
@@ -856,7 +905,8 @@ export function setPaneWatermark(
 
 export function setLogScale(chart: IChartApi, on: boolean): void {
   try {
-    chart.priceScale("right").applyOptions({
+    const main = chart.panes()[0] ?? chart;
+    main.priceScale("right").applyOptions({
       mode: on ? PriceScaleMode.Logarithmic : PriceScaleMode.Normal,
     });
   } catch {
@@ -1066,7 +1116,12 @@ export function useLcChart(preset: LcPreset = "desk") {
       onHoverRef.current(hoverIdxFromParam(param, labelsRef.current.length));
     };
     chart.subscribeCrosshairMove(onMove);
+    const fit = () => resizeLc(chart, el);
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(el);
     return () => {
+      ro.disconnect();
       chart.unsubscribeCrosshairMove(onMove);
       chart.remove();
       chartRef.current = null;

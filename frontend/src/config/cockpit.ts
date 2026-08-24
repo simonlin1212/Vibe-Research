@@ -45,7 +45,7 @@ export const COMMODITIES: CommodityDef[] = [
 
 export const COMMODITY_CODES = COMMODITIES.map((c) => c.code).join(",");
 
-/** HK / JP / KR stay on 指数目录; the 标的 tab draws them under NQ, then BTC. */
+/** HK / JP / KR stay on 指数目录; 行情观察 draws them under NQ, then BTC. */
 export const MACRO_INDEX_DEFS = WORLD_INDEX_DEFS.filter(
   (d) => d.region === "HK" || d.region === "JP" || d.region === "KR",
 );

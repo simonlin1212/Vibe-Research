@@ -17,7 +17,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { PageFallback } from "@/components/ui/PageFallback";
-import { CockpitHeader, PAGE_NAV, navChipClass } from "@/components/cockpit/CockpitHeader";
+import { CockpitHeader, PAGE_NAV } from "@/components/cockpit/CockpitHeader";
 import { NewsToastHost } from "@/components/cockpit/NewsToastHost";
 import { TickerTape } from "@/components/cockpit/TickerTape";
 import { useFullscreen } from "@/hooks/useFullscreen";

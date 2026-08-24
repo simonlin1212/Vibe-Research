@@ -12,11 +12,11 @@ import { getAShareSession, primeTradingDay } from "@/lib/ashareSession";
 import { formatClock } from "@/lib/freshness";
 import { useWatchCodes } from "@/lib/watchlist";
 
-const SEG_KEYS = ["boards", "money", "chain"] as const;
+const SEG_KEYS = ["inflow", "boards", "money", "chain"] as const;
 /** Match review warmup open cadence. Reads last-good; warmup put_emotion fills it. */
 const TOP_POLL_MS = 90_000;
 
-export type ReviewSeg = "boards" | "money" | "chain";
+export type ReviewSeg = (typeof SEG_KEYS)[number];
 
 export function useReviewData() {
   const [overview, setOverview] = useState<MarketOverview | null>(null);
@@ -42,8 +42,10 @@ export function useReviewData() {
   const [topUpdatedAt, setTopUpdatedAt] = useState<Date | null>(null);
   const topRefreshingRef = useRef(false);
 
-  const [segRaw, setSeg] = useSegment("ashare.review", [...SEG_KEYS], "boards");
-  const seg: ReviewSeg = segRaw === "boards" || segRaw === "chain" ? segRaw : "money";
+  const [segRaw, setSeg] = useSegment("ashare.review.v2", [...SEG_KEYS], "inflow");
+  const seg: ReviewSeg = (SEG_KEYS as readonly string[]).includes(segRaw)
+    ? (segRaw as ReviewSeg)
+    : "inflow";
 
   const topUpdatedLabel = formatClock(topUpdatedAt, { refreshing: topRefreshing });
 

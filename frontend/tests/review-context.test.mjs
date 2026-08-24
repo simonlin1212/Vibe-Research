@@ -106,7 +106,11 @@ test("Daily Review and Ask AI send the packed snapshot", () => {
   assert.match(reviewSrc, /sectorKind/);
   assert.match(reviewSrc, /newsSource: "cls"/);
   assert.doesNotMatch(reviewSrc, /NewsCockpitPanel/);
-  assert.ok(reviewSrc.indexOf('id: "watch"') < reviewSrc.indexOf('id: "flow"'), "自选在首行右上, 资金流之前");
+  assert.ok(reviewSrc.indexOf('id: "flow"') < reviewSrc.indexOf('id: "watch"'), "板块资金在首行, 自选在左下");
+  assert.ok(reviewSrc.indexOf('id: "sectors"') < reviewSrc.indexOf('id: "flow"'), "热点左、板块资金右");
+  assert.match(reviewSrc, /\["inflow", "主力"\]/);
+  assert.match(hookSrc, /ashare\.review\.v2/);
+  assert.match(hookSrc, /"inflow"/);
   assert.doesNotMatch(reviewSrc, /今日大盘数据：\$\{d\.dataSummary\}/);
   assert.match(askSrc, /getContext\?:/);
   assert.match(askSrc, /await getContext\(\)/);

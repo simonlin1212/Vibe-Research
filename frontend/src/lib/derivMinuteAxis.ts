@@ -84,13 +84,20 @@ function cmdNightKind(times: string[]): DerivAxisKind {
   return hasOvernightPrint(times) ? "cmd" : "cmd23";
 }
 
+/** CFFEX equity index / ETF options: day auction only, no 21:00 night. */
+export function isDaySessionUnd(und?: string): boolean {
+  const u = undRootOf(und || "");
+  if (/^85[01]\d{3}$/.test(u)) return false;
+  return /^\d{6}$/.test(u) || INDEX_ROOTS.has(u);
+}
+
 export function kindOfUnd(und: string | undefined, times: string[]): DerivAxisKind {
   const u = undRootOf(und || "");
   // 同花顺商品指数 850xxx/851xxx: 6 位数字但走商品时段, 不是 ETF
   if (/^85[01]\d{3}$/.test(u)) return times.some(isNightTime) ? cmdNightKind(times) : "cmdDay";
-  if (/^\d{6}$/.test(u)) return "etf";
-  if (INDEX_ROOTS.has(u)) return times.some(isNightTime) ? "index" : "etf";
-  return times.some(isNightTime) ? cmdNightKind(times) : "cmdDay";
+  if (isDaySessionUnd(und)) return "etf";
+  // EG/AU 等商品有夜盘. 周一 history 常缺周五夜, 不能因此改走 09:00 日盘轴.
+  return cmdNightKind(times);
 }
 
 /** Same clock windows as derivShared.derivSession (local, no holiday). */
@@ -106,22 +113,15 @@ function clockStamp(now: Date): string {
   return `${ymdOf(now)} ${pad2(now.getHours())}:${pad2(now.getMinutes())}:00`;
 }
 
-/** Night window: commodities/index use the overnight axis even if history has no print yet. */
+/** Night window: commodities use the overnight axis even if history has no print yet. */
 export function liveAxisKind(
   und: string | undefined,
   times: string[],
   now = new Date(),
 ): DerivAxisKind {
   const base = kindOfUnd(und, times);
-  // Index day session starts 09:30. Commodity with night keeps last night 21:00 on the left.
-  if (!isNightTime(clockStamp(now))) {
-    if (base === "index") return "etf";
-    return base;
-  }
-  const u = undRootOf(und || "");
-  if (/^85[01]\d{3}$/.test(u)) return cmdNightKind(times);
-  if (/^\d{6}$/.test(u)) return "etf";
-  if (INDEX_ROOTS.has(u)) return "index";
+  // Index/ETF stay 09:30-15:00. Commodity with night keeps last night 21:00 on the left.
+  if (isDaySessionUnd(und) || !isNightTime(clockStamp(now))) return base === "index" ? "etf" : base;
   return cmdNightKind(times);
 }
 
@@ -130,8 +130,10 @@ export function frameTradingDays(
   times: string[],
   days: 1 | 2,
   now = new Date(),
+  und?: string,
 ): string[] {
   let tds = tradingDaysOf(times).slice(-(days === 2 ? 2 : 1));
+  if (isDaySessionUnd(und) && isNightTime(clockStamp(now))) return tds;
   const nowTd = tradingDayOf(clockStamp(now));
   if (derivLiveNow(now) && nowTd && tds[tds.length - 1] !== nowTd) {
     tds = days === 2 && tds.length ? [...tds.slice(-1), nowTd] : [nowTd];

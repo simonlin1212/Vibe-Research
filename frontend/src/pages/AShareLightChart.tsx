@@ -7,7 +7,7 @@ import { Chip, ChipGroup } from "@/components/ui/SectionHeader";
 import { PageFallback } from "@/components/ui/PageFallback";
 import { WatchlistFeed } from "@/components/WatchlistFeed";
 import { ApiError, type AShareLightBar } from "@/lib/api";
-import { useQuotes, type HubQuote } from "@/lib/quoteHub";
+import { isFuturesCode, useQuotes, type HubQuote } from "@/lib/quoteHub";
 import { loadLightKline } from "@/lib/lightKline";
 import { createSeriesGate } from "@/lib/seriesGate";
 import { getAShareSession } from "@/lib/ashareSession";
@@ -199,14 +199,18 @@ function useAShareSeries(code: string, res: "1" | "5" | "1D", num: number) {
   return { bars, meta, loading, err, reload: load };
 }
 
+export type AShareChartPane = "table" | "minute" | "daily" | "charts";
+
 export function AShareLightChart({
   seg = "kline",
   onSegChange,
   embedded = false,
+  pane = "table",
 }: {
   seg?: AShareChartSeg;
   onSegChange?: (seg: AShareChartSeg) => void;
   embedded?: boolean;
+  pane?: AShareChartPane;
 } = {}) {
   const [params, setParams] = useSearchParams();
   const urlCode = peekChartCode(params.get("code") || "");
@@ -291,8 +295,10 @@ export function AShareLightChart({
   );
   const [sort, setSort] = useState<SortState<Record<ColKey, unknown>>>({ key: null, dir: "desc" });
   const rows = useMemo(() => sortWatchCodes(codes, quotes, sort), [codes, quotes, sort]);
-  const minute = useAShareSeries(selected, minuteDays === 2 ? "5" : "1", minuteDays === 2 ? 1000 : 240);
-  const daily = useAShareSeries(selected, "1D", KLINE_NUM);
+  const wantMin = !embedded || pane === "minute" || pane === "charts";
+  const wantDay = !embedded || pane === "daily" || pane === "charts";
+  const minute = useAShareSeries(wantMin ? selected : "", minuteDays === 2 ? "5" : "1", minuteDays === 2 ? 1000 : 240);
+  const daily = useAShareSeries(wantDay ? selected : "", "1D", KLINE_NUM);
   const wmName = minute.meta?.name || daily.meta?.name || (selected ? quotes[selected]?.name : "") || "";
 
   useEffect(() => {
@@ -350,7 +356,7 @@ export function AShareLightChart({
           </button>
         ))}
       </span>
-      {selected ? (
+      {selected && !isFuturesCode(selected) ? (
         <>
           <button
             type="button"
@@ -372,94 +378,11 @@ export function AShareLightChart({
   );
 
   if (embedded) {
-    return (
-      <div className="flex h-full min-h-0">
-        <div className="flex w-[42%] min-w-[220px] shrink-0 flex-col border-r border-[#2a2a2a]">
-          <div className="flex shrink-0 items-center gap-1 px-1.5 py-1">
-            <div ref={search.boxRef} className="relative min-w-0 flex-1">
-              <input
-                value={search.q}
-                onChange={(e) => search.type(e.target.value)}
-                onFocus={() => search.hits.length && search.setOpen(true)}
-                onKeyDown={(e) => search.onKeyDown(e, (h) => addOne(h.code), addOne)}
-                placeholder="搜名称 / 拼音 / 代码"
-                className="h-6 w-full rounded bg-slate-800/60 px-2 text-[11px] text-slate-200 placeholder:text-[9px] placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-primary/50"
-              />
-              {search.open && (
-                <SuggestHits
-                  hits={search.hits}
-                  hi={search.hi}
-                  onPick={(h) => addOne(h.code)}
-                  className="absolute left-0 top-7 z-20 w-56 overflow-hidden rounded border border-border bg-card shadow-lg"
-                />
-              )}
-            </div>
-            <button
-              type="button"
-              onClick={add}
-              className="inline-flex shrink-0 items-center gap-0.5 rounded bg-primary/15 px-1.5 py-0.5 text-[11px] text-primary hover:bg-primary/25"
-            >
-              <Plus className="h-3 w-3" /> 加
-            </button>
-          </div>
-          {hint ? <p className="px-1.5 text-[10px] text-slate-500">{hint}</p> : null}
-          <div ref={listRef} className="min-h-0 flex-1 overflow-auto">
-            {codes.length === 0 ? (
-              <p className="px-2 py-6 text-center text-[11px] text-slate-500">搜名称或代码加入自选</p>
-            ) : (
-              <table className="data-table dense">
-                <thead>
-                  <tr>
-                    {BASIC_COLS.map((h) => (
-                      <th key={h.key} className={h.num ? "num" : undefined}>
-                        <SortableHd
-                          k={h.key}
-                          label={h.label}
-                          sort={sort}
-                          onSort={(k) => setSort((s) => nextSort(s, k))}
-                          className={h.num ? "justify-end" : "justify-start"}
-                        />
-                      </th>
-                    ))}
-                    <th className="act" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((c) => {
-                    const q = quotes[c];
-                    return (
-                      <tr
-                        key={c}
-                        data-code={c}
-                        onClick={() => pickStock(c)}
-                        className={cn("cursor-pointer", c === selected && "!bg-primary/12")}
-                      >
-                        {BASIC_COLS.map((h) => (
-                          <Fragment key={h.key}>{basicTd(h.key, c, q)}</Fragment>
-                        ))}
-                        <td className="act">
-                          <span
-                            role="button"
-                            tabIndex={0}
-                            onClick={(e) => remove(c, e)}
-                            onKeyDown={(e) => { if (e.key === "Enter") remove(c); }}
-                            className="inline-flex rounded p-1 text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-                            title="移除"
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            )}
-          </div>
-        </div>
-        <div className="grid min-h-0 min-w-0 flex-1 grid-rows-2 gap-px bg-[#2a2a2a]">
+    if (pane === "charts") {
+      return (
+        <div className="grid h-full min-h-0 min-w-0 grid-rows-2 gap-px bg-[#2a2a2a]">
           <AShareLcPane
-            title="分时"
+            title={wmName || "分时"}
             kind="minute"
             code={selected}
             name={wmName}
@@ -467,7 +390,7 @@ export function AShareLightChart({
             prevClose={minute.meta?.prev_close}
             loading={minute.loading}
             err={minute.err}
-            emptyHint="点左侧一只"
+            emptyHint="点自选或榜单一只"
             visible
             days={minuteDays}
             bare
@@ -475,7 +398,7 @@ export function AShareLightChart({
             onRefresh={() => { void minute.reload(); }}
           />
           <AShareLcPane
-            title="日K"
+            title={wmName || "日K"}
             kind="daily"
             code={selected}
             name={wmName}
@@ -483,11 +406,134 @@ export function AShareLightChart({
             prevClose={daily.meta?.prev_close}
             loading={daily.loading}
             err={daily.err}
-            emptyHint="点左侧一只"
+            emptyHint="点自选或榜单一只"
             visible
             bare
             onRefresh={() => { void daily.reload(); }}
           />
+        </div>
+      );
+    }
+    if (pane === "minute") {
+      return (
+        <AShareLcPane
+          title={wmName || "分时"}
+          kind="minute"
+          code={selected}
+          name={wmName}
+          bars={minute.bars}
+          prevClose={minute.meta?.prev_close}
+          loading={minute.loading}
+          err={minute.err}
+          emptyHint="点自选或榜单一只"
+          visible
+          days={minuteDays}
+          bare
+          extra={minuteExtra}
+          onRefresh={() => { void minute.reload(); }}
+        />
+      );
+    }
+    if (pane === "daily") {
+      return (
+        <AShareLcPane
+          title={wmName || "日K"}
+          kind="daily"
+          code={selected}
+          name={wmName}
+          bars={daily.bars}
+          prevClose={daily.meta?.prev_close}
+          loading={daily.loading}
+          err={daily.err}
+          emptyHint="点自选或榜单一只"
+          visible
+          bare
+          onRefresh={() => { void daily.reload(); }}
+        />
+      );
+    }
+    return (
+      <div className="flex h-full min-h-0 flex-col">
+        <div className="flex shrink-0 items-center gap-1 px-1.5 py-1">
+          <div ref={search.boxRef} className="relative min-w-0 flex-1">
+            <input
+              value={search.q}
+              onChange={(e) => search.type(e.target.value)}
+              onFocus={() => search.hits.length && search.setOpen(true)}
+              onKeyDown={(e) => search.onKeyDown(e, (h) => addOne(h.code), addOne)}
+              placeholder="搜名称 / 拼音 / 代码"
+              className="h-6 w-full rounded bg-slate-800/60 px-2 text-[11px] text-slate-200 placeholder:text-[9px] placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-primary/50"
+            />
+            {search.open && (
+              <SuggestHits
+                hits={search.hits}
+                hi={search.hi}
+                onPick={(h) => addOne(h.code)}
+                className="absolute left-0 top-7 z-20 w-56 overflow-hidden rounded border border-border bg-card shadow-lg"
+              />
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={add}
+            className="inline-flex shrink-0 items-center gap-0.5 rounded bg-primary/15 px-1.5 py-0.5 text-[11px] text-primary hover:bg-primary/25"
+          >
+            <Plus className="h-3 w-3" /> 加
+          </button>
+        </div>
+        {hint ? <p className="px-1.5 text-[10px] text-slate-500">{hint}</p> : null}
+        <div ref={listRef} className="min-h-0 flex-1 overflow-auto">
+          {codes.length === 0 ? (
+            <p className="px-2 py-6 text-center text-[11px] text-slate-500">搜名称或代码加入自选</p>
+          ) : (
+            <table className="data-table dense">
+              <thead>
+                <tr>
+                  {BASIC_COLS.map((h) => (
+                    <th key={h.key} className={h.num ? "num" : undefined}>
+                      <SortableHd
+                        k={h.key}
+                        label={h.label}
+                        sort={sort}
+                        onSort={(k) => setSort((s) => nextSort(s, k))}
+                        className={h.num ? "justify-end" : "justify-start"}
+                      />
+                    </th>
+                  ))}
+                  <th className="act" />
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((c) => {
+                  const q = quotes[c];
+                  return (
+                    <tr
+                      key={c}
+                      data-code={c}
+                      onClick={() => pickStock(c)}
+                      className={cn("cursor-pointer", c === selected && "!bg-primary/12")}
+                    >
+                      {BASIC_COLS.map((h) => (
+                        <Fragment key={h.key}>{basicTd(h.key, c, q)}</Fragment>
+                      ))}
+                      <td className="act">
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          onClick={(e) => remove(c, e)}
+                          onKeyDown={(e) => { if (e.key === "Enter") remove(c); }}
+                          className="inline-flex rounded p-1 text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                          title="移除"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
     );

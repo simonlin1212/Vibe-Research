@@ -77,14 +77,25 @@ test("brand is fixed so PAGE_NAV chips do not shift", () => {
   assert.doesNotMatch(layout, /shrink-0 lg:hidden/);
 });
 
-test("A股不分复盘/K线页签, 分时日K挂在复盘自选格", () => {
+test("A股不分复盘/K线页签, 分时日K叠在第2/3行正中", () => {
   const header = readFileSync(join(root, "src/components/cockpit/CockpitHeader.tsx"), "utf8");
   assert.doesNotMatch(header, /A_SHARE_TABS/);
   assert.doesNotMatch(header, /label: "K线"/);
   const review = readFileSync(join(root, "src/pages/DailyReview.tsx"), "utf8");
   assert.match(review, /embedded/);
   assert.match(review, /AShareLightChart/);
-  assert.match(review, /自选 \/ K线/);
+  assert.match(review, /pane="table"/);
+  assert.match(review, /pane="charts"/);
+  assert.match(review, /id: "ashare-chart"/);
+  assert.match(review, /lg:h-\[30%\]/);
+  assert.match(review, /lg:h-\[70%\]/);
+  assert.match(review, /defaultW: 0\.30/);
+  assert.match(review, /lg:w-\[30%\]/);
+  assert.match(review, /lg:w-\[27%\]/);
+  assert.ok(review.indexOf('id: "watch"') < review.indexOf('id: "ashare-chart"'), "自选在左下, 图在正中");
+  assert.ok(review.indexOf('id: "sectors"') < review.indexOf('id: "flow"'), "首行热点左、板块资金右");
+  assert.doesNotMatch(review, /pane="minute"/);
+  assert.doesNotMatch(review, /自选 \/ K线/);
   const ashare = readFileSync(join(root, "src/pages/AShare.tsx"), "utf8");
   assert.match(ashare, /raw === "kline"/);
   assert.match(ashare, /p\.delete\("tab"\)/);
@@ -93,6 +104,9 @@ test("A股不分复盘/K线页签, 分时日K挂在复盘自选格", () => {
   assert.match(chart, /setSeg\("detail"\)/);
   assert.match(chart, /setSeg\("feed"\)/);
   assert.match(chart, /embedded/);
+  assert.match(chart, /AShareChartPane/);
+  assert.match(chart, /pane === "charts"/);
+  assert.match(chart, /grid-rows-2/);
   assert.match(chart, /BASIC_COLS/);
   assert.doesNotMatch(chart, /WatchlistCockpitPanel/);
   assert.doesNotMatch(chart, /MinuteSpark|QuoteStockRow|useMinutes/);
@@ -103,8 +117,19 @@ test("A股不分复盘/K线页签, 分时日K挂在复盘自选格", () => {
   assert.match(href, /\/a-share\?code=\$/);
   assert.match(href, /export function peekChartCode/);
   assert.match(href, /klineHref\(unit\)/);
+  assert.match(href, /\^\(hf_\|nf_\)/);
   assert.doesNotMatch(href, /tab=kline/);
   assert.doesNotMatch(chart, /saveWatch\(\[\.\.\.loadWatch\(\), urlCode\]\)/);
+  const goods = readFileSync(join(root, "src/components/cockpit/CommodityPanel.tsx"), "utf8");
+  assert.match(goods, /klineHref\(c\.code\)/);
+  assert.doesNotMatch(goods, /\["fut", "标的"\]/);
+  assert.doesNotMatch(goods, /\["daily", "日K"\]/);
+  assert.doesNotMatch(goods, /futureDaily/);
+  const lk = readFileSync(join(root, "src/lib/lightKline.ts"), "utf8");
+  assert.match(lk, /commodityMinutes\(COMMODITY_CODES\)/);
+  assert.match(lk, /futureDaily/);
+  assert.match(lk, /isFuturesCode/);
+  assert.match(chart, /!isFuturesCode\(selected\)/);
 });
 
 test("A-share portfolio jumps to backtest and autostarts", () => {

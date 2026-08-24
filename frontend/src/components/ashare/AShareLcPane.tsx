@@ -6,13 +6,14 @@ import type { AShareLightBar } from "@/lib/api";
 import {
   concatDaySlots, lastFiniteIdx, padToSlots, sessionMarkIdxs, tradingDayOf, tradingDaysOf,
 } from "@/lib/derivMinuteAxis";
+import { isFuturesCode } from "@/lib/quoteHub";
 import { cn } from "@/lib/utils";
 import {
   CandlestickSeries, HistogramSeries, LineSeries, MA_COLORS, MA_PERIODS, applyTimeLabels,
   barOpenForVol, candleOpts, candleValues, ensureUpDown, lcTime, lineValues,
-  minuteLineOpts, overlayLineOpts, paintCandles, paintHist, paintLine, paintUpDown, resizeLc,
+  minuteLineOpts, minuteScaleRange, overlayLineOpts, paintCandles, paintHist, paintLine, paintUpDown, resizeLc,
   seriesAlive, setLogScale, setPaneWatermark, setRefPriceLine, setSeriesMarks, showLatest,
-  showSession, sma, sparseLine, styleLastTag, styleVolPane, useLcChart,
+  showSession, sma, sparseLine, styleLastTag, styleMinuteSymScale, styleVolPane, useLcChart,
   useLcHoverTag, volPaneOpts, volUp, volValues, wipeLc,
   type CandlestickData, type HistogramData, type IPriceLine, type ISeriesApi,
   type ISeriesMarkersPluginApi, type ISeriesUpDownMarkerPluginApi, type ITextWatermarkPluginApi,
@@ -105,8 +106,8 @@ export function AShareLcPane({
   const isDaily = kind === "daily";
   const wmName = name.trim();
   const minute = useMemo(
-    () => (isDaily ? null : ashareMinuteFrame(bars, days)),
-    [isDaily, bars, days],
+    () => (isDaily || isFuturesCode(code) ? null : ashareMinuteFrame(bars, days)),
+    [isDaily, bars, days, code],
   );
 
   useEffect(() => {
@@ -209,6 +210,13 @@ export function AShareLcPane({
       const lastI = lastFiniteIdx(prices, null);
       styleLastTag(ln, lastI != null ? prices[lastI] : null, baseline);
       setRefPriceLine(ln, refLine, baseline > 0 ? baseline : null);
+      const rng = minuteScaleRange(prices, baseline > 0 ? baseline : null);
+      ln.applyOptions({
+        autoscaleInfoProvider: () => (
+          rng ? { priceRange: { minValue: rng.min, maxValue: rng.max } } : null
+        ),
+      });
+      styleMinuteSymScale(chart);
       setLogScale(chart, false);
       let prevPx: number | null = baseline > 0 ? baseline : null;
       const volPts = volValues(padded.map((b) => {
@@ -221,7 +229,7 @@ export function AShareLcPane({
         paintHist(bag.current.vol, volPts, bag.current.paintedVol);
         bag.current.paintedVol = volPts;
       }
-      setSeriesMarks(ln, marksRef, sessionMarkIdxs(cats).map((m) => ({
+      setSeriesMarks(ln, marksRef, sessionMarkIdxs(cats).filter((m) => m.text !== "开").map((m) => ({
         time: lcTime(m.i),
         position: "aboveBar" as const,
         shape: "circle" as const,
@@ -268,6 +276,18 @@ export function AShareLcPane({
   }
   const base = isDaily ? (prevBar?.close ?? null) : (dayPrev ?? prevClose ?? null);
   const chg = bar && base != null ? bar.close - base : null;
+  const axis = useMemo(() => {
+    if (isDaily) return null;
+    const px = (minute?.padded ?? bars).map((b) => (b && Number.isFinite(b.close) ? b.close : null));
+    const rng = minuteScaleRange(px, prevClose);
+    if (!rng || rng.prev === 0) return null;
+    return {
+      maxPx: fmtPrice(rng.max),
+      minPx: fmtPrice(rng.min),
+      maxPct: fmtPct(((rng.max - rng.prev) / rng.prev) * 100),
+      minPct: fmtPct(((rng.min - rng.prev) / rng.prev) * 100),
+    };
+  }, [isDaily, minute, bars, prevClose]);
   const { tag: hoverTag, y: tagY } = useLcHoverTag(
     () => bag.current.main,
     hoverIdx != null ? (bar?.close ?? null) : null,
@@ -315,8 +335,11 @@ export function AShareLcPane({
 
   const head = (
     <div className={cn("flex items-center justify-between gap-2", bare ? "px-1.5 py-0.5" : "mb-1.5")}>
-      <div className="min-w-0">
-        <p className={cn("truncate font-medium text-slate-200", bare ? "text-[10px]" : "text-xs")}>{title}</p>
+      <div className="flex min-w-0 flex-1 items-center gap-2">
+        <p className={cn("shrink-0 truncate font-medium text-slate-200", bare ? "text-[10px]" : "text-xs")}>{title}</p>
+        {!isDaily && legend.length > 0 ? (
+          <LcLegend items={legend} className="!static !left-auto !top-auto !max-w-none min-w-0 flex-1" />
+        ) : null}
         {!bare && bar && chg != null ? (
           <p className={cn(
             "font-mono text-[11px] tabular-nums",
@@ -357,7 +380,15 @@ export function AShareLcPane({
             <Loader2 className="h-5 w-5 animate-spin text-slate-500" />
           </div>
         )}
-        <LcLegend items={legend} />
+        {isDaily ? <LcLegend items={legend} /> : null}
+        {axis ? (
+          <>
+            <span className="pointer-events-none absolute left-1.5 top-0.5 z-10 font-mono text-[11px] tabular-nums text-[#ff2d2d]">{axis.maxPx}</span>
+            <span className="pointer-events-none absolute right-10 top-0.5 z-10 font-mono text-[11px] tabular-nums text-[#ff2d2d]">{axis.maxPct}</span>
+            <span className="pointer-events-none absolute bottom-[24%] left-1.5 z-10 font-mono text-[11px] tabular-nums text-[#00d26a]">{axis.minPx}</span>
+            <span className="pointer-events-none absolute bottom-[24%] right-10 z-10 font-mono text-[11px] tabular-nums text-[#00d26a]">{axis.minPct}</span>
+          </>
+        ) : null}
         <LcHoverTag tag={hoverTag} y={tagY} />
         {code && bars.length > 0 && (
           <div className="pointer-events-none absolute bottom-[6%] left-2 z-10 text-[10px] text-slate-400">

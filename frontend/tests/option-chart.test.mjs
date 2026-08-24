@@ -203,6 +203,7 @@ test("分时卡可切两日, 按交易日拼轴", async () => {
   const src = await readFile(new URL("../src/components/deriv/OptionChartCard.tsx", import.meta.url), "utf8");
   assert.ok(src.includes('[2, "两日"]'), "两日开关");
   assert.ok(src.includes("minuteFrame"), "两日拼轴走 minuteFrame");
+  assert.doesNotMatch(src, /days === 2 \? 5 : 2/, "一日也要够到上周五夜, 不能只往回 2 天");
   assert.ok(src.includes("concatDaySlots"), "交易日槽位拼接");
   assert.ok(src.includes("deriv.minute.days"), "本机记住一日/两日");
   assert.ok(src.includes("applyMinuteTick"), "dataview 叠分时最后一笔");
@@ -233,6 +234,7 @@ test("驾驶舱日K分时吃 dataview tick", async () => {
   assert.ok(card.includes("export function alertMatchesCode"), "异动对 T 表短码 / OPT_ 长码");
   assert.ok(card.includes('pick?.kind === "und"') && card.includes("ovlabLastBar"), "期货标的 last-bar 做底");
   assert.ok(card.includes("liveAxisKind"), "夜盘无分钟点也铺当夜轴");
+  assert.ok(card.includes("frameTradingDays(all.map((b) => b.t), days, now, und)"), "股指晚上不滚到下一交易日");
   assert.ok(card.includes("showSession"), "分时开盘贴左, 不 fitContent 挤到右侧");
 });
 
