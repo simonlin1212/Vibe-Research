@@ -4,19 +4,19 @@ import { GlassCard } from "@/components/ui/GlassCard";
 import { LcHoverTag, LcLegend, LcWell, lcTone, type LcLegendItem } from "@/components/ui/LcFrame";
 import type { AShareLightBar } from "@/lib/api";
 import {
-  concatDaySlots, lastFiniteIdx, padToSlots, sessionMarkIdxs, tradingDayOf, tradingDaysOf,
+  concatDaySlots, lastFiniteIdx, padToSlots, tradingDayOf, tradingDaysOf,
 } from "@/lib/derivMinuteAxis";
 import { isFuturesCode } from "@/lib/quoteHub";
 import { cn } from "@/lib/utils";
 import {
   CandlestickSeries, HistogramSeries, LineSeries, MA_COLORS, MA_PERIODS, applyTimeLabels,
-  barOpenForVol, candleOpts, candleValues, ensureUpDown, lcTime, lineValues,
+  barOpenForVol, candleOpts, candleValues, ensureUpDown, lineValues,
   minuteLineOpts, minuteScaleRange, overlayLineOpts, paintCandles, paintHist, paintLine, paintUpDown, resizeLc,
-  seriesAlive, setLogScale, setPaneWatermark, setRefPriceLine, setSeriesMarks, showLatest,
+  seriesAlive, setLogScale, setPaneWatermark, setRefPriceLine, showLatest,
   showSession, sma, sparseLine, styleLastTag, styleMinuteSymScale, styleVolPane, useLcChart,
   useLcHoverTag, volPaneOpts, volUp, volValues, wipeLc,
   type CandlestickData, type HistogramData, type IPriceLine, type ISeriesApi,
-  type ISeriesMarkersPluginApi, type ISeriesUpDownMarkerPluginApi, type ITextWatermarkPluginApi,
+  type ISeriesUpDownMarkerPluginApi, type ITextWatermarkPluginApi,
   type LineData, type Time, type WhitespaceData,
 } from "@/lib/lcChart";
 
@@ -99,7 +99,6 @@ export function AShareLcPane({
   const wmRef = useRef<ITextWatermarkPluginApi<Time> | null>(null);
   const tickRef = useRef<ISeriesApi<"Line"> | null>(null);
   const udRef = useRef<ISeriesUpDownMarkerPluginApi<Time> | null>(null);
-  const marksRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
   onHoverRef.current = setHoverIdx;
 
@@ -123,7 +122,6 @@ export function AShareLcPane({
       wmRef.current = null;
       tickRef.current = null;
       udRef.current = null;
-      marksRef.current = null;
     };
     if (bars.length === 0) {
       if (loading) return;
@@ -229,13 +227,6 @@ export function AShareLcPane({
         paintHist(bag.current.vol, volPts, bag.current.paintedVol);
         bag.current.paintedVol = volPts;
       }
-      setSeriesMarks(ln, marksRef, sessionMarkIdxs(cats).filter((m) => m.text !== "开").map((m) => ({
-        time: lcTime(m.i),
-        position: "aboveBar" as const,
-        shape: "circle" as const,
-        color: "#ffcc00",
-        text: m.text,
-      })));
       if (!lastOnly) showSession(chart, cats.length);
     } catch {
       /* LC throws Value is null if wipe/resize races; keep the pane */

@@ -57,6 +57,7 @@ from routers import (
     ashare,
     backtest_routes,
     core,
+    dxx_routes,
     event_routes,
     fin_routes,
     fino_routes,
@@ -117,6 +118,7 @@ app.include_router(global_routes.router)
 app.include_router(ashare.router)
 app.include_router(ovlab_routes.router)
 app.include_router(event_routes.router)
+app.include_router(dxx_routes.router)
 app.include_router(fino_routes.router)
 app.include_router(ai_watch_routes.router)
 app.include_router(fin_routes.router)

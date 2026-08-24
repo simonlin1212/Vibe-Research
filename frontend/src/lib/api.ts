@@ -403,6 +403,46 @@ export interface EventCalBoard {
   count: number;
   src?: string;
 }
+export interface DxxFengRow {
+  code: string; name: string; tags: string[]; a15: string; a20: string; a25: string;
+}
+export interface DxxFengDay {
+  date: string; yizhi: number | null; seal: string; t15: string; t20: string; t25: string; rows: DxxFengRow[];
+}
+export interface DxxDabanRow {
+  code: string; name: string; price: number | null; pct: number | null; amount: number | null;
+  jj_pct: number | null; jj_amt: number | null; turn: number | null; concepts: string;
+  mcap: number | null; net: number | null; board: string;
+}
+export interface DxxZtRow {
+  code: string; name: string; reason: string; board: string; time: string;
+}
+export interface DxxCurve {
+  last: Record<string, number>;
+  series: Record<string, number[]>;
+  labels: Record<string, string>;
+}
+export interface DxxStrong {
+  legend: string[];
+  last: Record<string, number>;
+  series: { name: string; data: number[] }[];
+}
+export interface DxxFupan {
+  date: string; qx: number | null; zt: number | null; dt: number | null;
+  seal_rate: number | null; zt_ret: number | null; lb_ret: number | null;
+}
+export interface DxxWajueRow { code: string; name: string; hits: number }
+export interface DxxBoard {
+  src?: string;
+  fengdan?: { days: DxxFengDay[] } | null;
+  daban?: { rows: DxxDabanRow[] } | null;
+  ztlive?: { count: number; rows: DxxZtRow[] } | null;
+  qingxu?: DxxCurve | null;
+  qxlive?: DxxCurve | null;
+  strong?: DxxStrong | null;
+  fupan?: DxxFupan | null;
+  wajue?: { rows: DxxWajueRow[] } | null;
+}
 export interface StockBoards {
   code: string; name: string; industry: string; area: string;
   concepts: string[]; source?: string;
@@ -1665,6 +1705,7 @@ export const api = {
   polymarketWatch: (slugs: string[]) =>
     get<PmBoard>(`/polymarket/watch?slugs=${encodeURIComponent(slugs.slice(0, 20).join(","))}`),
   eventCalendar: () => get<EventCalBoard>("/event/calendar"),
+  dxxBoard: () => get<DxxBoard>("/dxx/board"),
   commodityMinutes: (codes: string) =>
     get<Record<string, CommodityMinute | null>>(`/market/commodity-minutes?codes=${encodeURIComponent(codes)}`),
   spotTable: () => get<SpotTable>("/market/spot-table"),

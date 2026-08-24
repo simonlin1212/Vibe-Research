@@ -1,6 +1,6 @@
 /** Futures/option minute axis: X spans the full session, prints stay left at open. */
 
-export type DerivAxisKind = "etf" | "index" | "cmd" | "cmd23" | "cmdDay";
+export type DerivAxisKind = "etf" | "cmd" | "cmd23" | "cmdDay";
 
 const INDEX_ROOTS = new Set(["IF", "IH", "IM", "IO", "HO", "MO"]);
 
@@ -121,7 +121,7 @@ export function liveAxisKind(
 ): DerivAxisKind {
   const base = kindOfUnd(und, times);
   // Index/ETF stay 09:30-15:00. Commodity with night keeps last night 21:00 on the left.
-  if (isDaySessionUnd(und) || !isNightTime(clockStamp(now))) return base === "index" ? "etf" : base;
+  if (isDaySessionUnd(und) || !isNightTime(clockStamp(now))) return base;
   return cmdNightKind(times);
 }
 
@@ -170,13 +170,6 @@ export function derivMinuteSlots(td: string, kind: DerivAxisKind): string[] {
     ];
   }
   const night = nightDateOf(td);
-  if (kind === "index") {
-    return [
-      ...expandIncl(night, 21 * 60, 23 * 60),
-      ...expandIncl(td, 9 * 60 + 30, 11 * 60 + 30),
-      ...expandIncl(td, 13 * 60, 15 * 60),
-    ];
-  }
   // EG / plastics: 21:00-23:00 then 09:00, no 23:00-02:30 vacuum.
   if (kind === "cmd23") {
     return [
@@ -244,7 +237,6 @@ export function concatDaySlots(
 export function derivSessionSpan(kind: DerivAxisKind): number {
   if (kind === "etf") return 240;
   if (kind === "cmdDay") return 225;
-  if (kind === "index") return 360;
   if (kind === "cmd23") return 346;
   return 555;
 }
@@ -257,11 +249,6 @@ export function derivSessionIdx(t: string, kind: DerivAxisKind): number {
     let e = m - open;
     if (m >= 13 * 60) e -= 90;
     return Math.max(0, Math.min(e, 240));
-  }
-  if (kind === "index") {
-    if (m >= 21 * 60) return Math.max(0, Math.min(m - 21 * 60, 120));
-    if (m < 6 * 60) return 120;
-    return 120 + derivSessionIdx(t, "etf");
   }
   const day = (clock: number): number => {
     if (clock < 9 * 60) return 0;
@@ -281,34 +268,6 @@ export function derivSessionIdx(t: string, kind: DerivAxisKind): number {
   if (m >= 21 * 60) return Math.min(m - 21 * 60, 180);
   if (m < 6 * 60) return Math.min(180 + m, 330);
   return 330 + day(m);
-}
-
-/** Night open + day open on a session axis. */
-export function sessionMarkIdxs(cats: string[]): Array<{ i: number; text: string }> {
-  const out: Array<{ i: number; text: string }> = [];
-  let prevTd = "";
-  let seenNight = false;
-  let seenDay = false;
-  for (let i = 0; i < cats.length; i++) {
-    const c = cats[i];
-    if (!c) continue;
-    const td = tradingDayOf(c);
-    if (td !== prevTd) {
-      seenNight = false;
-      seenDay = false;
-      prevTd = td;
-    }
-    const hm = hmOf(c);
-    if (!seenNight && (hm === "21:00" || hm === "21:01")) {
-      out.push({ i, text: "夜" });
-      seenNight = true;
-    }
-    if (!seenDay && (hm === "09:00" || hm === "09:30")) {
-      out.push({ i, text: hm === "09:30" ? "开" : "日" });
-      seenDay = true;
-    }
-  }
-  return out;
 }
 
 /** Hovered slot if it has a print; empty hover stays null (do not snap to last print). */

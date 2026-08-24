@@ -33,11 +33,14 @@ test("/derivatives sits right after /a-share and is primary", () => {
   assert.match(ovlLine, /primary: true/);
   const arbIdx = nav.indexOf('to: "/arb"');
   const eventIdx = nav.indexOf('to: "/event"');
-  assert.ok(arbIdx > oIdx && arbIdx < eventIdx && eventIdx < fIdx);
+  const dxxIdx = nav.indexOf('to: "/dxx"');
+  assert.ok(arbIdx > oIdx && arbIdx < eventIdx && eventIdx < dxxIdx && dxxIdx < fIdx);
   const arbLine = nav.split("\n").find((l) => l.includes('to: "/arb"'));
   assert.match(arbLine, /primary: true/);
   const eventLine = nav.split("\n").find((l) => l.includes('to: "/event"'));
   assert.match(eventLine, /primary: true/);
+  const dxxLine = nav.split("\n").find((l) => l.includes('to: "/dxx"'));
+  assert.match(dxxLine, /primary: true/);
   const researchLine = nav.split("\n").find((l) => l.includes('to: "/research"'));
   assert.match(researchLine, /primary: false/);
   assert.doesNotMatch(header, /OVL_TABS|parseOvlabTab/);
@@ -51,6 +54,7 @@ test("/derivatives sits right after /a-share and is primary", () => {
   assert.doesNotMatch(ovlab, /VolSurfacePanel|FlowAlertPanel/);
   assert.match(layout, /pathname\.startsWith\("\/arb"\)/);
   assert.match(layout, /pathname\.startsWith\("\/event"\)/);
+  assert.match(layout, /pathname\.startsWith\("\/dxx"\)/);
   const arb = readFileSync(join(root, "src/pages/ArbCockpit.tsx"), "utf8");
   assert.match(arb, /export function ArbCockpit/);
   assert.doesNotMatch(arb, /CtpPortfolio/);
@@ -58,11 +62,18 @@ test("/derivatives sits right after /a-share and is primary", () => {
   const router = readFileSync(join(root, "src/router.tsx"), "utf8");
   assert.match(router, /path: "\/arb"/);
   assert.match(router, /path: "\/event"/);
+  assert.match(router, /path: "\/dxx"/);
   const event = readFileSync(join(root, "src/pages/EventCockpit.tsx"), "utf8");
   assert.match(event, /export function EventCockpit/);
   assert.doesNotMatch(event, /CtpPortfolio/);
   assert.doesNotMatch(event, /ovlabMarket/);
   assert.doesNotMatch(event, /useQuotes/);
+  const dxx = readFileSync(join(root, "src/pages/DxxCockpit.tsx"), "utf8");
+  assert.match(dxx, /export function DxxCockpit/);
+  assert.match(dxx, /api\.dxxBoard/);
+  assert.doesNotMatch(dxx, /CtpPortfolio/);
+  assert.doesNotMatch(dxx, /ovlabMarket/);
+  assert.doesNotMatch(dxx, /useQuotes/);
 });
 
 test("brand is fixed so PAGE_NAV chips do not shift", () => {

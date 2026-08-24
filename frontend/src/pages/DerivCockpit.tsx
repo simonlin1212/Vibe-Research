@@ -257,31 +257,27 @@ export function DerivCockpit() {
         },
         {
           id: "opt-charts",
-          title: "日K / 分时",
+          title: "分时 / 日K",
           hint: optPick ? optPick.name : "点行情观察或 T 表",
           icon: <CandlestickChart size={14} />,
           accent: "#ff4d4f",
           defaultW: 0.32,
           mobileH: "h-[40vh]",
-          bodyClassName: "overflow-hidden",
+          bodyClassName: "!overflow-hidden p-0",
           body: (
-            <div className="flex h-full min-h-0 flex-col overflow-hidden">
-              <div className="min-h-0 flex-1 border-b border-slate-800/80">
-                <OptionChartCard
-                  pick={optPick}
-                  mode="minute"
-                  tick={chartTick}
-                  alerts={d.alerts ?? undefined}
-                />
-              </div>
-              <div className="min-h-0 flex-1">
-                <OptionChartCard
-                  pick={optPick}
-                  mode="daily"
-                  tick={chartTick}
-                  alerts={d.alerts ?? undefined}
-                />
-              </div>
+            <div className="grid h-full min-h-0 min-w-0 grid-rows-2 gap-px bg-[#2a2a2a]">
+              <OptionChartCard
+                pick={optPick}
+                mode="minute"
+                tick={chartTick}
+                alerts={d.alerts ?? undefined}
+              />
+              <OptionChartCard
+                pick={optPick}
+                mode="daily"
+                tick={chartTick}
+                alerts={d.alerts ?? undefined}
+              />
             </div>
           ),
         },

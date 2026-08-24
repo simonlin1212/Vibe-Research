@@ -5,7 +5,7 @@ import { num } from "@/components/ovlab/shared";
 import { cn } from "@/lib/utils";
 import { storageGet, storageSet } from "@/lib/storage";
 import {
-  concatDaySlots, frameTradingDays, hmOf, lastFiniteIdx, liveAxisKind, minuteKey, padToSlots, sessionMarkIdxs, tradingDayOf, ymdOf,
+  concatDaySlots, frameTradingDays, hmOf, lastFiniteIdx, liveAxisKind, minuteKey, padToSlots, tradingDayOf, ymdOf,
 } from "@/lib/derivMinuteAxis";
 import type { OptionPick } from "./TQuotePanel";
 import type { OvlabDataviewTick, OvlabFlowAlert, OvlabOptionDailyBar } from "@/lib/api";
@@ -13,9 +13,9 @@ import { derivSession } from "./derivShared";
 import {
   CandlestickSeries, HistogramSeries, LineSeries, UP, DN, applyTimeLabels,
   candleOpts, candleValues, finiteLine, fmtPx, hoverIdxFromParam, lcTime,
-  ensureUpDown, lineValues, minuteLineOpts, overlayLineOpts, paintCandles, paintHist, paintLine, paintUpDown,
+  ensureUpDown, lineValues, minuteLineOpts, minuteScaleRange, overlayLineOpts, paintCandles, paintHist, paintLine, paintUpDown,
   priceFormatOf, seriesAlive, setPaneWatermark, setRefPriceLine, setSeriesMarks, showLatest,
-  showSession, sparseLine, styleIvOverlay, styleLastTag, styleOiPane,
+  showSession, sparseLine, styleIvOverlay, styleLastTag, styleMinuteSymScale, styleOiPane,
   styleVolPane, useLcChart, useLcHoverTag, volPaneOpts, volUp, volValues, wipeLc, guardLc, IV_COLOR, OI_COLOR,
   type IPriceLine, type ISeriesApi, type ISeriesMarkersPluginApi, type ISeriesUpDownMarkerPluginApi,
   type ITextWatermarkPluginApi, type SeriesMarker, type Time,
@@ -28,6 +28,10 @@ interface MinBar { t: string; close: number; open: number | null; vol: number; o
 /** Compact OI for glance header. */
 function fmtOi(v: number): string {
   return v >= 10000 ? `${(v / 10000).toFixed(1)}万` : String(Math.round(v));
+}
+
+function fmtAxisPct(v: number): string {
+  return `${v > 0 ? "+" : ""}${v.toFixed(2)}%`;
 }
 
 export { volUp } from "@/lib/lcChart";
@@ -250,24 +254,6 @@ export function hoverIdxOf(raw: unknown, cats: string[]): number | null {
   return null;
 }
 
-export { sessionMarkIdxs } from "@/lib/derivMinuteAxis";
-
-/** 20260825 / 2026-08-25 -> 2026-08-25. OpenVlab expiry_date is often compact. */
-export function expiryYmd(raw?: string | null): string {
-  const s = String(raw ?? "").trim();
-  const compact = s.match(/^(\d{4})(\d{2})(\d{2})(?:\D|$)/);
-  if (compact) return `${compact[1]}-${compact[2]}-${compact[3]}`;
-  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
-  return "";
-}
-
-export function expiryMarkIdx(days: string[], expiry?: string | null): number | null {
-  const ymd = expiryYmd(expiry);
-  if (!ymd) return null;
-  const i = days.findIndex((d) => d.slice(0, 10) === ymd);
-  return i >= 0 ? i : null;
-}
-
 /** T-table code is {prod}{exp[2:]}{C/P}{strike}. Flow may send that, an exchange id, or OPT_ long form. */
 export function alertMatchesCode(
   a: Pick<OvlabFlowAlert, "instrument" | "contract_code">,
@@ -316,35 +302,13 @@ export function alertMarkIdxs(
   return out;
 }
 
-function toMarks(
-  parts: Array<{ i: number; text?: string; up?: boolean; kind: "session" | "expiry" | "alert" }>,
-): SeriesMarker<Time>[] {
-  return parts.map((p) => {
-    if (p.kind === "alert") {
-      return {
-        time: lcTime(p.i),
-        position: "belowBar" as const,
-        shape: (p.up ? "arrowUp" : "arrowDown") as "arrowUp" | "arrowDown",
-        color: p.up ? UP : DN,
-      };
-    }
-    if (p.kind === "expiry") {
-      return {
-        time: lcTime(p.i),
-        position: "aboveBar" as const,
-        shape: "square" as const,
-        color: "#f0b90b",
-        text: p.text ?? "到",
-      };
-    }
-    return {
-      time: lcTime(p.i),
-      position: "aboveBar" as const,
-      shape: "circle" as const,
-      color: "#ffcc00",
-      text: p.text,
-    };
-  });
+function toMarks(parts: Array<{ i: number; up: boolean }>): SeriesMarker<Time>[] {
+  return parts.map((p) => ({
+    time: lcTime(p.i),
+    position: "belowBar" as const,
+    shape: (p.up ? "arrowUp" : "arrowDown") as "arrowUp" | "arrowDown",
+    color: p.up ? UP : DN,
+  }));
 }
 
 export { tradingDayOf } from "@/lib/derivMinuteAxis";
@@ -544,11 +508,7 @@ export function OptionChartCard({ pick, mode, tick, alerts = NO_ALERTS }: {
         bag.current.paintedVol = volPts;
       }
       const days = dailyBars.map((b) => b.t);
-      const markParts: Array<{ i: number; text?: string; up?: boolean; kind: "session" | "expiry" | "alert" }> = [];
-      const expI = expiryMarkIdx(days, pick.expiry);
-      if (expI != null) markParts.push({ i: expI, kind: "expiry", text: "到" });
-      for (const a of alertMarkIdxs(days, alerts, pick.code)) markParts.push({ ...a, kind: "alert" });
-      setSeriesMarks(bag.current.px, marksRef, toMarks(markParts));
+      setSeriesMarks(bag.current.px, marksRef, toMarks(alertMarkIdxs(days, alerts, pick.code)));
       if (!lastOnly) showLatest(chart, dailyBars.length, 80);
       return;
     }
@@ -586,6 +546,13 @@ export function OptionChartCard({ pick, mode, tick, alerts = NO_ALERTS }: {
     bag.current.paintedTick = tickPts;
     styleLastTag(bag.current.px, finite[finite.length - 1], baseline);
     setRefPriceLine(bag.current.px, refLine, pre !== null && pre > 0 ? pre : null);
+    const rng = minuteScaleRange(prices, pre !== null && pre > 0 ? pre : null);
+    bag.current.px?.applyOptions({
+      autoscaleInfoProvider: () => (
+        rng ? { priceRange: { minValue: rng.min, maxValue: rng.max } } : null
+      ),
+    });
+    styleMinuteSymScale(chart);
     bag.current.iv?.applyOptions({
       autoscaleInfoProvider: () => {
         const r = overlayAxis(minData?.iv ?? []);
@@ -619,11 +586,7 @@ export function OptionChartCard({ pick, mode, tick, alerts = NO_ALERTS }: {
       paintLine(bag.current.oi, oiPts, bag.current.paintedOi);
       bag.current.paintedOi = oiPts;
     }
-    const markParts: Array<{ i: number; text?: string; up?: boolean; kind: "session" | "expiry" | "alert" }> = [
-      ...sessionMarkIdxs(cats).map((m) => ({ ...m, kind: "session" as const })),
-      ...alertMarkIdxs(cats, alerts, pick.code).map((a) => ({ ...a, kind: "alert" as const })),
-    ];
-    setSeriesMarks(bag.current.px, marksRef, toMarks(markParts));
+    setSeriesMarks(bag.current.px, marksRef, toMarks(alertMarkIdxs(cats, alerts, pick.code)));
     if (!lastOnly) showSession(chart, cats.length);
   };
 
@@ -654,6 +617,17 @@ export function OptionChartCard({ pick, mode, tick, alerts = NO_ALERTS }: {
     (v) => fmtPx(v, pick?.und),
     hover,
   );
+  const axis = useMemo(() => {
+    if (mode !== "minute" || !minData) return null;
+    const rng = minuteScaleRange(minData.prices, minData.pre);
+    if (!rng || rng.prev === 0) return null;
+    return {
+      maxPx: fmtPx(rng.max, pick?.und),
+      minPx: fmtPx(rng.min, pick?.und),
+      maxPct: fmtAxisPct(((rng.max - rng.prev) / rng.prev) * 100),
+      minPct: fmtAxisPct(((rng.min - rng.prev) / rng.prev) * 100),
+    };
+  }, [mode, minData, pick?.und]);
 
   let head: { label: string; toneCls: string } | null = null;
   const glanceLegend: LcLegendItem[] = [];
@@ -695,20 +669,11 @@ export function OptionChartCard({ pick, mode, tick, alerts = NO_ALERTS }: {
           const iv = minData!.iv[i];
           const vol = minData!.vols[i];
           const oi = minData!.oi[i];
-          head = {
-            label: [
-              `${minData!.days === 2 ? (t.slice(5, 16) || t) : (t.slice(11, 16) || t)} ${fmtPx(px, pick.und)}`,
-              pct !== null ? `${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%` : "",
-              iv != null ? `IV ${iv.toFixed(0)}` : "",
-              vol != null ? `量 ${fmtOi(vol)}` : "",
-              oi != null ? `仓 ${fmtOi(oi)}` : "",
-            ].filter(Boolean).join("  "),
-            toneCls: pct === null ? "text-slate-400" : pct >= 0 ? "text-[#ff2d2d]" : "text-[#00d26a]",
-          };
           glanceLegend.push(
+            { k: "T", v: minData!.days === 2 ? (t.slice(5, 16) || t) : (t.slice(11, 16) || t), tone: "muted" },
             { k: "P", v: fmtPx(px, pick.und), tone: lcTone(pct) },
-            { k: "V", v: vol != null ? fmtOi(vol) : "—", tone: "muted" },
           );
+          if (vol != null) glanceLegend.push({ k: "V", v: fmtOi(vol), tone: "muted" });
           if (iv != null) glanceLegend.push({ k: "IV", v: iv.toFixed(0), tone: "iv" });
           if (oi != null) glanceLegend.push({ k: "OI", v: fmtOi(oi), tone: "oi" });
         }
@@ -738,9 +703,11 @@ export function OptionChartCard({ pick, mode, tick, alerts = NO_ALERTS }: {
             ))}
           </span>
         )}
-        {pick && head && (
+        {mode === "minute" && glanceLegend.length > 0 ? (
+          <LcLegend items={glanceLegend} className="!static !left-auto !top-auto !max-w-none min-w-0 flex-1" />
+        ) : pick && head ? (
           <span className={cn("min-w-0 truncate tabular-nums", head.toneCls)}>{head.label}</span>
-        )}
+        ) : null}
         {!pick && mode === "daily" && (
           <span className="text-slate-600">点行情观察或 T 表</span>
         )}
@@ -752,7 +719,15 @@ export function OptionChartCard({ pick, mode, tick, alerts = NO_ALERTS }: {
         {pick && !loading && (err || empty) && (
           <div className="absolute inset-0 z-10 flex items-center justify-center text-[11px] text-slate-500">未取到</div>
         )}
-        <LcLegend items={glanceLegend} className="left-1 top-0.5 text-[10px]" />
+        {mode === "daily" ? <LcLegend items={glanceLegend} className="left-1 top-0.5 text-[10px]" /> : null}
+        {axis ? (
+          <>
+            <span className="pointer-events-none absolute left-1.5 top-0.5 z-10 font-mono text-[11px] tabular-nums text-[#ff2d2d]">{axis.maxPx}</span>
+            <span className="pointer-events-none absolute right-10 top-0.5 z-10 font-mono text-[11px] tabular-nums text-[#ff2d2d]">{axis.maxPct}</span>
+            <span className="pointer-events-none absolute bottom-[24%] left-1.5 z-10 font-mono text-[11px] tabular-nums text-[#00d26a]">{axis.minPx}</span>
+            <span className="pointer-events-none absolute bottom-[24%] right-10 z-10 font-mono text-[11px] tabular-nums text-[#00d26a]">{axis.minPct}</span>
+          </>
+        ) : null}
         <LcHoverTag tag={hoverTag} y={tagY} />
         <div ref={ref} className="h-full w-full" />
       </LcWell>

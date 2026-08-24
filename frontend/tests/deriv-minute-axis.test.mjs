@@ -52,13 +52,6 @@ function derivMinuteSlots(td, kind) {
     ];
   }
   const night = nightDateOf(td);
-  if (kind === "index") {
-    return [
-      ...expandIncl(night, 21 * 60, 23 * 60),
-      ...expandIncl(td, 9 * 60 + 30, 11 * 60 + 30),
-      ...expandIncl(td, 13 * 60, 15 * 60),
-    ];
-  }
   if (kind === "cmd23") {
     return [
       ...expandIncl(night, 21 * 60, 23 * 60),
@@ -263,7 +256,7 @@ function isDaySessionUnd(und) {
 function liveAxisKind(und, times, now) {
   const base = kindOfUnd(und, times);
   const stamp = `${ymdOf(now)} ${pad2(now.getHours())}:${pad2(now.getMinutes())}:00`;
-  if (isDaySessionUnd(und) || !isNightTime(stamp)) return base === "index" ? "etf" : base;
+  if (isDaySessionUnd(und) || !isNightTime(stamp)) return base;
   return cmdNightKind(times);
 }
 function derivLiveNow(now) {

@@ -117,8 +117,7 @@ test("四张 K/分时卡走 LC, 不直接 echarts.init", () => {
   assert.match(pane, /mdhm/);
   assert.match(pane, /showSession/);
   assert.match(pane, /paintHist/);
-  assert.match(pane, /sessionMarkIdxs/);
-  assert.match(pane, /m\.text !== "开"/);
+  assert.doesNotMatch(pane, /sessionMarkIdxs/);
   assert.match(pane, /styleVolPane/);
   assert.match(pane, /volPaneOpts\(\), 1/);
   assert.match(pane, /成交额/);

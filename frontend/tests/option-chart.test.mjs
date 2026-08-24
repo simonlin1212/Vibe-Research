@@ -169,8 +169,10 @@ test("分时量窗叠持仓黄线, 独立轴不压成交量", async () => {
   assert.ok(src.includes("styleOiPane"), "仓走量窗独立轴");
   assert.ok(src.includes('"oi"'), "仓走独立轴");
   assert.ok(src.includes("overlayAxis(minData?.oi"), "仓不跟成交量抢同一标尺");
-  assert.ok(src.includes("仓 ${fmtOi(oi)}"), "十字光标读仓");
-  assert.ok(src.includes("量 ${fmtOi(vol)}"), "十字光标读量");
+  assert.ok(src.includes('k: "OI"'), "读仓");
+  assert.ok(src.includes('k: "V"'), "读量");
+  assert.ok(src.includes("!static"), "分时 T/P/V/IV/OI 挂标题行, 不叠图");
+  assert.ok(src.includes('mode === "daily" ? <LcLegend'), "日K 图例仍在图上");
   assert.ok(src.includes("volUp(px, minData?.opens[i]"), "量柱按当根开收");
   assert.ok(lc.includes("export function styleOiPane"), "量窗持仓轴");
   assert.ok(lc.includes("UP_VOL"), "量柱半透明红绿, 不挡持仓黄线");
@@ -182,6 +184,7 @@ test("驾驶舱日K分时叠在同一张卡", async () => {
   assert.ok(src.includes('id: "opt-charts"'), "一张图卡");
   assert.ok(!src.includes('id: "opt-daily"') && !src.includes('id: "opt-minute"'), "不再并排两卡");
   assert.ok(/mode="minute"[\s\S]*mode="daily"/.test(src), "上分时下日K");
+  assert.match(src, /title: "分时 \/ 日K"/);
   assert.ok(src.includes("defaultW: 0.36") && src.includes("defaultW: 0.20"), "行情观察/日历宽度");
   assert.ok(src.includes("defaultW: 0.68") && src.includes("defaultW: 0.32"), "T 表主宽, 图卡约占三分之一");
   assert.ok(src.includes("defaultH: 0.29") && src.includes("defaultH: 0.71"), "首行回原高, T 区加高");
@@ -224,18 +227,19 @@ test("驾驶舱日K分时吃 dataview tick", async () => {
   assert.ok(card.includes("paintCandles"), "日K 最后一根优先 update");
   assert.ok(card.includes("paintLine"), "分时最后一根优先 update");
   assert.ok(card.includes("setRefPriceLine"), "昨收/昨结价线");
-  assert.ok(card.includes("setSeriesMarks"), "到期/夜盘/异动 markers");
+  assert.ok(card.includes("setSeriesMarks"), "异动分钟箭头");
   assert.ok(card.includes("setPaneWatermark"), "合约淡字水印");
   assert.ok(card.includes("ensureUpDown"), "分时最新一跳红绿闪");
   assert.ok(card.includes("paintUpDown"), "MQTT 最后一根才闪");
-  assert.ok(card.includes("sessionMarkIdxs"), "夜盘开盘钉点");
+  assert.ok(!card.includes("sessionMarkIdxs") && !card.includes("expiryMarkIdx"), "图上不钉夜盘/到期点");
   assert.ok(src.includes("alerts={d.alerts ?? undefined}"), "异动分钟叠当前合约, 空列表不每帧新建");
-  assert.ok(card.includes("export function expiryYmd"), "到期日兼容 20260825");
   assert.ok(card.includes("export function alertMatchesCode"), "异动对 T 表短码 / OPT_ 长码");
   assert.ok(card.includes('pick?.kind === "und"') && card.includes("ovlabLastBar"), "期货标的 last-bar 做底");
   assert.ok(card.includes("liveAxisKind"), "夜盘无分钟点也铺当夜轴");
   assert.ok(card.includes("frameTradingDays(all.map((b) => b.t), days, now, und)"), "股指晚上不滚到下一交易日");
   assert.ok(card.includes("showSession"), "分时开盘贴左, 不 fitContent 挤到右侧");
+  assert.ok(card.includes("minuteScaleRange"), "分时价轴绕昨结对称, 同 A 股");
+  assert.ok(card.includes("styleMinuteSymScale"), "分时价轴边距同 A 股");
 });
 
 test("自选最新叠 dataview", async () => {
@@ -423,48 +427,6 @@ test("两日分时隐波仍落在各自交易日", () => {
   assert.equal(iv[3], null);
 });
 
-function sessionMarkIdxs(cats) {
-  const out = [];
-  let prevTd = "";
-  let seenNight = false;
-  let seenDay = false;
-  for (let i = 0; i < cats.length; i++) {
-    const c = cats[i];
-    if (!c) continue;
-    const td = tradingDayOf(c);
-    if (td !== prevTd) {
-      seenNight = false;
-      seenDay = false;
-      prevTd = td;
-    }
-    const hm = c.slice(11, 16);
-    if (!seenNight && (hm === "21:00" || hm === "21:01")) {
-      out.push({ i, text: "夜" });
-      seenNight = true;
-    }
-    if (!seenDay && (hm === "09:00" || hm === "09:30")) {
-      out.push({ i, text: hm === "09:30" ? "开" : "日" });
-      seenDay = true;
-    }
-  }
-  return out;
-}
-
-function expiryYmd(raw) {
-  const s = String(raw ?? "").trim();
-  const compact = s.match(/^(\d{4})(\d{2})(\d{2})(?:\D|$)/);
-  if (compact) return `${compact[1]}-${compact[2]}-${compact[3]}`;
-  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
-  return "";
-}
-
-function expiryMarkIdx(days, expiry) {
-  const ymd = expiryYmd(expiry);
-  if (!ymd) return null;
-  const i = days.findIndex((d) => d.slice(0, 10) === ymd);
-  return i >= 0 ? i : null;
-}
-
 function alertMatchesCode(a, code) {
   const want = code.toUpperCase();
   if (!want) return false;
@@ -499,23 +461,7 @@ function alertMarkIdxs(cats, alerts, code) {
   return out;
 }
 
-test("sessionMarkIdxs 夜盘 21:00 和日盘开盘各钉一次", () => {
-  const cats = [
-    "2026-08-17 21:00:00",
-    "2026-08-17 21:01:00",
-    "2026-08-18 09:00:00",
-    "2026-08-18 09:01:00",
-  ];
-  const m = sessionMarkIdxs(cats);
-  assert.deepEqual(m.map((x) => x.text), ["夜", "日"]);
-  assert.equal(m[0].i, 0);
-  assert.equal(m[1].i, 2);
-});
-
-test("expiryMarkIdx / alertMarkIdxs 对上当前合约", () => {
-  assert.equal(expiryMarkIdx(["2026-08-18", "2026-09-16"], "2026-09-16"), 1);
-  assert.equal(expiryMarkIdx(["2026-08-18", "2026-08-25"], "20260825"), 1);
-  assert.equal(expiryMarkIdx(["2026-08-18"], "2026-09-16"), null);
+test("alertMarkIdxs 对上当前合约", () => {
   const cats = ["2026-08-18 09:30:00", "2026-08-18 10:00:00"];
   const hits = alertMarkIdxs(cats, [
     { contract_code: "AG2609C16000", time: "2026-08-18 10:00:12", side: "ask" },

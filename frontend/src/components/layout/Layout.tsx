@@ -10,6 +10,7 @@ import {
   GitCompare,
   Globe2,
   Radio,
+  Zap,
   LineChart,
   MoreHorizontal,
   Plug,
@@ -35,6 +36,7 @@ const NAV_ICONS: Record<string, LucideIcon> = {
   "/derivatives": LineChart,
   "/arb": GitCompare,
   "/event": Radio,
+  "/dxx": Zap,
   "/portfolio": Wallet,
   "/settings": Plug,
 };
@@ -47,6 +49,7 @@ function isCockpitPath(pathname: string, tab: string | null) {
   if (pathname.startsWith("/derivatives")) return true;
   if (pathname.startsWith("/arb")) return true;
   if (pathname.startsWith("/event")) return true;
+  if (pathname.startsWith("/dxx")) return true;
   if (!pathname.startsWith("/a-share")) return false;
   if (tab === "detail" || tab === "feed") return false;
   return true;
