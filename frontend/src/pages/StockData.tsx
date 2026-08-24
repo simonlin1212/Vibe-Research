@@ -230,7 +230,7 @@ export function StockData({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- react to external selection
   }, [externalCode]);
 
-  // Deep-link: /a-share?tab=kline&code=600519
+  // Deep-link: /a-share?code=600519
   const autoQueryRef = useRef(false);
   useEffect(() => {
     if (externalCode !== undefined) return; // parent owns the code

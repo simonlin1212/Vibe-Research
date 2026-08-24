@@ -64,6 +64,15 @@ test("lcChart 是 K/分时共用封装, 不画 TradingView logo", () => {
   assert.match(src, /export function paintUpDown/);
   assert.match(src, /PriceScaleMode/);
   assert.match(src, /export function setLogScale/);
+  assert.match(src, /export function sma/);
+  assert.match(src, /export function minuteLineOpts/);
+  assert.match(src, /MA_PERIODS/);
+  assert.match(src, /vertLines: \{ visible: true/);
+  assert.match(src, /#ff2d2d/);
+  assert.match(src, /#00d26a/);
+  assert.match(src, /upColor: "#000"/);
+  assert.match(src, /borderUpColor: UP/);
+  assert.match(src, /borderVisible: true/);
 });
 
 test("四张 K/分时卡走 LC, 不直接 echarts.init", () => {
@@ -91,6 +100,10 @@ test("四张 K/分时卡走 LC, 不直接 echarts.init", () => {
   assert.match(pane, /setLogScale/);
   assert.match(us, /setLogScale/);
   assert.match(pane, /ensureUpDown/);
+  assert.match(pane, /LineSeries/);
+  assert.match(pane, /minuteLineOpts/);
+  assert.doesNotMatch(pane, /minuteAvg/);
+  assert.match(pane, /MA_PERIODS/);
   assert.match(pane, /volUp/);
   assert.match(pane, /barOpenForVol/);
   assert.match(pane, /concatDaySlots/);
@@ -107,14 +120,16 @@ test("四张 K/分时卡走 LC, 不直接 echarts.init", () => {
   assert.match(pane, /b\.volume/);
   assert.match(pane, /\"额\"/);
   assert.match(pane, /\"量\"/);
-  assert.match(pane, /距今/);
-  assert.match(src, /export function sinceNowPct/);
+  assert.doesNotMatch(pane, /距今/);
+  assert.match(src, /export function vsRefPct/);
   assert.match(src, /export function hoverPxPct/);
   assert.match(pane, /LcHoverTag/);
   assert.doesNotMatch(pane, /styleVolOverlay/);
   assert.match(src, /export function volUp/);
   assert.match(src, /export function barOpenForVol/);
-  assert.match(arb, /ensureUpDown/);
+  assert.match(arb, /CandlestickSeries/);
+  assert.match(arb, /candleOpts/);
+  assert.doesNotMatch(arb, /ensureUpDown/);
   assert.match(pane, /\[wmName, code\]/);
   assert.match(ashare, /AShareLcPane/);
   assert.match(ashare, /createSeriesGate/);
@@ -268,14 +283,14 @@ function httpDetail(detail, status) {
   return `HTTP ${status}`;
 }
 
-function sinceNowPct(from, latest) {
-  if (from == null || latest == null || !Number.isFinite(from) || !Number.isFinite(latest) || from === 0) return null;
-  return ((latest - from) / from) * 100;
+function vsRefPct(price, ref) {
+  if (price == null || ref == null || !Number.isFinite(price) || !Number.isFinite(ref) || ref === 0) return null;
+  return ((price - ref) / ref) * 100;
 }
 
-function hoverPxPct(price, latest) {
+function hoverPxPct(price, ref) {
   if (price == null || !Number.isFinite(price)) return null;
-  const chg = sinceNowPct(price, latest);
+  const chg = vsRefPct(price, ref);
   const px = Number(price.toFixed(2)).toLocaleString("zh-CN", { maximumFractionDigits: 2 });
   const show = chg != null && Math.abs(chg) >= 1e-12;
   const pct = show ? `${chg > 0 ? "+" : ""}${chg.toFixed(2)}%` : null;
@@ -293,23 +308,23 @@ test("guardLc 吞掉 LC Value is null, 不把图打翻", () => {
   assert.equal(n, 1);
 });
 
-test("sinceNowPct 是相对最新价, 不是当日涨跌", () => {
-  assert.equal(sinceNowPct(10, 11), 10);
-  assert.equal(sinceNowPct(10, 9), -10);
-  assert.equal(sinceNowPct(10, 10), 0);
-  assert.equal(sinceNowPct(0, 10), null);
-  assert.equal(sinceNowPct(null, 10), null);
+test("vsRefPct 是相对昨收/昨结, 不是距今", () => {
+  assert.equal(vsRefPct(11, 10), 10);
+  assert.equal(vsRefPct(9, 10), -10);
+  assert.equal(vsRefPct(10, 10), 0);
+  assert.equal(vsRefPct(10, 0), null);
+  assert.equal(vsRefPct(null, 10), null);
 });
 
-test("hoverPxPct 右侧价签是 价格 (+/-%) 相对现价", () => {
-  assert.deepEqual(hoverPxPct(10, 11), { px: "10", pct: "+10.00%", chg: 10 });
-  assert.deepEqual(hoverPxPct(10, 9), { px: "10", pct: "-10.00%", chg: -10 });
+test("hoverPxPct 右侧价签是 价格 (+/-%) 相对昨收", () => {
+  assert.deepEqual(hoverPxPct(11, 10), { px: "11", pct: "+10.00%", chg: 10 });
+  assert.deepEqual(hoverPxPct(9, 10), { px: "9", pct: "-10.00%", chg: -10 });
   assert.deepEqual(hoverPxPct(10, 10), { px: "10", pct: null, chg: null });
   assert.deepEqual(hoverPxPct(10, null), { px: "10", pct: null, chg: null });
   assert.equal(hoverPxPct(null, 10), null);
   const frame = readFileSync(join(root, "src/components/ui/LcFrame.tsx"), "utf8");
   assert.match(frame, /export function LcHoverTag/);
-  assert.match(frame, /text-\[#f6465d\].*text-\[#0ecb81\]/s);
+  assert.match(frame, /text-\[#ff2d2d\].*text-\[#00d26a\]/s);
 });
 
 test("httpDetail 不把 FastAPI 422 列表打成 [object Object]", () => {

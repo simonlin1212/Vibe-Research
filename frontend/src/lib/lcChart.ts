@@ -47,19 +47,27 @@ export type {
   SeriesMarker, SeriesType, Time, LineData, WhitespaceData, HistogramData, CandlestickData,
 };
 
-/** CN convention, TV saturation. */
-export const UP = "#f6465d";
-export const DN = "#0ecb81";
-export const UP_VOL = "rgba(246,70,93,0.28)";
-export const DN_VOL = "rgba(14,203,129,0.28)";
+/** THS desk: hard red/green, not Binance pink/teal. */
+export const UP = "#ff2d2d";
+export const DN = "#00d26a";
+export const UP_VOL = "rgba(255,45,45,0.50)";
+export const DN_VOL = "rgba(0,210,106,0.50)";
 export const IV_COLOR = "#8b7cff";
 export const OI_COLOR = "#f0b90b";
+export const PX_LINE = "#ffffff";
+export const MA_PERIODS = [5, 10, 20, 60] as const;
+export const MA_COLORS: Record<(typeof MA_PERIODS)[number], string> = {
+  5: "#ffffff",
+  10: "#ffcc00",
+  20: "#e040fb",
+  60: "#00d26a",
+};
 
 const INK = "#c8cdd6";
-const GRID = "rgba(255,255,255,0.045)";
+const GRID = "rgba(255,255,255,0.10)";
 const HAIR = "rgba(255,204,0,0.55)";
 const TAG = "#1a1400";
-const FONT = '"Geist Mono", ui-monospace, monospace';
+const FONT = '"Consolas", "Microsoft YaHei", ui-monospace, sans-serif';
 
 /** Logical unix seconds so lunch/night gaps stay one bar, not hours of empty axis. */
 export const LC_ORIGIN = 1_700_000_000;
@@ -138,6 +146,27 @@ export function candleValues(
   }));
 }
 
+/** Simple MA. Nulls do not enter the window. */
+export function sma(values: Array<number | null | undefined>, n: number): Array<number | null> {
+  const out: Array<number | null> = [];
+  const q: number[] = [];
+  let sum = 0;
+  for (const raw of values) {
+    if (raw == null || !Number.isFinite(raw)) {
+      out.push(null);
+      continue;
+    }
+    q.push(raw);
+    sum += raw;
+    if (q.length > n) {
+      const left = q.shift();
+      if (left != null) sum -= left;
+    }
+    out.push(q.length === n ? sum / n : null);
+  }
+  return out;
+}
+
 /** Volume bar: this bar close >= open (missing open -> prev close). OpenVlab light chart same rule. */
 export function volUp(
   close: number | null | undefined,
@@ -199,12 +228,6 @@ export function fmtPx(v: number, codeOrUnd?: string | null): string {
   return v.toFixed(pxPrec(codeOrUnd, v).precision);
 }
 
-/** (latest - from) / from. Hover a past bar to see move since then. */
-export function sinceNowPct(from: number | null | undefined, latest: number | null | undefined): number | null {
-  if (from == null || latest == null || !Number.isFinite(from) || !Number.isFinite(latest) || from === 0) return null;
-  return ((latest - from) / from) * 100;
-}
-
 function fmtHoverPct(v: number) {
   return `${v > 0 ? "+" : ""}${v.toFixed(2)}%`;
 }
@@ -213,14 +236,20 @@ function fmtHoverPx(v: number) {
   return Number(v.toFixed(2)).toLocaleString("zh-CN", { maximumFractionDigits: 2 });
 }
 
-/** Right-edge crosshair tag parts. Price stays dark on white; pct is red/green vs latest. */
+/** (price - ref) / ref. Minute vs 昨收/昨结; daily vs prev bar. */
+export function vsRefPct(price: number | null | undefined, ref: number | null | undefined): number | null {
+  if (price == null || ref == null || !Number.isFinite(price) || !Number.isFinite(ref) || ref === 0) return null;
+  return ((price - ref) / ref) * 100;
+}
+
+/** Right-edge crosshair tag. Price dark on white; pct is the bar's own move vs ref. */
 export function hoverPxPct(
   price: number | null | undefined,
-  latest: number | null | undefined,
+  ref: number | null | undefined,
   formatPx: (v: number) => string = fmtHoverPx,
 ): { px: string; pct: string | null; chg: number | null } | null {
   if (price == null || !Number.isFinite(price)) return null;
-  const chg = sinceNowPct(price, latest);
+  const chg = vsRefPct(price, ref);
   const show = chg != null && Math.abs(chg) >= 1e-12;
   return { px: formatPx(price), pct: show ? fmtHoverPct(chg) : null, chg: show ? chg : null };
 }
@@ -229,11 +258,11 @@ export function hoverPxPct(
 export function useLcHoverTag(
   getSeries: () => { priceToCoordinate: (price: number) => number | null } | null,
   price: number | null | undefined,
-  latest: number | null | undefined,
+  ref: number | null | undefined,
   formatPx?: (v: number) => string,
   paintKey?: unknown,
 ): { tag: ReturnType<typeof hoverPxPct>; y: number | null } {
-  const tag = hoverPxPct(price, latest, formatPx);
+  const tag = hoverPxPct(price, ref, formatPx);
   const [y, setY] = useState<number | null>(null);
   useLayoutEffect(() => {
     const series = getSeries();
@@ -273,9 +302,11 @@ export function hoverPxFromParam(
 
 export function candleOpts(_glance = false, fmt?: ReturnType<typeof priceFormatOf>) {
   return {
-    upColor: UP,
+    upColor: "#000",
     downColor: DN,
-    borderVisible: false,
+    borderVisible: true,
+    borderUpColor: UP,
+    borderDownColor: DN,
     wickUpColor: UP,
     wickDownColor: DN,
     priceScaleId: "right",
@@ -319,11 +350,11 @@ export function baselineOpts(base: number, glance = false, fmt?: ReturnType<type
     baseValue: { type: "price" as const, price: base },
     relativeGradient: true,
     topLineColor: UP,
-    topFillColor1: "rgba(246,70,93,0.22)",
-    topFillColor2: "rgba(246,70,93,0.01)",
+    topFillColor1: "rgba(255,45,45,0.22)",
+    topFillColor2: "rgba(255,45,45,0.01)",
     bottomLineColor: DN,
-    bottomFillColor1: "rgba(14,203,129,0.22)",
-    bottomFillColor2: "rgba(14,203,129,0.01)",
+    bottomFillColor1: "rgba(0,210,106,0.22)",
+    bottomFillColor2: "rgba(0,210,106,0.01)",
     lineWidth: (glance ? 1 : 2) as 1 | 2,
     crosshairMarkerVisible: true,
     crosshairMarkerRadius: glance ? 3 : 4,
@@ -362,6 +393,25 @@ export function overlayLineOpts(color: string, scaleId: string) {
   };
 }
 
+/** Minute last: white line. No avg overlay. */
+export function minuteLineOpts(fmt?: ReturnType<typeof priceFormatOf>) {
+  return {
+    priceScaleId: "right",
+    color: PX_LINE,
+    lineWidth: 1 as const,
+    lastValueVisible: true,
+    priceLineVisible: true,
+    priceLineWidth: 1 as const,
+    priceLineStyle: LineStyle.SparseDotted,
+    priceLineColor: UP,
+    priceFormat: fmt ?? { type: "price" as const, precision: 2, minMove: 0.01 },
+    crosshairMarkerVisible: true,
+    crosshairMarkerRadius: 4,
+    crosshairMarkerBorderWidth: 1,
+    crosshairMarkerBorderColor: "#000",
+  };
+}
+
 export function createLcChart(el: HTMLElement, preset: LcPreset = "desk"): IChartApi {
   const glance = preset === "glance";
   return createChart(el, {
@@ -375,7 +425,7 @@ export function createLcChart(el: HTMLElement, preset: LcPreset = "desk"): IChar
       panes: { enableResize: false, separatorColor: "rgba(255,255,255,0.06)" },
     },
     grid: {
-      vertLines: { visible: false },
+      vertLines: { visible: true, color: GRID, style: LineStyle.Solid },
       horzLines: { color: GRID, style: LineStyle.Solid },
     },
     rightPriceScale: {
@@ -883,7 +933,7 @@ export function createLcPriceChart(el: HTMLElement) {
       attributionLogo: false,
     },
     grid: {
-      vertLines: { visible: false },
+      vertLines: { visible: true, color: GRID, style: LineStyle.Solid },
       horzLines: { color: GRID, style: LineStyle.Solid },
     },
     rightPriceScale: {

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { PageFallback } from "@/components/ui/PageFallback";
 import type { AShareChartSeg } from "@/pages/AShareLightChart";
@@ -10,64 +10,46 @@ const AShareLightChart = lazy(() =>
   import("@/pages/AShareLightChart").then((m) => ({ default: m.AShareLightChart })),
 );
 
-type Tab = "review" | AShareChartSeg;
-
-function parseTab(raw: string | null): Tab {
-  if (raw === "kline" || raw === "chart" || raw === "stock") return "kline";
+function parseOverlay(raw: string | null): AShareChartSeg | null {
   if (raw === "detail" || raw === "feed") return raw;
-  return "review";
+  return null;
 }
 
 export function AShare() {
   const [params, setParams] = useSearchParams();
-  const [tab, setTab] = useState<Tab>(() => parseTab(params.get("tab")));
+  const overlay = parseOverlay(params.get("tab"));
 
   useEffect(() => {
     void import("@/pages/FinWindow");
   }, []);
 
   useEffect(() => {
-    const t = parseTab(params.get("tab"));
-    setTab(t);
     const raw = params.get("tab");
-    if (raw === "chart" || raw === "stock") {
+    if (raw === "kline" || raw === "chart" || raw === "stock") {
       const p = new URLSearchParams(params);
-      p.set("tab", "kline");
+      p.delete("tab");
       setParams(p, { replace: true });
     }
   }, [params, setParams]);
 
-  const switchTab = (next: Tab) => {
-    setTab(next);
+  const switchSeg = (next: AShareChartSeg) => {
     const p = new URLSearchParams(params);
-    if (next === "review") {
-      p.delete("tab");
-    } else {
-      p.set("tab", next);
-    }
+    if (next === "kline") p.delete("tab");
+    else p.set("tab", next);
     setParams(p, { replace: true });
   };
 
-  const chartOpen = tab === "kline" || tab === "detail" || tab === "feed";
-
-  if (tab === "review") {
+  if (overlay) {
     return (
       <Suspense fallback={<PageFallback />}>
-        <DailyReview />
+        <AShareLightChart seg={overlay} onSegChange={switchSeg} />
       </Suspense>
     );
   }
 
   return (
-    <div>
-      {chartOpen && (
-        <Suspense fallback={<PageFallback />}>
-          <AShareLightChart
-            seg={tab}
-            onSegChange={(s) => switchTab(s)}
-          />
-        </Suspense>
-      )}
-    </div>
+    <Suspense fallback={<PageFallback />}>
+      <DailyReview />
+    </Suspense>
   );
 }

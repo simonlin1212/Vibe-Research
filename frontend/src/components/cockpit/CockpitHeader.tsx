@@ -27,18 +27,12 @@ export const PAGE_NAV: PageNavItem[] = [
   { to: "/settings", label: "接入 AI", short: "接入AI", match: (p) => p.startsWith("/settings"), primary: false },
 ];
 
-export const A_SHARE_TABS = [
-  { to: "/a-share", label: "复盘", tab: null as string | null },
-  { to: "/a-share?tab=kline", label: "K线", tab: "kline" },
-];
-
 export function parseAShareTab(raw: string | null): string {
-  if (raw === "kline" || raw === "chart" || raw === "stock") return "kline";
   if (raw === "detail" || raw === "feed") return raw;
   return "review";
 }
 
-/** Flush rail for page nav and 复盘/K线. */
+/** Flush rail for page nav. */
 export const NAV_RAIL_CLASS =
   "flex min-w-0 items-center gap-px overflow-x-auto bg-black [scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
 

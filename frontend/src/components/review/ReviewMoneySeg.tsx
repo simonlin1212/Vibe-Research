@@ -9,7 +9,6 @@ import { reviewPending } from "@/components/review/reviewPending";
 import { ETF_SHARE_WATCH, type CnBondYield, type EtfFlow, type EtfShares, type LprData, type ShareholderChanges } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { LcHoverTag, LcWell } from "@/components/ui/LcFrame";
-import { lastFiniteIdx } from "@/lib/derivMinuteAxis";
 import {
   LineSeries, applyTimeLabels, lcTime, seriesAlive, setPaneWatermark, useLcChart, useLcHoverTag, wipeLc,
   type ISeriesApi, type ITextWatermarkPluginApi, type Time,
@@ -388,16 +387,11 @@ function EtfShareChart({
   const hitI = i < 0 ? -1 : series.findIndex((s) => s.values[i] != null && Number.isFinite(s.values[i]));
   const hit = hitI >= 0 ? series[hitI] : null;
   const hoverPx = hit && i >= 0 ? hit.values[i] : null;
-  const latestPx = hit
-    ? (() => {
-        const li = lastFiniteIdx(hit.values, null);
-        return li != null ? hit.values[li] : null;
-      })()
-    : null;
+  const prevPx = hit && i > 0 ? hit.values[i - 1] : null;
   const { tag: hoverTag, y: tagY } = useLcHoverTag(
     () => bag.current[hitI] ?? null,
     hoverPx,
-    latestPx,
+    prevPx,
     (v) => v.toFixed(2),
     hover,
   );

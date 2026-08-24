@@ -394,6 +394,15 @@ export interface PmSearch {
   q: string;
   events: PmEvent[];
 }
+export interface EventCalDay {
+  date: string;
+  items: string[];
+}
+export interface EventCalBoard {
+  days: EventCalDay[];
+  count: number;
+  src?: string;
+}
 export interface StockBoards {
   code: string; name: string; industry: string; area: string;
   concepts: string[]; source?: string;
@@ -1655,6 +1664,7 @@ export const api = {
     get<PmSearch>(`/polymarket/search?q=${encodeURIComponent(q)}`),
   polymarketWatch: (slugs: string[]) =>
     get<PmBoard>(`/polymarket/watch?slugs=${encodeURIComponent(slugs.slice(0, 20).join(","))}`),
+  eventCalendar: () => get<EventCalBoard>("/event/calendar"),
   commodityMinutes: (codes: string) =>
     get<Record<string, CommodityMinute | null>>(`/market/commodity-minutes?codes=${encodeURIComponent(codes)}`),
   spotTable: () => get<SpotTable>("/market/spot-table"),

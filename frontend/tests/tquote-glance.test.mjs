@@ -373,6 +373,35 @@ test("hideItmSide 藏实值侧, 夹档两边都留", () => {
   assert.equal(hideItmSide("call", 100, 105, [100, 110], true), false);
 });
 
+function tquoteMny(side, strike, fwd) {
+  if (fwd == null || strike === fwd) return null;
+  const itm = side === "call" ? strike < fwd : strike > fwd;
+  return itm ? "itm" : "otm";
+}
+
+function tquoteMnyBg(mny, selected) {
+  if (selected) return "bg-violet-500/20 hover:bg-violet-500/28";
+  if (mny === "itm") return "bg-[#160a0a] hover:bg-[#1e0c0c]";
+  if (mny === "otm") return "bg-[#0d1e16] hover:bg-[#143028]";
+  return "hover:bg-violet-500/10";
+}
+
+test("T表实值暗红底、虚值暗绿底, 选中仍紫", async () => {
+  assert.equal(tquoteMny("call", 90, 100), "itm");
+  assert.equal(tquoteMny("call", 110, 100), "otm");
+  assert.equal(tquoteMny("put", 110, 100), "itm");
+  assert.equal(tquoteMny("put", 90, 100), "otm");
+  assert.equal(tquoteMny("call", 100, 100), null);
+  assert.equal(tquoteMny("call", 90, null), null);
+  assert.match(tquoteMnyBg("itm"), /#160a0a/);
+  assert.match(tquoteMnyBg("otm"), /#0d1e16/);
+  assert.match(tquoteMnyBg("itm", true), /violet/);
+  const src = await readFile(new URL("../src/components/deriv/TQuotePanel.tsx", import.meta.url), "utf8");
+  assert.match(src, /export function tquoteMny/);
+  assert.match(src, /export function tquoteMnyBg/);
+  assert.doesNotMatch(src, /itm \? "bg-slate-800\/40"/);
+});
+
 function expMd(raw) {
   const s = String(raw ?? "").trim();
   const m = s.match(/^(\d{4})-?(\d{2})-?(\d{2})/);

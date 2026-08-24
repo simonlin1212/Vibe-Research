@@ -192,16 +192,25 @@ export function QuoteLine({
     : cn(
       "relative grid grid-cols-[minmax(4.5rem,1fr)_minmax(3rem,1.2fr)_4.2rem_3.1rem] items-center gap-1.5 rounded px-1.5 py-0.5 hover:bg-slate-800/40",
     );
-  const jump = useAllowKlineJump() ? href : undefined;
+  const jump = useAllowKlineJump() ? (href ?? klineHref(unit)) : undefined;
   if (jump) {
     return <Link to={jump} className={cls}>{bar}{inner}</Link>;
   }
   return <div className={cls}>{bar}{inner}</div>;
 }
 
+/** Chart peek id. Keep market prefix so sh000001 is not sz000001. */
+export function peekChartCode(raw: string): string {
+  const s = (raw || "").trim();
+  if (/^\d{6}$/.test(s)) return s;
+  const cn = s.match(/^(sh|sz|bj)(\d{6})$/i);
+  if (cn) return `${cn[1].toLowerCase()}${cn[2]}`;
+  const ext = s.match(/^(hk|us|wh|jp|ks)([A-Za-z0-9]+)$/i);
+  if (ext) return `${ext[1].toLowerCase()}${ext[2]}`;
+  return "";
+}
+
 export function klineHref(code?: string) {
-  if (!code) return undefined;
-  const digits = code.replace(/^(sh|sz|bj)/i, "");
-  if (!/^\d{6}$/.test(digits)) return undefined;
-  return `/a-share?tab=kline&code=${digits}`;
+  const id = peekChartCode(code || "");
+  return id ? `/a-share?code=${id}` : undefined;
 }

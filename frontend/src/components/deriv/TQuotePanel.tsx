@@ -94,6 +94,23 @@ export function undBracket(
   return null;
 }
 
+export type TQuoteMny = "itm" | "otm" | null;
+
+/** Call ITM = strike < fwd; put ITM = strike > fwd. ATM / no fwd stays null. */
+export function tquoteMny(side: "call" | "put", strike: number, fwd: number | null): TQuoteMny {
+  if (fwd == null || !Number.isFinite(fwd) || !Number.isFinite(strike) || strike === fwd) return null;
+  const itm = side === "call" ? strike < fwd : strike > fwd;
+  return itm ? "itm" : "otm";
+}
+
+/** Dark wash only. Selected stays violet. Text colors unchanged. */
+export function tquoteMnyBg(mny: TQuoteMny, selected?: boolean): string {
+  if (selected) return "bg-violet-500/20 hover:bg-violet-500/28";
+  if (mny === "itm") return "bg-[#160a0a] hover:bg-[#1e0c0c]";
+  if (mny === "otm") return "bg-[#0d1e16] hover:bg-[#143028]";
+  return "hover:bg-violet-500/10";
+}
+
 /** 隐藏实值侧: 夹档 (或 ATM 回落) 两边都留; 购实值=strike<fwd, 沽实值=strike>fwd. */
 export function hideItmSide(
   side: "call" | "put",
@@ -193,9 +210,9 @@ function fmtMove(up: number | null | undefined, dn: number | null | undefined): 
 }
 
 /** 单侧 4 格: 最新价贴行权价. call 右对齐 (IV Delta 持仓 最新价), put 左对齐反向. 整侧可点选. */
-function SideCells({ s, itm, side, selected, maxOi, oiMax, atmIv, onPick }: {
+function SideCells({ s, mny, side, selected, maxOi, oiMax, atmIv, onPick }: {
   s: OvlabTQuoteSide;
-  itm: boolean;
+  mny: TQuoteMny;
   side: "call" | "put";
   selected?: boolean;
   maxOi?: boolean;
@@ -208,9 +225,9 @@ function SideCells({ s, itm, side, selected, maxOi, oiMax, atmIv, onPick }: {
   const oi = num(s.oi);
   const oiChg = num(s.oiChg);
   const ivDiff = iv !== null && atmIv != null ? iv - atmIv : null;
-  const bg = selected ? "bg-violet-500/15" : itm ? "bg-slate-800/40" : undefined;
+  const bg = tquoteMnyBg(mny, selected);
   const alignCls = side === "call" ? "num" : "text-left tabular-nums";
-  const pickCls = onPick ? "cursor-pointer hover:bg-violet-500/10" : undefined;
+  const pickCls = onPick ? "cursor-pointer" : undefined;
   const px = num(s.price);
   const chg = num(s.pct);
   const chgPct = chg !== null ? chg * 100 : null;
@@ -572,8 +589,8 @@ export function TQuotePanel({ d, product, onProduct, pick, onPickContract }: {
             </thead>
             <tbody>
               {rows.map((s) => {
-                const callItm = fwd !== null && s.strike < fwd;
-                const putItm = fwd !== null && s.strike > fwd;
+                const callMny = tquoteMny("call", s.strike, fwd);
+                const putMny = tquoteMny("put", s.strike, fwd);
                 const hideCall = hideItmSide("call", s.strike, fwd, keepStrikes, hideItm);
                 const hidePut = hideItmSide("put", s.strike, fwd, keepStrikes, hideItm);
                 const mny = fwd !== null && fwd !== 0 ? ((s.strike / fwd) - 1) * 100 : null;
@@ -589,7 +606,7 @@ export function TQuotePanel({ d, product, onProduct, pick, onPickContract }: {
                     ) : (
                       <SideCells
                         s={s.call}
-                        itm={callItm}
+                        mny={callMny}
                         side="call"
                         selected={pick?.kind === "option" && pick.code === s.callCode}
                         maxOi={maxCall !== null && s.strike === maxCall}
@@ -609,7 +626,7 @@ export function TQuotePanel({ d, product, onProduct, pick, onPickContract }: {
                     ) : (
                       <SideCells
                         s={s.put}
-                        itm={putItm}
+                        mny={putMny}
                         side="put"
                         selected={pick?.kind === "option" && pick.code === s.putCode}
                         maxOi={maxPut !== null && s.strike === maxPut}

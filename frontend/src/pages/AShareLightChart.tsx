@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { Fragment, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import { FileText, Newspaper, Plus, Search, X } from "lucide-react";
 import { AShareLcPane } from "@/components/ashare/AShareLcPane";
@@ -13,7 +13,8 @@ import { createSeriesGate } from "@/lib/seriesGate";
 import { getAShareSession } from "@/lib/ashareSession";
 import { storageGet, storageSet } from "@/lib/storage";
 import { SuggestHits, useSuggestSearch } from "@/hooks/useSuggestSearch";
-import { addCodes, loadWatch, saveWatch, watchDigits } from "@/lib/watchlist";
+import { peekChartCode } from "@/components/cockpit/QuoteLine";
+import { addCodes, loadWatch, saveWatch, useWatchCodes, watchDigits } from "@/lib/watchlist";
 import { nextSort, type SortState } from "@/components/ovlab/shared";
 import { cmpVal, SortableHd } from "@/components/deriv/derivShared";
 import { cn } from "@/lib/utils";
@@ -69,6 +70,11 @@ const COLS: { key: ColKey; label: string; num?: boolean }[] = [
   { key: "pb", label: "PB", num: true },
 ];
 
+const BASIC_KEYS: ColKey[] = [
+  "code", "name", "price", "pct", "change", "amount", "turnover", "open", "high", "low",
+];
+const BASIC_COLS = COLS.filter((c) => BASIC_KEYS.includes(c.key));
+
 function colVal(key: ColKey, c: string, q: HubQuote | undefined): unknown {
   if (key === "code") return c;
   if (key === "name") return q?.name || c;
@@ -122,7 +128,23 @@ function vsPrev(v: number | null | undefined, prev: number | null | undefined) {
 
 function chgTone(v: number | null | undefined) {
   if (v == null || !Number.isFinite(v) || v === 0) return "text-muted-foreground";
-  return v > 0 ? "text-[#f6465d]" : "text-[#0ecb81]";
+  return v > 0 ? "text-[#ff2d2d]" : "text-[#00d26a]";
+}
+
+function basicTd(key: ColKey, c: string, q: HubQuote | undefined) {
+  const pct = q?.pct;
+  const chg = quoteChg(q);
+  if (key === "code") return <td className="code">{c}</td>;
+  if (key === "name") return <td className="name font-semibold">{q?.name || c}</td>;
+  if (key === "price") return <td className={cn("num", chgTone(pct))}>{fmtPrice(q?.price)}</td>;
+  if (key === "pct") return <td className={cn("num", chgTone(pct))}>{fmtPct(pct)}</td>;
+  if (key === "change") return <td className={cn("num", chgTone(chg))}>{fmtChg(chg)}</td>;
+  if (key === "amount") return <td className="num">{fmtVol(q?.amount)}</td>;
+  if (key === "turnover") return <td className="num">{fmtRate(q?.turnover)}</td>;
+  if (key === "open") return <td className={cn("num", chgTone(vsPrev(q?.open, q?.prev)))}>{fmtPrice(q?.open)}</td>;
+  if (key === "high") return <td className={cn("num", chgTone(vsPrev(q?.high, q?.prev)))}>{fmtPrice(q?.high)}</td>;
+  if (key === "low") return <td className={cn("num", chgTone(vsPrev(q?.low, q?.prev)))}>{fmtPrice(q?.low)}</td>;
+  return <td className="num">—</td>;
 }
 
 const MINUTE_DAYS_KEY = "ashare.minute.days";
@@ -180,21 +202,16 @@ function useAShareSeries(code: string, res: "1" | "5" | "1D", num: number) {
 export function AShareLightChart({
   seg = "kline",
   onSegChange,
+  embedded = false,
 }: {
   seg?: AShareChartSeg;
   onSegChange?: (seg: AShareChartSeg) => void;
+  embedded?: boolean;
 } = {}) {
   const [params, setParams] = useSearchParams();
-  const urlCode = (params.get("code") || "").trim().toUpperCase();
-  const [codes, setCodes] = useState<string[]>(() => {
-    const w = loadWatch();
-    if (urlCode && /^\d{6}$/.test(urlCode) && !w.includes(urlCode)) return [...w, urlCode];
-    return w;
-  });
-  const [selected, setSelected] = useState<string>(() => {
-    if (urlCode && /^\d{6}$/.test(urlCode)) return urlCode;
-    return loadWatch()[0] ?? "";
-  });
+  const urlCode = peekChartCode(params.get("code") || "");
+  const codes = useWatchCodes();
+  const [selected, setSelected] = useState<string>(() => urlCode || loadWatch()[0] || "");
   const [hint, setHint] = useState<string | null>(null);
   const search = useSuggestSearch({ skipCode: true });
   const [feedKind, setFeedKind] = useState<"filings" | "news">("filings");
@@ -202,7 +219,15 @@ export function AShareLightChart({
   const [minuteDays, setMinuteDays] = useState<1 | 2>(() => (storageGet(MINUTE_DAYS_KEY) === "2" ? 2 : 1));
   const listRef = useRef<HTMLDivElement>(null);
   const setSeg = (next: AShareChartSeg) => {
-    onSegChange?.(next);
+    if (onSegChange) {
+      onSegChange(next);
+      return;
+    }
+    const p = new URLSearchParams(params);
+    if (next === "kline") p.delete("tab");
+    else p.set("tab", next);
+    if (selected) p.set("code", selected);
+    setParams(p, { replace: true });
   };
   const pickStock = (c: string) => {
     setSelected(c);
@@ -217,9 +242,9 @@ export function AShareLightChart({
   }, []);
 
   const persist = (next: string[]) => {
-    setCodes(next);
     saveWatch(next);
-    if (selected && !next.includes(selected)) setSelected(next[0] ?? "");
+    const inWatch = Boolean(watchDigits(selected) && next.includes(selected));
+    if (selected && watchDigits(selected) && !inWatch) setSelected(next[0] ?? "");
     if (!selected && next[0]) setSelected(next[0]);
   };
 
@@ -261,7 +286,9 @@ export function AShareLightChart({
     persist(codes.filter((x) => x !== c));
   };
 
-  const quotes = useQuotes(codes);
+  const quotes = useQuotes(
+    selected && !codes.includes(selected) ? [...codes, selected] : codes,
+  );
   const [sort, setSort] = useState<SortState<Record<ColKey, unknown>>>({ key: null, dir: "desc" });
   const rows = useMemo(() => sortWatchCodes(codes, quotes, sort), [codes, quotes, sort]);
   const minute = useAShareSeries(selected, minuteDays === 2 ? "5" : "1", minuteDays === 2 ? 1000 : 240);
@@ -269,23 +296,27 @@ export function AShareLightChart({
   const wmName = minute.meta?.name || daily.meta?.name || (selected ? quotes[selected]?.name : "") || "";
 
   useEffect(() => {
-    if (!urlCode || !/^\d{6}$/.test(urlCode)) return;
-    if (urlCode !== selected) {
-      setSelected(urlCode);
-      setCodes((prev) => (prev.includes(urlCode) ? prev : [...prev, urlCode]));
-    }
+    if (!urlCode) return;
+    if (urlCode !== selected) setSelected(urlCode);
   }, [urlCode]); // eslint-disable-line react-hooks/exhaustive-deps -- only react to URL
 
   useEffect(() => {
     if (!selected) return;
-    const cur = (params.get("code") || "").trim().toUpperCase();
+    const cur = peekChartCode(params.get("code") || "");
+    if (embedded) {
+      if (cur === selected) return;
+      const p = new URLSearchParams(params);
+      p.set("code", selected);
+      setParams(p, { replace: true });
+      return;
+    }
     const tab = CHART_SEGS.includes(seg) ? seg : "kline";
     if (cur === selected && params.get("tab") === tab) return;
     const p = new URLSearchParams(params);
     p.set("tab", tab);
     p.set("code", selected);
     setParams(p, { replace: true });
-  }, [selected, seg]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selected, seg, embedded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const showKline = seg === "kline";
   useEffect(() => {
@@ -298,6 +329,169 @@ export function AShareLightChart({
     session.kind === "open" ? "border-primary/40 bg-primary/10 text-primary"
       : session.kind === "closed" ? "border-border/50 bg-muted/30 text-muted-foreground"
         : "border-border/40 bg-muted/20 text-muted-foreground/80";
+
+  const minuteExtra = (
+    <div className="flex items-center gap-0.5">
+      <span className="flex gap-0.5 rounded bg-white/[0.03] p-0.5 ring-1 ring-white/[0.06]">
+        {([[1, "分时"], [2, "两日"]] as const).map(([n, lab]) => (
+          <button
+            key={n}
+            type="button"
+            onClick={() => {
+              setMinuteDays(n);
+              storageSet(MINUTE_DAYS_KEY, String(n));
+            }}
+            className={cn(
+              "rounded px-1.5 py-0.5 text-[11px]",
+              minuteDays === n ? "bg-primary/15 text-primary" : "text-slate-500 hover:text-slate-300",
+            )}
+          >
+            {lab}
+          </button>
+        ))}
+      </span>
+      {selected ? (
+        <>
+          <button
+            type="button"
+            onClick={() => setSeg("detail")}
+            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-slate-400 hover:bg-white/[0.06] hover:text-slate-100"
+          >
+            <Search className="h-3 w-3" /> 详情
+          </button>
+          <button
+            type="button"
+            onClick={() => setSeg("feed")}
+            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-slate-400 hover:bg-white/[0.06] hover:text-slate-100"
+          >
+            <Newspaper className="h-3 w-3" /> 公告
+          </button>
+        </>
+      ) : null}
+    </div>
+  );
+
+  if (embedded) {
+    return (
+      <div className="flex h-full min-h-0">
+        <div className="flex w-[42%] min-w-[220px] shrink-0 flex-col border-r border-[#2a2a2a]">
+          <div className="flex shrink-0 items-center gap-1 px-1.5 py-1">
+            <div ref={search.boxRef} className="relative min-w-0 flex-1">
+              <input
+                value={search.q}
+                onChange={(e) => search.type(e.target.value)}
+                onFocus={() => search.hits.length && search.setOpen(true)}
+                onKeyDown={(e) => search.onKeyDown(e, (h) => addOne(h.code), addOne)}
+                placeholder="搜名称 / 拼音 / 代码"
+                className="h-6 w-full rounded bg-slate-800/60 px-2 text-[11px] text-slate-200 placeholder:text-[9px] placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-primary/50"
+              />
+              {search.open && (
+                <SuggestHits
+                  hits={search.hits}
+                  hi={search.hi}
+                  onPick={(h) => addOne(h.code)}
+                  className="absolute left-0 top-7 z-20 w-56 overflow-hidden rounded border border-border bg-card shadow-lg"
+                />
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={add}
+              className="inline-flex shrink-0 items-center gap-0.5 rounded bg-primary/15 px-1.5 py-0.5 text-[11px] text-primary hover:bg-primary/25"
+            >
+              <Plus className="h-3 w-3" /> 加
+            </button>
+          </div>
+          {hint ? <p className="px-1.5 text-[10px] text-slate-500">{hint}</p> : null}
+          <div ref={listRef} className="min-h-0 flex-1 overflow-auto">
+            {codes.length === 0 ? (
+              <p className="px-2 py-6 text-center text-[11px] text-slate-500">搜名称或代码加入自选</p>
+            ) : (
+              <table className="data-table dense">
+                <thead>
+                  <tr>
+                    {BASIC_COLS.map((h) => (
+                      <th key={h.key} className={h.num ? "num" : undefined}>
+                        <SortableHd
+                          k={h.key}
+                          label={h.label}
+                          sort={sort}
+                          onSort={(k) => setSort((s) => nextSort(s, k))}
+                          className={h.num ? "justify-end" : "justify-start"}
+                        />
+                      </th>
+                    ))}
+                    <th className="act" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((c) => {
+                    const q = quotes[c];
+                    return (
+                      <tr
+                        key={c}
+                        data-code={c}
+                        onClick={() => pickStock(c)}
+                        className={cn("cursor-pointer", c === selected && "!bg-primary/12")}
+                      >
+                        {BASIC_COLS.map((h) => (
+                          <Fragment key={h.key}>{basicTd(h.key, c, q)}</Fragment>
+                        ))}
+                        <td className="act">
+                          <span
+                            role="button"
+                            tabIndex={0}
+                            onClick={(e) => remove(c, e)}
+                            onKeyDown={(e) => { if (e.key === "Enter") remove(c); }}
+                            className="inline-flex rounded p-1 text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                            title="移除"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+        <div className="grid min-h-0 min-w-0 flex-1 grid-rows-2 gap-px bg-[#2a2a2a]">
+          <AShareLcPane
+            title="分时"
+            kind="minute"
+            code={selected}
+            name={wmName}
+            bars={minute.bars}
+            prevClose={minute.meta?.prev_close}
+            loading={minute.loading}
+            err={minute.err}
+            emptyHint="点左侧一只"
+            visible
+            days={minuteDays}
+            bare
+            extra={minuteExtra}
+            onRefresh={() => { void minute.reload(); }}
+          />
+          <AShareLcPane
+            title="日K"
+            kind="daily"
+            code={selected}
+            name={wmName}
+            bars={daily.bars}
+            prevClose={daily.meta?.prev_close}
+            loading={daily.loading}
+            err={daily.err}
+            emptyHint="点左侧一只"
+            visible
+            bare
+            onRefresh={() => { void daily.reload(); }}
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -452,46 +646,7 @@ export function AShareLightChart({
               emptyHint="先从左侧表格点一只"
               visible={showKline}
               days={minuteDays}
-              extra={(
-                <div className="flex items-center gap-0.5">
-                  <span className="flex gap-0.5 rounded bg-white/[0.03] p-0.5 ring-1 ring-white/[0.06]">
-                    {([[1, "分时"], [2, "两日"]] as const).map(([n, lab]) => (
-                      <button
-                        key={n}
-                        type="button"
-                        onClick={() => {
-                          setMinuteDays(n);
-                          storageSet(MINUTE_DAYS_KEY, String(n));
-                        }}
-                        className={cn(
-                          "rounded px-1.5 py-0.5 text-[11px]",
-                          minuteDays === n ? "bg-primary/15 text-primary" : "text-slate-500 hover:text-slate-300",
-                        )}
-                      >
-                        {lab}
-                      </button>
-                    ))}
-                  </span>
-                  {selected ? (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => setSeg("detail")}
-                        className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-slate-400 hover:bg-white/[0.06] hover:text-slate-100"
-                      >
-                        <Search className="h-3 w-3" /> 详情
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setSeg("feed")}
-                        className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-slate-400 hover:bg-white/[0.06] hover:text-slate-100"
-                      >
-                        <Newspaper className="h-3 w-3" /> 公告
-                      </button>
-                    </>
-                  ) : null}
-                </div>
-              )}
+              extra={minuteExtra}
               onRefresh={() => { void minute.reload(); }}
             />
             <AShareLcPane

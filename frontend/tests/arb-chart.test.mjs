@@ -15,8 +15,11 @@ test("SpreadChart 图容器首屏就挂着, pick 空不整卡 return", () => {
   assert.match(src, /useLcChart/);
   assert.match(src, /LcHoverTag/);
   assert.match(src, /useLcHoverTag/);
-  assert.match(src, /LineSeries/);
-  assert.match(src, /spreadLineOpts/);
+  assert.match(src, /CandlestickSeries/);
+  assert.match(src, /candleOpts/);
+  assert.match(src, /export function spreadOHLC/);
+  assert.doesNotMatch(src, /LineSeries/);
+  assert.doesNotMatch(src, /spreadLineOpts/);
   assert.doesNotMatch(src, /BaselineSeries/);
   assert.doesNotMatch(src, /baselineOpts/);
   assert.doesNotMatch(src, /echarts/);
@@ -67,7 +70,7 @@ function parseDaily(raw) {
 
 test("ovlab 日K trade_date=YYYYMMDD, 不能用 length>=10 丢掉", () => {
   assert.match(src, /export function dayKey/);
-  assert.match(src, /function parseDaily[\s\S]*dayKey/);
+  assert.match(src, /function parseHist[\s\S]*dayKey/);
   assert.doesNotMatch(src, /t\.length >= 10 && c != null/);
   const bars = parseDaily([
     { ts_code: "IF2609.CFX", trade_date: "20260119", close: 4633.8, open: 4634.0 },
@@ -158,4 +161,37 @@ test("分时同钟点取更新的一根, 周日夜盘盖住上周五夜盘", () 
   const later = "2026-08-23 21:01:00";
   const earlier = "2026-08-21 21:01:00";
   assert.ok(later > earlier);
+});
+
+function spreadOHLC(L, R, m = 1) {
+  const open = L.o - R.o * m;
+  const close = L.c - R.c * m;
+  const high = L.h - R.l * m;
+  const low = L.l - R.h * m;
+  return {
+    open,
+    close,
+    high: Math.max(high, open, close),
+    low: Math.min(low, open, close),
+  };
+}
+
+test("价差K由两腿OHLC合成, 高低夹住开收", () => {
+  const s = spreadOHLC(
+    { t: "d", o: 100, h: 110, l: 90, c: 105 },
+    { t: "d", o: 50, h: 55, l: 45, c: 52 },
+  );
+  assert.equal(s.open, 50);
+  assert.equal(s.close, 53);
+  assert.equal(s.high, 65);
+  assert.equal(s.low, 35);
+  const tight = spreadOHLC(
+    { t: "d", o: 10, h: 10, l: 10, c: 10 },
+    { t: "d", o: 10, h: 12, l: 8, c: 11 },
+  );
+  // raw high 10-8=2, raw low 10-12=-2; open 0 close -1 -> clamp still 2 / -2
+  assert.equal(tight.open, 0);
+  assert.equal(tight.close, -1);
+  assert.equal(tight.high, 2);
+  assert.equal(tight.low, -2);
 });

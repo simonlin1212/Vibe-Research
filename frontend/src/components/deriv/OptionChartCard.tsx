@@ -11,9 +11,9 @@ import type { OptionPick } from "./TQuotePanel";
 import type { OvlabDataviewTick, OvlabFlowAlert, OvlabOptionDailyBar } from "@/lib/api";
 import { derivSession } from "./derivShared";
 import {
-  BaselineSeries, CandlestickSeries, HistogramSeries, LineSeries, UP, DN, applyTimeLabels,
-  baselineOpts, candleOpts, candleValues, finiteLine, fmtPx, hoverIdxFromParam, lcTime,
-  ensureUpDown, lineValues, overlayLineOpts, paintCandles, paintHist, paintLine, paintUpDown,
+  CandlestickSeries, HistogramSeries, LineSeries, UP, DN, applyTimeLabels,
+  candleOpts, candleValues, finiteLine, fmtPx, hoverIdxFromParam, lcTime,
+  ensureUpDown, lineValues, minuteLineOpts, overlayLineOpts, paintCandles, paintHist, paintLine, paintUpDown,
   priceFormatOf, seriesAlive, setPaneWatermark, setRefPriceLine, setSeriesMarks, showLatest,
   showSession, sparseLine, styleIvOverlay, styleLastTag, styleOiPane,
   styleVolPane, useLcChart, useLcHoverTag, volPaneOpts, volUp, volValues, wipeLc, guardLc, IV_COLOR, OI_COLOR,
@@ -369,7 +369,7 @@ export function OptionChartCard({ pick, mode, tick, alerts = NO_ALERTS }: {
   const live = derivSession().live;
   const bag = useRef<{
     kind: "daily" | "minute" | null;
-    px: ISeriesApi<"Candlestick"> | ISeriesApi<"Baseline"> | null;
+    px: ISeriesApi<"Candlestick"> | ISeriesApi<"Line"> | null;
     iv: ISeriesApi<"Line"> | null;
     vol: ISeriesApi<"Histogram"> | null;
     oi: ISeriesApi<"Line"> | null;
@@ -563,7 +563,7 @@ export function OptionChartCard({ pick, mode, tick, alerts = NO_ALERTS }: {
     const baseline = pre !== null && pre > 0 ? pre : finite[0];
     if (bag.current.kind !== "minute" || !seriesAlive(chart, bag.current.px)) {
       reset();
-      bag.current.px = chart.addSeries(BaselineSeries, baselineOpts(baseline, true, fmt));
+      bag.current.px = chart.addSeries(LineSeries, minuteLineOpts(fmt));
       bag.current.iv = chart.addSeries(LineSeries, overlayLineOpts(IV_COLOR, "iv"));
       bag.current.vol = chart.addSeries(HistogramSeries, volPaneOpts(), 1);
       bag.current.oi = chart.addSeries(LineSeries, overlayLineOpts(OI_COLOR, "oi"), 1);
@@ -572,11 +572,11 @@ export function OptionChartCard({ pick, mode, tick, alerts = NO_ALERTS }: {
       styleOiPane(chart);
       styleIvOverlay(chart, 0.08);
     } else {
-      (bag.current.px as ISeriesApi<"Baseline">).applyOptions({ ...baselineOpts(baseline, true, fmt) });
+      bag.current.px?.applyOptions({ ...minuteLineOpts(fmt) });
     }
     const pxPts = sparseLine(prices);
     const lastOnly = paintLine(
-      bag.current.px as ISeriesApi<"Baseline">,
+      bag.current.px as ISeriesApi<"Line">,
       pxPts,
       bag.current.paintedPx as Array<LineData | WhitespaceData> | null,
     );
@@ -603,7 +603,7 @@ export function OptionChartCard({ pick, mode, tick, alerts = NO_ALERTS }: {
       const up = volUp(px, minData?.opens[i] ?? null, prevPx);
       if (px != null) prevPx = px;
       return { value: v, up };
-    }), true);
+    }), false);
     if (bag.current.vol) {
       paintHist(bag.current.vol, volPts, bag.current.paintedVol);
       bag.current.paintedVol = volPts;
@@ -627,12 +627,6 @@ export function OptionChartCard({ pick, mode, tick, alerts = NO_ALERTS }: {
     if (!lastOnly) showSession(chart, cats.length);
   };
 
-  const latestPx = mode === "daily"
-    ? (dailyBars[dailyBars.length - 1]?.close ?? null)
-    : (() => {
-        const i = lastFiniteIdx(minData?.prices ?? [], null);
-        return i != null ? (minData?.prices[i] ?? null) : null;
-      })();
   const hoverPx = hover == null ? null : (
     mode === "daily"
       ? (dailyBars[hover]?.close ?? null)
@@ -641,10 +635,22 @@ export function OptionChartCard({ pick, mode, tick, alerts = NO_ALERTS }: {
           return i != null ? (minData?.prices[i] ?? null) : null;
         })()
   );
+  const hoverRef = hover == null ? null : (
+    mode === "daily"
+      ? (hover > 0 ? dailyBars[hover - 1]?.close ?? null : null)
+      : (() => {
+          const i = lastFiniteIdx(minData?.prices ?? [], hover);
+          if (i == null) return null;
+          const t = minData?.cats[i] ?? "";
+          const td = t ? tradingDayOf(t) : "";
+          const pre = (td && minData?.preByTd[td]) || minData?.pre;
+          return pre != null && Number.isFinite(pre) ? pre : null;
+        })()
+  );
   const { tag: hoverTag, y: tagY } = useLcHoverTag(
     () => bag.current.px,
     hover != null ? hoverPx : null,
-    latestPx,
+    hoverRef,
     (v) => fmtPx(v, pick?.und),
     hover,
   );
@@ -663,7 +669,7 @@ export function OptionChartCard({ pick, mode, tick, alerts = NO_ALERTS }: {
           pct !== null ? `${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%` : "",
           iv != null ? `IV ${iv.toFixed(0)}` : "",
         ].filter(Boolean).join("  "),
-        toneCls: pct === null ? "text-slate-400" : pct >= 0 ? "text-[#f6465d]" : "text-[#0ecb81]",
+        toneCls: pct === null ? "text-slate-400" : pct >= 0 ? "text-[#ff2d2d]" : "text-[#00d26a]",
       };
       glanceLegend.push(
         { k: "O", v: fmtPx(b.open, pick.und) },
@@ -697,7 +703,7 @@ export function OptionChartCard({ pick, mode, tick, alerts = NO_ALERTS }: {
               vol != null ? `量 ${fmtOi(vol)}` : "",
               oi != null ? `仓 ${fmtOi(oi)}` : "",
             ].filter(Boolean).join("  "),
-            toneCls: pct === null ? "text-slate-400" : pct >= 0 ? "text-[#f6465d]" : "text-[#0ecb81]",
+            toneCls: pct === null ? "text-slate-400" : pct >= 0 ? "text-[#ff2d2d]" : "text-[#00d26a]",
           };
           glanceLegend.push(
             { k: "P", v: fmtPx(px, pick.und), tone: lcTone(pct) },

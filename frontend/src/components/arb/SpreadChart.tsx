@@ -2,25 +2,57 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { usePolling } from "@/hooks/usePolling";
 import { num } from "@/components/ovlab/shared";
-import { parseMinute } from "@/components/deriv/OptionChartCard";
 import { loadLightKline } from "@/lib/lightKline";
 import {
   concatDaySlots, hmOf, kindOfUnd, lastFiniteIdx, tradingDayOf, tradingDaysOf,
 } from "@/lib/derivMinuteAxis";
 import {
-  LineSeries, applyTimeLabels, ensureUpDown, lineValues, paintUpDown, seriesAlive,
-  setPaneWatermark, setRefPriceLine, sparseLine, spreadLineOpts,
+  CandlestickSeries, applyTimeLabels, candleOpts, lcTime, seriesAlive,
+  setPaneWatermark, setRefPriceLine, styleLastTag,
   useLcChart, useLcHoverTag, wipeLc,
-  type IPriceLine, type ISeriesApi, type ISeriesUpDownMarkerPluginApi, type ITextWatermarkPluginApi,
-  type LineData, type Time,
+  type CandlestickData, type IPriceLine, type ISeriesApi, type ITextWatermarkPluginApi,
+  type Time, type WhitespaceData,
 } from "@/lib/lcChart";
 import { LcHoverTag, LcLegend, LcSeg, LcWell, lcTone } from "@/components/ui/LcFrame";
-import { chgClass, signed, type ArbPick } from "./arbShared";
+import { chgClass, fmtPx, signed, type ArbPick } from "./arbShared";
 import { cn } from "@/lib/utils";
 
 type Mode = "minute" | "daily";
 
-type Pt = { t: string; c: number };
+type Pt = { t: string; o: number; h: number; l: number; c: number };
+type Ohlc = { open: number; high: number; low: number; close: number };
+
+function barOf(
+  t: string,
+  o: number | null,
+  h: number | null,
+  l: number | null,
+  c: number | null,
+): Pt | null {
+  if (!t || c == null || !Number.isFinite(c)) return null;
+  const open = o != null && Number.isFinite(o) ? o : c;
+  const high = h != null && Number.isFinite(h) ? Math.max(h, open, c) : Math.max(open, c);
+  const low = l != null && Number.isFinite(l) ? Math.min(l, open, c) : Math.min(open, c);
+  return { t, o: open, h: high, l: low, c };
+}
+
+/** Left minus right. High/low use the max/min spread of the two ranges. */
+export function spreadOHLC(L: Pt, R: Pt, m = 1): Ohlc {
+  const open = L.o - R.o * m;
+  const close = L.c - R.c * m;
+  const high = L.h - R.l * m;
+  const low = L.l - R.h * m;
+  return {
+    open,
+    close,
+    high: Math.max(high, open, close),
+    low: Math.min(low, open, close),
+  };
+}
+
+function candlePts(bars: Array<Ohlc | null>): Array<CandlestickData | WhitespaceData> {
+  return bars.map((b, i) => (b ? { time: lcTime(i), ...b } : { time: lcTime(i) }));
+}
 
 /** OpenVlab 近 2 日窗口周一早盘不含周五, 也不回周日夜盘. 5 日才能对齐上一交易日. */
 const MINUTE_LOOKBACK = 5 * 86400;
@@ -29,8 +61,8 @@ function defaultMode(kind: ArbPick["kind"] | undefined): Mode {
   return kind === "cal" ? "minute" : "daily";
 }
 
-/** Latest close per HH:MM so Sunday night wins over the previous Friday night. */
-function clockLast(pts: Pt[]): Map<string, number> {
+/** Latest bar per HH:MM so Sunday night wins over the previous Friday night. */
+function clockLast(pts: Pt[]): Map<string, Pt> {
   const best = new Map<string, Pt>();
   for (const p of pts) {
     const hm = hmOf(p.t);
@@ -38,9 +70,7 @@ function clockLast(pts: Pt[]): Map<string, number> {
     const prev = best.get(hm);
     if (!prev || p.t > prev.t) best.set(hm, p);
   }
-  const out = new Map<string, number>();
-  for (const [hm, p] of best) out.set(hm, p.c);
-  return out;
+  return best;
 }
 
 /** Last trading day that both legs printed. Empty -> no overlap. */
@@ -57,9 +87,9 @@ export function joinSpreadMinute(
   right: Pt[],
   und: string,
   mult = 1,
-): { cats: string[]; vals: Array<number | null> } {
+): { cats: string[]; candles: Array<Ohlc | null> } {
   const td = lastOverlapDay(left, right);
-  if (!td) return { cats: [], vals: [] };
+  if (!td) return { cats: [], candles: [] };
   const leftD = left.filter((p) => tradingDayOf(p.t) === td);
   const rightD = right.filter((p) => tradingDayOf(p.t) === td);
   const times = [...leftD, ...rightD].map((p) => p.t);
@@ -67,14 +97,14 @@ export function joinSpreadMinute(
   const { cats } = concatDaySlots([td], kind);
   const byL = clockLast(leftD);
   const byR = clockLast(rightD);
-  const vals = cats.map((slot) => {
+  const candles = cats.map((slot) => {
     const hm = hmOf(slot);
     const a = byL.get(hm);
     const r = byR.get(hm);
-    if (a == null || r == null) return null;
-    return a - r * mult;
+    if (!a || !r) return null;
+    return spreadOHLC(a, r, mult);
   });
-  return { cats, vals };
+  return { cats, candles };
 }
 
 /** Unwrap ovlab history: {data: bars} or a bare bar array. */
@@ -95,37 +125,37 @@ export function dayKey(t: unknown): string {
   return "";
 }
 
-function parseDaily(raw: unknown): Pt[] {
+function parseHist(raw: unknown, daily: boolean): Pt[] {
   if (!Array.isArray(raw)) return [];
   const out: Pt[] = [];
   for (const b of raw) {
     if (Array.isArray(b) && b.length >= 2) {
-      const t = dayKey(b[0]);
-      const c = num(b[1]);
-      if (t && c != null) out.push({ t, c });
+      const t = daily ? dayKey(b[0]) : String(b[0] ?? "");
+      const bar = barOf(t, num(b[4]), num(b[5]), num(b[6]), num(b[1]));
+      if (bar) out.push(bar);
       continue;
     }
     if (b && typeof b === "object") {
       const o = b as Record<string, unknown>;
-      const t = dayKey(o.trade_date ?? o.datetime ?? o.date);
-      const c = num(o.close);
-      if (t && c != null) out.push({ t, c });
+      const rawT = o.trade_date ?? o.datetime ?? o.date;
+      const t = daily ? dayKey(rawT) : String(rawT ?? "");
+      const bar = barOf(t, num(o.open), num(o.high), num(o.low), num(o.close));
+      if (bar) out.push(bar);
     }
   }
   return out;
 }
 
 function parseLight(
-  bars: Array<{ datetime?: string; close?: number }> | undefined,
+  bars: Array<{ datetime?: string; open?: number; high?: number; low?: number; close?: number }> | undefined,
   daily: boolean,
 ): Pt[] {
   const out: Pt[] = [];
   for (const b of bars ?? []) {
     const raw = String(b.datetime ?? "");
     const t = daily ? dayKey(raw) : raw;
-    const c = num(b.close);
-    if (!t || c == null) continue;
-    out.push({ t, c });
+    const bar = barOf(t, num(b.open), num(b.high), num(b.low), num(b.close));
+    if (bar) out.push(bar);
   }
   return out;
 }
@@ -134,10 +164,10 @@ async function loadFut(code: string, mode: Mode): Promise<Pt[]> {
   const now = Math.floor(Date.now() / 1000);
   if (mode === "daily") {
     const kl = await api.ovlabKlineHistory(code, "1D", now - 180 * 86400, now);
-    return parseDaily(klineBars(kl?.data ?? kl));
+    return parseHist(klineBars(kl?.data ?? kl), true);
   }
   const kl = await api.ovlabKlineHistory(code, "1", now - MINUTE_LOOKBACK, now);
-  return parseMinute(klineBars(kl?.data ?? kl)).map((b) => ({ t: b.t, c: b.close }));
+  return parseHist(klineBars(kl?.data ?? kl), false);
 }
 
 async function loadCash(code: string, mode: Mode): Promise<Pt[]> {
@@ -151,12 +181,9 @@ export function SpreadChart({ pick }: { pick: ArbPick | null }) {
     setMode(defaultMode(pick?.kind));
   }, [pick?.kind, pick?.key]);
   const { ref, chartRef, labelsRef, onHoverRef } = useLcChart();
-  const seriesRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const refLine = useRef<IPriceLine | null>(null);
   const wmRef = useRef<ITextWatermarkPluginApi<Time> | null>(null);
-  const tickRef = useRef<ISeriesApi<"Line"> | null>(null);
-  const udRef = useRef<ISeriesUpDownMarkerPluginApi<Time> | null>(null);
-  const paintedTick = useRef<LineData[] | null>(null);
   const [hover, setHover] = useState<number | null>(null);
   onHoverRef.current = setHover;
 
@@ -179,30 +206,32 @@ export function SpreadChart({ pick }: { pick: ArbPick | null }) {
     if (!d || !pick || d.key !== pick.key) return null;
     const mult = d.mult;
     if (mode === "daily") {
-      const byR = new Map<string, number>();
+      const byR = new Map<string, Pt>();
       for (const p of d.right) {
         const k = dayKey(p.t);
-        if (k) byR.set(k, p.c);
+        if (k) byR.set(k, p);
       }
       const cats: string[] = [];
-      const vals: Array<number | null> = [];
+      const candles: Array<Ohlc | null> = [];
       for (const p of d.left) {
         const day = dayKey(p.t);
         if (!day) continue;
         const r = byR.get(day);
         cats.push(day);
-        vals.push(r == null ? null : p.c - r * mult);
+        candles.push(r ? spreadOHLC(p, r, mult) : null);
       }
-      return { cats, vals };
+      return { cats, candles };
     }
     return joinSpreadMinute(d.left, d.right, pick.leftUnd, mult);
   }, [poll.data, pick, mode]);
 
-  const last = useMemo(() => {
-    if (!frame) return null;
-    const i = lastFiniteIdx(frame.vals, null);
-    return i == null ? null : frame.vals[i] ?? null;
-  }, [frame]);
+  const closes = useMemo(
+    () => frame?.candles.map((b) => (b && Number.isFinite(b.close) ? b.close : null)) ?? [],
+    [frame],
+  );
+  const lastIdx = useMemo(() => lastFiniteIdx(closes, null), [closes]);
+  const lastBar = lastIdx != null && frame ? frame.candles[lastIdx] : null;
+  const last = lastBar?.close ?? null;
 
   useEffect(() => { setHover(null); }, [pick?.key, mode]);
 
@@ -214,44 +243,53 @@ export function SpreadChart({ pick }: { pick: ArbPick | null }) {
       wipeLc(chart);
       seriesRef.current = null;
       refLine.current = null;
-      tickRef.current = null;
-      udRef.current = null;
-      paintedTick.current = null;
       labelsRef.current = [];
       return;
     }
     labelsRef.current = frame.cats;
     applyTimeLabels(chart, labelsRef, mode === "daily" ? "md" : "hm");
-    if (!seriesAlive(chart, seriesRef.current) || seriesRef.current?.seriesType() !== "Line") {
+    if (!seriesAlive(chart, seriesRef.current) || seriesRef.current?.seriesType() !== "Candlestick") {
       if (seriesAlive(chart, seriesRef.current) && seriesRef.current) {
         try { chart.removeSeries(seriesRef.current); } catch { /* already gone */ }
       }
-      seriesRef.current = chart.addSeries(LineSeries, spreadLineOpts());
-      tickRef.current = null;
-      udRef.current = null;
+      seriesRef.current = chart.addSeries(CandlestickSeries, candleOpts());
     } else {
-      seriesRef.current!.applyOptions(spreadLineOpts());
+      seriesRef.current!.applyOptions(candleOpts());
     }
-    const pxPts = sparseLine(frame.vals);
+    const pxPts = candlePts(frame.candles);
     seriesRef.current!.setData(pxPts);
-    const tickPts = lineValues(pxPts);
-    paintUpDown(ensureUpDown(chart, tickRef, udRef), tickPts, paintedTick.current);
-    paintedTick.current = tickPts;
-    setRefPriceLine(seriesRef.current, refLine, null);
+    const lastI = lastFiniteIdx(frame.candles.map((b) => b?.close ?? null), null);
+    const lastC = lastI != null ? frame.candles[lastI] : null;
+    let prevClose: number | null = null;
+    if (lastI != null) {
+      for (let j = lastI - 1; j >= 0; j--) {
+        const c = frame.candles[j]?.close;
+        if (c != null && Number.isFinite(c)) { prevClose = c; break; }
+      }
+    }
+    styleLastTag(seriesRef.current, lastC?.close, lastC?.open);
+    setRefPriceLine(seriesRef.current, refLine, prevClose);
     setPaneWatermark(chart, wmRef, pick?.label ?? "", 72);
     chart.timeScale().fitContent();
   }, [frame, mode, pick?.label, chartRef, labelsRef]);
 
   const loading = Boolean(pick) && !frame && !poll.error;
-  const empty = Boolean(pick && frame && frame.vals.every((v) => v == null));
-  const hoverIdx = frame ? lastFiniteIdx(frame.vals, hover) : null;
-  const hoverVal = hoverIdx == null || !frame ? last : (frame.vals[hoverIdx] ?? last);
+  const empty = Boolean(pick && frame && frame.candles.every((v) => v == null));
+  const hoverIdx = lastFiniteIdx(closes, hover);
+  const hoverBar = hoverIdx != null && frame ? frame.candles[hoverIdx] : lastBar;
   const hoverT = hoverIdx == null || !frame ? "" : frame.cats[hoverIdx];
-  const hoverPx = hover != null && hoverIdx != null && frame ? (frame.vals[hoverIdx] ?? null) : null;
+  const hoverPx = hover != null && hoverIdx != null ? (hoverBar?.close ?? null) : null;
+  let hoverRef: number | null = null;
+  if (hoverIdx != null) {
+    for (let j = hoverIdx - 1; j >= 0; j--) {
+      const c = closes[j];
+      if (c != null && Number.isFinite(c)) { hoverRef = c; break; }
+    }
+  }
   const { tag: hoverTag, y: tagY } = useLcHoverTag(
     () => seriesRef.current,
     hoverPx,
-    last,
+    hoverRef,
     (v) => signed(v),
     hover,
   );
@@ -292,8 +330,11 @@ export function SpreadChart({ pick }: { pick: ArbPick | null }) {
           <div className="absolute inset-0 z-10 flex items-center justify-center text-[11px] text-slate-500">无重叠点</div>
         ) : null}
         <LcLegend
-          items={hoverVal != null ? [
-            { k: "Δ", v: signed(hoverVal), tone: lcTone(hoverVal) },
+          items={hoverBar ? [
+            { k: "O", v: fmtPx(hoverBar.open) },
+            { k: "H", v: fmtPx(hoverBar.high) },
+            { k: "L", v: fmtPx(hoverBar.low) },
+            { k: "C", v: signed(hoverBar.close), tone: lcTone(hoverBar.close - (hoverRef ?? hoverBar.open)) },
             ...(hoverT ? [{ k: "T", v: mode === "daily" ? hoverT : (hoverT.slice(11, 16) || hoverT), tone: "muted" as const }] : []),
           ] : []}
         />

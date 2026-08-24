@@ -8,11 +8,12 @@ import {
 } from "@/lib/derivMinuteAxis";
 import { cn } from "@/lib/utils";
 import {
-  BaselineSeries, CandlestickSeries, HistogramSeries, applyTimeLabels, barOpenForVol,
-  baselineOpts, candleOpts, candleValues, ensureUpDown, lcTime, lineValues, paintCandles,
-  paintHist, paintLine, paintUpDown, resizeLc, seriesAlive, setLogScale, setPaneWatermark,
-  setRefPriceLine, setSeriesMarks, showLatest, showSession, sparseLine, styleLastTag,
-  sinceNowPct, styleVolPane, useLcChart, useLcHoverTag, volPaneOpts, volUp, volValues, wipeLc,
+  CandlestickSeries, HistogramSeries, LineSeries, MA_COLORS, MA_PERIODS, applyTimeLabels,
+  barOpenForVol, candleOpts, candleValues, ensureUpDown, lcTime, lineValues,
+  minuteLineOpts, overlayLineOpts, paintCandles, paintHist, paintLine, paintUpDown, resizeLc,
+  seriesAlive, setLogScale, setPaneWatermark, setRefPriceLine, setSeriesMarks, showLatest,
+  showSession, sma, sparseLine, styleLastTag, styleVolPane, useLcChart,
+  useLcHoverTag, volPaneOpts, volUp, volValues, wipeLc,
   type CandlestickData, type HistogramData, type IPriceLine, type ISeriesApi,
   type ISeriesMarkersPluginApi, type ISeriesUpDownMarkerPluginApi, type ITextWatermarkPluginApi,
   type LineData, type Time, type WhitespaceData,
@@ -60,6 +61,8 @@ export function AShareLcPane({
   extra,
   onRefresh,
   days = 1,
+  bare = false,
+  className,
 }: {
   title: string;
   kind: "minute" | "daily";
@@ -74,16 +77,23 @@ export function AShareLcPane({
   extra?: ReactNode;
   onRefresh: () => void;
   days?: 1 | 2;
+  bare?: boolean;
+  className?: string;
 }) {
   const { ref: chartRef, chartRef: lcRef, labelsRef, onHoverRef } = useLcChart();
   const bag = useRef<{
-    kind: "candle" | "baseline" | null;
-    main: ISeriesApi<"Candlestick"> | ISeriesApi<"Baseline"> | null;
+    kind: "candle" | "line" | null;
+    main: ISeriesApi<"Candlestick"> | ISeriesApi<"Line"> | null;
     vol: ISeriesApi<"Histogram"> | null;
+    mas: Array<ISeriesApi<"Line">> | null;
     paintedTick: LineData[] | null;
     paintedPx: Array<LineData | WhitespaceData> | CandlestickData[] | null;
     paintedVol: Array<HistogramData | WhitespaceData> | null;
-  }>({ kind: null, main: null, vol: null, paintedTick: null, paintedPx: null, paintedVol: null });
+    paintedMa: Array<Array<LineData | WhitespaceData>> | null;
+  }>({
+    kind: null, main: null, vol: null, mas: null,
+    paintedTick: null, paintedPx: null, paintedVol: null, paintedMa: null,
+  });
   const refLine = useRef<IPriceLine | null>(null);
   const wmRef = useRef<ITextWatermarkPluginApi<Time> | null>(null);
   const tickRef = useRef<ISeriesApi<"Line"> | null>(null);
@@ -104,7 +114,10 @@ export function AShareLcPane({
     if (!chart) return;
     const wipeBag = () => {
       wipeLc(chart);
-      bag.current = { kind: null, main: null, vol: null, paintedTick: null, paintedPx: null, paintedVol: null };
+      bag.current = {
+        kind: null, main: null, vol: null, mas: null,
+        paintedTick: null, paintedPx: null, paintedVol: null, paintedMa: null,
+      };
       refLine.current = null;
       wmRef.current = null;
       tickRef.current = null;
@@ -123,16 +136,23 @@ export function AShareLcPane({
       return;
     }
     try {
-      const seriesKind = isDaily ? "candle" as const : "baseline" as const;
+      const seriesKind = isDaily ? "candle" as const : "line" as const;
       const finitePx = bars.map((b) => b.close).filter((v) => Number.isFinite(v));
       const baseline = (!isDaily && prevClose != null && Number.isFinite(prevClose))
         ? Number(prevClose)
         : (finitePx[0] ?? 0);
-      if (bag.current.kind !== seriesKind || !seriesAlive(chart, bag.current.main) || !seriesAlive(chart, bag.current.vol)) {
+      const needWipe = bag.current.kind !== seriesKind
+        || !seriesAlive(chart, bag.current.main)
+        || !seriesAlive(chart, bag.current.vol)
+        || (isDaily && !bag.current.mas?.[0]);
+      if (needWipe) {
         wipeBag();
-        bag.current.main = isDaily
-          ? chart.addSeries(CandlestickSeries, candleOpts())
-          : chart.addSeries(BaselineSeries, baselineOpts(baseline));
+        if (isDaily) {
+          bag.current.main = chart.addSeries(CandlestickSeries, candleOpts());
+          bag.current.mas = MA_PERIODS.map((n) => chart.addSeries(LineSeries, overlayLineOpts(MA_COLORS[n], "right")));
+        } else {
+          bag.current.main = chart.addSeries(LineSeries, minuteLineOpts());
+        }
         bag.current.vol = chart.addSeries(HistogramSeries, volPaneOpts(), 1);
         bag.current.kind = seriesKind;
         styleVolPane(chart, isDaily ? 0.22 : 0.24);
@@ -161,6 +181,15 @@ export function AShareLcPane({
           paintHist(bag.current.vol, volPts, bag.current.paintedVol);
           bag.current.paintedVol = volPts;
         }
+        const closes = bars.map((b) => b.close);
+        const paintedMa: Array<Array<LineData | WhitespaceData>> = [];
+        bag.current.mas?.forEach((s, i) => {
+          const n = MA_PERIODS[i];
+          const pts = sparseLine(sma(closes, n));
+          paintLine(s, pts, bag.current.paintedMa?.[i] ?? null);
+          paintedMa.push(pts);
+        });
+        bag.current.paintedMa = paintedMa;
         if (!lastOnly) showLatest(chart, bars.length, VIEW_DAYS);
         return;
       }
@@ -170,17 +199,16 @@ export function AShareLcPane({
       const prices = padded.map((b) => (b && Number.isFinite(b.close) ? b.close : null));
       labelsRef.current = cats;
       applyTimeLabels(chart, labelsRef, days === 2 ? "mdhm" : "hm");
-      const bl = bag.current.main as ISeriesApi<"Baseline">;
-      bl.applyOptions(baselineOpts(baseline));
+      const ln = bag.current.main as ISeriesApi<"Line">;
       const pxPts = sparseLine(prices);
-      const lastOnly = paintLine(bl, pxPts, bag.current.paintedPx as Array<LineData | WhitespaceData> | null);
+      const lastOnly = paintLine(ln, pxPts, bag.current.paintedPx as Array<LineData | WhitespaceData> | null);
       bag.current.paintedPx = pxPts;
       const tickPts = lineValues(pxPts);
       paintUpDown(ensureUpDown(chart, tickRef, udRef), tickPts, bag.current.paintedTick);
       bag.current.paintedTick = tickPts;
       const lastI = lastFiniteIdx(prices, null);
-      styleLastTag(bl, lastI != null ? prices[lastI] : null, baseline);
-      setRefPriceLine(bl, refLine, baseline > 0 ? baseline : null);
+      styleLastTag(ln, lastI != null ? prices[lastI] : null, baseline);
+      setRefPriceLine(ln, refLine, baseline > 0 ? baseline : null);
       setLogScale(chart, false);
       let prevPx: number | null = baseline > 0 ? baseline : null;
       const volPts = volValues(padded.map((b) => {
@@ -193,7 +221,7 @@ export function AShareLcPane({
         paintHist(bag.current.vol, volPts, bag.current.paintedVol);
         bag.current.paintedVol = volPts;
       }
-      setSeriesMarks(bl, marksRef, sessionMarkIdxs(cats).map((m) => ({
+      setSeriesMarks(ln, marksRef, sessionMarkIdxs(cats).map((m) => ({
         time: lcTime(m.i),
         position: "aboveBar" as const,
         shape: "circle" as const,
@@ -240,26 +268,25 @@ export function AShareLcPane({
   }
   const base = isDaily ? (prevBar?.close ?? null) : (dayPrev ?? prevClose ?? null);
   const chg = bar && base != null ? bar.close - base : null;
-  const latestPx = isDaily
-    ? (bars[bars.length - 1]?.close ?? null)
-    : (() => {
-        const px = (minute?.padded ?? bars).map((b) => (b && Number.isFinite(b.close) ? b.close : null));
-        const i = lastFiniteIdx(px, null);
-        return i != null ? px[i] : null;
-      })();
-  const since = bar ? sinceNowPct(bar.close, latestPx) : null;
-  const showSince = since != null && Math.abs(since) >= 1e-12;
   const { tag: hoverTag, y: tagY } = useLcHoverTag(
     () => bag.current.main,
     hoverIdx != null ? (bar?.close ?? null) : null,
-    latestPx,
+    base,
     undefined,
     hoverIdx,
   );
 
+  const maTone: Record<(typeof MA_PERIODS)[number], LcLegendItem["tone"]> = {
+    5: "flat",
+    10: "px",
+    20: "iv",
+    60: "down",
+  };
   const legend: LcLegendItem[] = [];
   if (bar) {
     if (isDaily) {
+      const idx = bars.indexOf(bar);
+      const closes = bars.map((b) => b.close);
       legend.push(
         { k: "O", v: fmtPrice(bar.open) },
         { k: "H", v: fmtPrice(bar.high) },
@@ -267,6 +294,10 @@ export function AShareLcPane({
         { k: "C", v: fmtPrice(bar.close), tone: lcTone(chg) },
         { k: "量", v: fmtVol(bar.volume), tone: "muted" },
       );
+      for (const n of MA_PERIODS) {
+        const v = sma(closes, n)[idx];
+        if (v != null) legend.push({ k: `MA${n}`, v: fmtPrice(v), tone: maTone[n] });
+      }
     } else {
       legend.push(
         { k: "T", v: days === 2 ? (bar.datetime.slice(5, 16) || bar.datetime) : (bar.datetime.slice(11, 16) || bar.datetime), tone: "muted" },
@@ -274,7 +305,6 @@ export function AShareLcPane({
         { k: "额", v: fmtVol(bar.amount), tone: "muted" },
       );
     }
-    if (showSince) legend.push({ k: "距今", v: fmtPct(since), tone: lcTone(since) });
   } else if (emptySlot) {
     legend.push({
       k: "T",
@@ -283,42 +313,35 @@ export function AShareLcPane({
     });
   }
 
-  return (
-    <GlassCard className="flex min-h-0 min-w-0 flex-col p-3">
-      <div className="mb-1.5 flex items-center justify-between gap-2">
-        <div className="min-w-0">
-          <p className="truncate text-xs font-medium text-slate-200">{title}</p>
-          {bar && chg != null ? (
-            <p className={cn(
-              "font-mono text-[11px] tabular-nums",
-              chg > 0 ? "text-[#f6465d]" : chg < 0 ? "text-[#0ecb81]" : "text-slate-500",
-            )}>
-              {fmtPrice(bar.close)}
-              <span className="ml-1.5">{chg > 0 ? "+" : ""}{chg.toFixed(2)}</span>
-              <span className="ml-1">({fmtPct(base ? (chg / base) * 100 : null)})</span>
-              {showSince && since != null ? (
-                <span className={cn(
-                  "ml-2",
-                  since > 0 ? "text-[#f6465d]" : since < 0 ? "text-[#0ecb81]" : "text-slate-500",
-                )}>
-                  距今 {fmtPct(since)}
-                </span>
-              ) : null}
-            </p>
-          ) : null}
-        </div>
-        <div className="flex shrink-0 items-center gap-1">
-          {extra}
-          <button
-            type="button"
-            onClick={onRefresh}
-            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-slate-500 ring-1 ring-white/[0.06] hover:text-slate-200"
-          >
-            <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
-          </button>
-        </div>
+  const head = (
+    <div className={cn("flex items-center justify-between gap-2", bare ? "px-1.5 py-0.5" : "mb-1.5")}>
+      <div className="min-w-0">
+        <p className={cn("truncate font-medium text-slate-200", bare ? "text-[10px]" : "text-xs")}>{title}</p>
+        {!bare && bar && chg != null ? (
+          <p className={cn(
+            "font-mono text-[11px] tabular-nums",
+            chg > 0 ? "text-[#ff2d2d]" : chg < 0 ? "text-[#00d26a]" : "text-slate-500",
+          )}>
+            {fmtPrice(bar.close)}
+            <span className="ml-1.5">{chg > 0 ? "+" : ""}{chg.toFixed(2)}</span>
+            <span className="ml-1">({fmtPct(base ? (chg / base) * 100 : null)})</span>
+          </p>
+        ) : null}
       </div>
-      <LcWell className="min-h-[220px] flex-1">
+      <div className="flex shrink-0 items-center gap-1">
+        {extra}
+        <button
+          type="button"
+          onClick={onRefresh}
+          className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-slate-500 ring-1 ring-white/[0.06] hover:text-slate-200"
+        >
+          <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
+        </button>
+      </div>
+    </div>
+  );
+  const well = (
+      <LcWell className={cn("flex-1", bare ? "min-h-0" : "min-h-[220px]")}>
         {!code && (
           <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 bg-black/88 px-6 text-center">
             <p className="text-sm text-slate-400">{emptyHint}</p>
@@ -343,6 +366,19 @@ export function AShareLcPane({
         )}
         <div ref={chartRef} className="h-full w-full" />
       </LcWell>
+  );
+  if (bare) {
+    return (
+      <div className={cn("flex min-h-0 min-w-0 flex-col bg-black", className)}>
+        {head}
+        {well}
+      </div>
+    );
+  }
+  return (
+    <GlassCard className={cn("flex min-h-0 min-w-0 flex-col p-3", className)}>
+      {head}
+      {well}
     </GlassCard>
   );
 }

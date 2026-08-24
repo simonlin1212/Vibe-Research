@@ -87,19 +87,21 @@ test("overlayAxis 窄幅隐波只占约三成高度, 空值忽略", () => {
   assert.equal(overlayAxis([null, 0, -1]), null);
 });
 
-test("OptionChartCard 用 hoverIdxOf, 分时 Baseline 上红下绿", async () => {
+test("OptionChartCard 用 hoverIdxOf, 分时白线无均价", async () => {
   const src = await readFile(new URL("../src/components/deriv/OptionChartCard.tsx", import.meta.url), "utf8");
   const lc = await readFile(new URL("../src/lib/lcChart.ts", import.meta.url), "utf8");
   assert.ok(src.includes("export function hoverIdxOf"), "十字光标走 hoverIdxOf");
   assert.ok(src.includes("seriesDataIndices"), "类目轴读 dataIndex");
-  assert.ok(src.includes("BaselineSeries"), "分时用 Baseline 零轴");
-  assert.ok(lc.includes("topFillColor1"), "涨区顶浓");
-  assert.ok(lc.includes("bottomFillColor1"), "跌区不反转渐变");
+  assert.ok(src.includes("minuteLineOpts"), "分时白线");
+  assert.ok(!src.includes("minuteAvg"), "不分时均价");
+  assert.ok(!src.includes("BaselineSeries"), "不再画红绿零轴区");
+  assert.ok(lc.includes("export function minuteLineOpts"), "白线挂 lcChart");
+  assert.ok(!lc.includes("export function minuteAvg"), "均价函数删掉");
   assert.ok(src.includes("export function overlayAxis"), "隐波右轴走 overlayAxis");
   assert.ok(src.includes("overlayAxis(minData?.iv"), "分时隐波不拉满");
   assert.ok(src.includes("overlayAxis(dailyIv)"), "日K隐波同一比例");
   assert.ok(src.includes("LcHoverTag"), "十字右侧价签同 A 股");
-  assert.ok(src.includes("useLcHoverTag"), "价签涨跌相对现价");
+  assert.ok(src.includes("useLcHoverTag"), "价签涨跌相对昨结");
   assert.ok(src.includes("guardLc"), "快切分时/两日吞 LC Value is null");
 });
 

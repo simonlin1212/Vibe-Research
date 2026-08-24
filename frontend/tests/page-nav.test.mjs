@@ -24,7 +24,7 @@ test("desktop header and phone bar share PAGE_NAV", () => {
 
 test("/derivatives sits right after /a-share and is primary", () => {
   const header = readFileSync(join(root, "src/components/cockpit/CockpitHeader.tsx"), "utf8");
-  const nav = header.slice(header.indexOf("export const PAGE_NAV"), header.indexOf("export const A_SHARE_TABS"));
+  const nav = header.slice(header.indexOf("export const PAGE_NAV"), header.indexOf("export function parseAShareTab"));
   const aIdx = nav.indexOf('to: "/a-share"');
   const oIdx = nav.indexOf('to: "/derivatives"');
   const fIdx = nav.indexOf('to: "/fin"');
@@ -72,24 +72,39 @@ test("brand is fixed so PAGE_NAV chips do not shift", () => {
   assert.match(header, /市场研究驾驶舱/);
   assert.doesNotMatch(header, /PAGE_TITLES|brand\.to/);
   assert.doesNotMatch(header, /aria-label="A股页签"|aria-label="期权期货页签"/);
-  assert.match(layout, /aria-label="A股页签"/);
+  assert.doesNotMatch(layout, /aria-label="A股页签"/);
   assert.doesNotMatch(layout, /aria-label="期权期货页签"/);
   assert.doesNotMatch(layout, /shrink-0 lg:hidden/);
 });
 
-test("A股顶栏只留复盘和K线, 详情公告在分时右上", () => {
+test("A股不分复盘/K线页签, 分时日K挂在复盘自选格", () => {
   const header = readFileSync(join(root, "src/components/cockpit/CockpitHeader.tsx"), "utf8");
-  const tabs = header.slice(header.indexOf("export const A_SHARE_TABS"), header.indexOf("export function parseAShareTab"));
-  assert.match(tabs, /label: "复盘"/);
-  assert.match(tabs, /label: "K线"/);
-  assert.doesNotMatch(tabs, /label: "详情"/);
-  assert.doesNotMatch(tabs, /label: "公告"/);
+  assert.doesNotMatch(header, /A_SHARE_TABS/);
+  assert.doesNotMatch(header, /label: "K线"/);
+  const review = readFileSync(join(root, "src/pages/DailyReview.tsx"), "utf8");
+  assert.match(review, /embedded/);
+  assert.match(review, /AShareLightChart/);
+  assert.match(review, /自选 \/ K线/);
+  const ashare = readFileSync(join(root, "src/pages/AShare.tsx"), "utf8");
+  assert.match(ashare, /raw === "kline"/);
+  assert.match(ashare, /p\.delete\("tab"\)/);
   const chart = readFileSync(join(root, "src/pages/AShareLightChart.tsx"), "utf8");
   assert.match(chart, /kind="minute"/);
   assert.match(chart, /setSeg\("detail"\)/);
   assert.match(chart, /setSeg\("feed"\)/);
+  assert.match(chart, /embedded/);
+  assert.match(chart, /BASIC_COLS/);
+  assert.doesNotMatch(chart, /WatchlistCockpitPanel/);
+  assert.doesNotMatch(chart, /MinuteSpark|QuoteStockRow|useMinutes/);
   const layout = readFileSync(join(root, "src/components/layout/Layout.tsx"), "utf8");
-  assert.match(layout, /aTab === "detail" \|\| aTab === "feed"/);
+  assert.match(layout, /tab === "detail" \|\| tab === "feed"/);
+  assert.doesNotMatch(layout, /A_SHARE_TABS/);
+  const href = readFileSync(join(root, "src/components/cockpit/QuoteLine.tsx"), "utf8");
+  assert.match(href, /\/a-share\?code=\$/);
+  assert.match(href, /export function peekChartCode/);
+  assert.match(href, /klineHref\(unit\)/);
+  assert.doesNotMatch(href, /tab=kline/);
+  assert.doesNotMatch(chart, /saveWatch\(\[\.\.\.loadWatch\(\), urlCode\]\)/);
 });
 
 test("A-share portfolio jumps to backtest and autostarts", () => {

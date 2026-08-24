@@ -19,7 +19,8 @@ const sessionSrc = await readFile(SESSION, "utf8");
 const directSrc = await readFile(DIRECT, "utf8");
 
 test("K-line page and watchlist feed subscribe to the quote hub", () => {
-  assert.match(chartSrc, /useQuotes\(codes\)/);
+  assert.match(chartSrc, /useQuotes\(/);
+  assert.match(chartSrc, /codes\.includes\(selected\)/);
   assert.doesNotMatch(chartSrc, /api\.quote\(/);
   assert.match(feedSrc, /useQuotes\(codes\)/);
   assert.doesNotMatch(feedSrc, /api\.quote\(/);

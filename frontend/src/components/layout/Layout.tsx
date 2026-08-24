@@ -17,7 +17,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { PageFallback } from "@/components/ui/PageFallback";
-import { A_SHARE_TABS, CockpitHeader, NAV_RAIL_CLASS, PAGE_NAV, navChipClass, parseAShareTab } from "@/components/cockpit/CockpitHeader";
+import { CockpitHeader, PAGE_NAV, navChipClass } from "@/components/cockpit/CockpitHeader";
 import { NewsToastHost } from "@/components/cockpit/NewsToastHost";
 import { TickerTape } from "@/components/cockpit/TickerTape";
 import { useFullscreen } from "@/hooks/useFullscreen";
@@ -48,8 +48,8 @@ function isCockpitPath(pathname: string, tab: string | null) {
   if (pathname.startsWith("/arb")) return true;
   if (pathname.startsWith("/event")) return true;
   if (!pathname.startsWith("/a-share")) return false;
-  if (!tab || tab === "review") return true;
-  return false;
+  if (tab === "detail" || tab === "feed") return false;
+  return true;
 }
 
 export function Layout() {
@@ -60,7 +60,6 @@ export function Layout() {
   const cockpit = isCockpitPath(pathname, params.get("tab"));
   const [moreOpen, setMoreOpen] = useState(false);
   const moreActive = MORE_NAV.some((l) => l.match(pathname));
-  const aTab = parseAShareTab(params.get("tab"));
   const mainRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
@@ -85,23 +84,6 @@ export function Layout() {
       <CockpitHeader isFullscreen={isFullscreen} onToggleFullscreen={toggle} />
       <TickerTape items={tapeItems} />
       <NewsToastHost />
-      {pathname.startsWith("/a-share") && (
-        <nav
-          className={cn(NAV_RAIL_CLASS, "shrink-0 border-b border-[#2a2a2a] px-1")}
-          aria-label="A股页签"
-        >
-          {A_SHARE_TABS.map((t) => {
-            const active = t.tab === null
-              ? aTab === "review"
-              : aTab === "kline" || aTab === "detail" || aTab === "feed";
-            return (
-              <Link key={t.label} to={t.to} aria-current={active ? "page" : undefined} className={navChipClass(active)}>
-                {t.label}
-              </Link>
-            );
-          })}
-        </nav>
-      )}
       <main
         id="main"
         ref={mainRef}

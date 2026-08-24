@@ -1,4 +1,4 @@
-import { useLayoutEffect, useState, type ReactNode } from "react";
+import { lazy, Suspense, useLayoutEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import {
@@ -11,7 +11,7 @@ import remarkGfm from "remark-gfm";
 import { AskAiButton } from "@/components/ui/AskAiButton";
 import { CockpitLayout, type CockpitRow } from "@/components/cockpit/CockpitLayout";
 import { Chip, ChipGroup } from "@/components/ui/SectionHeader";
-import { WatchlistCockpitPanel } from "@/components/cockpit/WatchlistCockpitPanel";
+import { PageFallback } from "@/components/ui/PageFallback";
 import { ReviewSentimentPanel } from "@/components/review/ReviewSentimentPanel";
 import { ReviewBoardsSeg } from "@/components/review/ReviewBoardsSeg";
 import { ReviewMoneySeg } from "@/components/review/ReviewMoneySeg";
@@ -28,6 +28,10 @@ import { useReviewData } from "@/hooks/useReviewData";
 import { api, ApiError } from "@/lib/api";
 import { collectReviewContext } from "@/lib/reviewContext";
 import { hasLlm, chatStream } from "@/lib/llm";
+
+const AShareLightChart = lazy(() =>
+  import("@/pages/AShareLightChart").then((m) => ({ default: m.AShareLightChart })),
+);
 
 export function DailyReview() {
   const d = useReviewData();
@@ -90,7 +94,7 @@ export function DailyReview() {
 
   const rows: CockpitRow[] = [
     {
-      defaultH: 0.30,
+      defaultH: 0.36,
       panels: [
         {
           id: "market-watch",
@@ -98,7 +102,7 @@ export function DailyReview() {
           hint: "全球关键指数 + 宏观观察",
           icon: <Globe size={14} />,
           accent: "#ffcc00",
-          defaultW: 0.43,
+          defaultW: 0.34,
           mobileH: "h-[64vh]",
           right: <span className="text-[10px] tabular-nums text-slate-500">5s</span>,
           body: (
@@ -117,7 +121,7 @@ export function DailyReview() {
           title: "涨跌分布 / 广度",
           icon: <BarChart3 size={14} />,
           accent: "#ffcc00",
-          defaultW: 0.24,
+          defaultW: 0.20,
           mobileH: "h-[380px]",
           right: (
             <span className="flex items-center gap-1.5 text-[10px] tabular-nums text-slate-500">
@@ -136,22 +140,27 @@ export function DailyReview() {
         },
         {
           id: "watch",
-          title: "自选",
+          title: "自选 / K线",
+          hint: "点行出分时和日K",
           icon: <Star size={14} />,
           accent: "#ffcc00",
-          defaultW: 0.33,
-          mobileH: "h-[400px]",
+          defaultW: 0.46,
+          mobileH: "h-[520px]",
           right: (
             <span className="text-[10px] tabular-nums text-slate-500">
               {d.watchCodes.length}只 · 5s
             </span>
           ),
-          body: <WatchlistCockpitPanel />,
+          body: (
+            <Suspense fallback={<PageFallback />}>
+              <AShareLightChart embedded />
+            </Suspense>
+          ),
         },
       ],
     },
     {
-      defaultH: 0.34,
+      defaultH: 0.32,
       panels: [
         {
           id: "flow",
@@ -221,7 +230,7 @@ export function DailyReview() {
       ],
     },
     {
-      defaultH: 0.36,
+      defaultH: 0.32,
       panels: [
         {
           id: "risk",

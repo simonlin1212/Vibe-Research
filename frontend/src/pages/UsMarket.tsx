@@ -292,7 +292,7 @@ export function UsMarket() {
   const { tag: hoverTag, y: tagY } = useLcHoverTag(
     () => bag.current.candle,
     hovering ? bar?.close ?? null : null,
-    bars[bars.length - 1]?.close ?? null,
+    prevBar?.close ?? null,
     fmtPrice,
     hoverIdx,
   );
@@ -426,7 +426,7 @@ export function UsMarket() {
                     <div className="mt-0.5 flex items-baseline gap-2 tabular-nums text-xs">
                       <span>{fmtPrice(q?.quote?.price)}</span>
                       <span className={cn(
-                        pct != null && pct > 0 ? "text-[#f6465d]" : pct != null && pct < 0 ? "text-[#0ecb81]" : "text-muted-foreground",
+                        pct != null && pct > 0 ? "text-[#ff2d2d]" : pct != null && pct < 0 ? "text-[#00d26a]" : "text-muted-foreground",
                       )}>
                         {fmtPct(pct)}
                       </span>
@@ -467,16 +467,16 @@ export function UsMarket() {
               <div className="mt-1 flex flex-wrap items-baseline gap-3">
                 <span className={cn(
                   "font-mono text-2xl font-semibold tabular-nums",
-                  chgPct != null && chgPct > 0 ? "text-[#f6465d]"
-                    : chgPct != null && chgPct < 0 ? "text-[#0ecb81]"
+                  chgPct != null && chgPct > 0 ? "text-[#ff2d2d]"
+                    : chgPct != null && chgPct < 0 ? "text-[#00d26a]"
                       : "text-slate-200",
                 )}>
                   {fmtPrice(bar?.close ?? selQuote?.quote?.price)}
                 </span>
                 <span className={cn(
                   "font-mono text-sm tabular-nums",
-                  chgPct != null && chgPct > 0 ? "text-[#f6465d]"
-                    : chgPct != null && chgPct < 0 ? "text-[#0ecb81]"
+                  chgPct != null && chgPct > 0 ? "text-[#ff2d2d]"
+                    : chgPct != null && chgPct < 0 ? "text-[#00d26a]"
                       : "text-slate-500",
                 )}>
                   {chg != null ? `${chg > 0 ? "+" : ""}${chg.toFixed(2)}` : "—"}

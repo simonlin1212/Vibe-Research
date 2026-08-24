@@ -77,6 +77,8 @@ export function QuoteStockRow({
   watchable = true,
   boards: wantBoards = true,
   flow = false,
+  active = false,
+  onPick,
 }: {
   code: string;
   name: string;
@@ -98,6 +100,8 @@ export function QuoteStockRow({
   boards?: boolean;
   /** Fetch 主力净额/净占比 (Eastmoney ulist, 30s). Same as marketingdashboard QuoteRow flow. */
   flow?: boolean;
+  active?: boolean;
+  onPick?: (code: string) => void;
 }) {
   const { setEl, on: visible, rowW } = useRowBox();
   const compact = rowW > 0 && rowW < COMPACT_W;
@@ -132,7 +136,7 @@ export function QuoteStockRow({
   const times = ownSpark?.times;
   const prevClose = ownSpark?.prevClose;
   const allowJump = useAllowKlineJump();
-  const href = link && allowJump ? klineHref(code) : undefined;
+  const href = link && !onPick && allowJump ? klineHref(code) : undefined;
   const hasAmt = liveAmt != null && liveAmt > 0;
   const hasTurn = liveTurn != null && liveTurn > 0;
   const ratioBar = liveMainPct != null ? Math.min(100, Math.abs(liveMainPct) * 2) : 0;
@@ -225,10 +229,15 @@ export function QuoteStockRow({
       </span>
     </div>
   );
-  const cls = "group block w-full px-1.5 py-[2px] text-left transition-colors hover:bg-[#1a1400] hover:shadow-[inset_2px_0_0_#ffcc00]";
+  const cls = cn(
+    "group block w-full px-1.5 py-[2px] text-left transition-colors hover:bg-[#1a1400] hover:shadow-[inset_2px_0_0_#ffcc00]",
+    active && "bg-[#1a1400] shadow-[inset_2px_0_0_#ffcc00]",
+  );
   return (
     <div ref={setEl}>
-      {href ? (
+      {onPick ? (
+        <button type="button" onClick={() => onPick(code)} className={cls}>{inner}{line}</button>
+      ) : href ? (
         <Link to={href} className={cls}>{inner}{line}</Link>
       ) : (
         <div className={cls}>{inner}{line}</div>

@@ -1,8 +1,9 @@
-"""Event cockpit HTTP: Polymarket probabilities. Keys under polymarket."""
+"""Event cockpit HTTP: Polymarket + calendar. Keys polymarket / event_cal."""
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Query
 
+import event_cal
 import polymarket
 from api_common import _cached, _serve
 
@@ -24,6 +25,38 @@ def _pm(code: str, ttl: float, fetch, valid, empty: str):
     if valid(last):
         return last
     return None
+
+
+def _cal(code: str, ttl: float, fetch, valid, empty: str):
+    """Calendar. One key event_cal. Not telegraph, not polymarket."""
+    try:
+        data = _cached("event_cal", code, ttl, fetch, valid=valid)
+        if valid(data):
+            return data
+    except Exception as e:
+        last = _serve("event_cal", code)
+        if valid(last):
+            return last
+        raise HTTPException(502, f"{empty}: {e}") from e
+    last = _serve("event_cal", code)
+    if valid(last):
+        return last
+    return None
+
+
+@router.get("/api/event/calendar")
+def event_calendar():
+    """Date list from duanxianxia timeline. Key event_cal/timeline, 300s."""
+    data = _cal(
+        "timeline",
+        300,
+        event_cal.calendar,
+        event_cal.calendar_ok,
+        "连不上财经日历",
+    )
+    if not data:
+        raise HTTPException(502, "连不上财经日历")
+    return {"data": data}
 
 
 @router.get("/api/polymarket/board")
@@ -95,4 +128,3 @@ def polymarket_watch(slugs: str = Query("", max_length=4000)):
         if ev:
             events.append(ev)
     return {"data": {"events": events}}
-

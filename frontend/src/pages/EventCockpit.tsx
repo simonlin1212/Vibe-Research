@@ -1,21 +1,33 @@
 import { useLayoutEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useSearchParams } from "react-router-dom";
-import { Percent, RefreshCw, Rss } from "lucide-react";
+import { CalendarDays, Percent, RefreshCw, Rss } from "lucide-react";
 import { AskAiButton } from "@/components/ui/AskAiButton";
 import { CockpitLayout, type CockpitRow } from "@/components/cockpit/CockpitLayout";
 import { NewsCockpitPanel, NewsFeedBar } from "@/components/cockpit/NewsCockpitPanel";
 import { FreshTag } from "@/components/deriv/derivShared";
+import { EventCalPanel } from "@/components/event/EventCalPanel";
 import { PmPanel, extractSlugs, fmtPct, fmtVol } from "@/components/event/PmPanel";
 import { usePolling } from "@/hooks/usePolling";
-import { api, type PmEvent } from "@/lib/api";
+import { api, type EventCalBoard, type PmEvent } from "@/lib/api";
 import { addPmWatch, addPmWatchMany, loadPmWatch, removePmWatch } from "@/lib/pmWatch";
 import { peekTelegraphItems, type FeedSource } from "@/lib/telegraphHub";
 import { cn } from "@/lib/utils";
 
 type Tab = "watch" | "hot";
 
-function packEventContext(src: FeedSource, events: PmEvent[], slug: string): string {
+function packCal(cal: EventCalBoard | null): string[] {
+  const days = cal?.days ?? [];
+  if (!days.length) return ["未取到"];
+  const out: string[] = [];
+  for (const g of days.slice(0, 5)) {
+    out.push(`${g.date}`);
+    for (const t of g.items.slice(0, 8)) out.push(`- ${t}`);
+  }
+  return out;
+}
+
+function packEventContext(src: FeedSource, events: PmEvent[], slug: string, cal: EventCalBoard | null): string {
   const lines = ["# 事件页快照"];
   const news = peekTelegraphItems(src).slice(0, 16);
   lines.push("", `## 快讯 (${src})`);
@@ -25,6 +37,8 @@ function packEventContext(src: FeedSource, events: PmEvent[], slug: string): str
       lines.push(`- ${it.time || ""} ${it.title}`);
     }
   }
+  lines.push("", "## 财经日历");
+  lines.push(...packCal(cal));
   lines.push("", "## Polymarket 监控");
   if (!events.length) lines.push("未取到");
   else {
@@ -106,6 +120,7 @@ export function EventCockpit() {
     [slug, tick],
     Boolean(slug) && tab === "hot",
   );
+  const calPoll = usePolling(() => api.eventCalendar(), 300_000, [tick], true);
 
   const events = tab === "watch"
     ? (watchPoll.data?.events ?? [])
@@ -135,7 +150,7 @@ export function EventCockpit() {
           hint: "财联社 / 新浪见闻 / 金十 · 与复盘同一口",
           icon: <Rss size={14} />,
           accent: "#ffcc00",
-          defaultW: 0.40,
+          defaultW: 0.30,
           mobileH: "h-[56vh]",
           right: (
             <NewsFeedBar
@@ -149,12 +164,30 @@ export function EventCockpit() {
           body: <NewsCockpitPanel source={newsSource} auto={newsAuto} />,
         },
         {
+          id: "event-cal",
+          title: "财经日历",
+          hint: "短线侠日程 · 与九言同一口",
+          icon: <CalendarDays size={14} />,
+          accent: "#ffcc00",
+          defaultW: 0.28,
+          mobileH: "h-[48vh]",
+          right: <FreshTag updated={calPoll.updated} />,
+          bodyClassName: "overflow-hidden",
+          body: (
+            <EventCalPanel
+              data={calPoll.data}
+              error={calPoll.error}
+              loading={!calPoll.data && !calPoll.error}
+            />
+          ),
+        },
+        {
           id: "event-pm",
           title: "Polymarket",
           hint: tab === "watch" ? "本机监控 · 粘贴事件链接加入" : "24h 成交额 · 点 + 加入监控",
           icon: <Percent size={14} />,
           accent: "#ffcc00",
-          defaultW: 0.60,
+          defaultW: 0.42,
           mobileH: "h-[70vh]",
           right: (
             <div className="flex items-center gap-1.5">
@@ -206,7 +239,7 @@ export function EventCockpit() {
         },
       ],
     },
-  ], [newsSource, newsAuto, draft, events, slug, detail.data, detail.error, err, loading, updated, tab, watch]);
+  ], [newsSource, newsAuto, draft, events, slug, detail.data, detail.error, err, loading, updated, tab, watch, calPoll.data, calPoll.error, calPoll.updated]);
 
   const headerActions = (
     <>
@@ -216,18 +249,19 @@ export function EventCockpit() {
         className={cn(
           "inline-flex h-6 items-center gap-1 rounded border border-slate-700/60 px-2 text-[11px] text-slate-400 transition-colors hover:border-primary/50 hover:text-primary",
         )}
-        title="重拉 Polymarket"
+        title="重拉日历和 Polymarket"
       >
         <RefreshCw className="h-3 w-3" />
         刷新
       </button>
       <AskAiButton
         context=""
-        getContext={() => packEventContext(newsSource, events, slug)}
+        getContext={() => packEventContext(newsSource, events, slug, calPoll.data)}
         label="问 AI"
         scopeKey="event"
         suggestions={[
           "监控里这些事件各档概率现在怎么排?",
+          "近几日财经日历里哪些和监控事件对得上?",
           "结合快讯, 哪些档和新闻对得上?",
           "WTI 各价位 Yes 概率差在哪?",
         ]}

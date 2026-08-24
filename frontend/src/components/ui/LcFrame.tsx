@@ -11,8 +11,8 @@ export function lcTone(n: number | null | undefined): LcTone {
 }
 
 const TONE: Record<LcTone, string> = {
-  up: "text-[#f6465d]",
-  down: "text-[#0ecb81]",
+  up: "text-[#ff2d2d]",
+  down: "text-[#00d26a]",
   flat: "text-slate-300",
   muted: "text-slate-500",
   iv: "text-[#8b7cff]",
@@ -82,7 +82,7 @@ export function LcHoverTag({
     >
       {tag.px}
       {tag.pct != null && tag.chg != null ? (
-        <span className={tag.chg > 0 ? "text-[#f6465d]" : "text-[#0ecb81]"}>
+        <span className={tag.chg > 0 ? "text-[#ff2d2d]" : "text-[#00d26a]"}>
           {" "}({tag.pct})
         </span>
       ) : null}
