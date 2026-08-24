@@ -5,7 +5,7 @@ import { num } from "@/components/ovlab/shared";
 import { parseMinute } from "@/components/deriv/OptionChartCard";
 import { loadLightKline } from "@/lib/lightKline";
 import {
-  concatDaySlots, hmOf, kindOfUnd, lastFiniteIdx, minuteKey, padToSlots, tradingDaysOf,
+  concatDaySlots, hmOf, kindOfUnd, lastFiniteIdx, tradingDayOf, tradingDaysOf,
 } from "@/lib/derivMinuteAxis";
 import {
   LineSeries, applyTimeLabels, ensureUpDown, lineValues, paintUpDown, seriesAlive,
@@ -21,6 +21,61 @@ import { cn } from "@/lib/utils";
 type Mode = "minute" | "daily";
 
 type Pt = { t: string; c: number };
+
+/** OpenVlab 近 2 日窗口周一早盘不含周五, 也不回周日夜盘. 5 日才能对齐上一交易日. */
+const MINUTE_LOOKBACK = 5 * 86400;
+
+function defaultMode(kind: ArbPick["kind"] | undefined): Mode {
+  return kind === "cal" ? "minute" : "daily";
+}
+
+/** Latest close per HH:MM so Sunday night wins over the previous Friday night. */
+function clockLast(pts: Pt[]): Map<string, number> {
+  const best = new Map<string, Pt>();
+  for (const p of pts) {
+    const hm = hmOf(p.t);
+    if (!hm) continue;
+    const prev = best.get(hm);
+    if (!prev || p.t > prev.t) best.set(hm, p);
+  }
+  const out = new Map<string, number>();
+  for (const [hm, p] of best) out.set(hm, p.c);
+  return out;
+}
+
+/** Last trading day that both legs printed. Empty -> no overlap. */
+export function lastOverlapDay(left: Pt[], right: Pt[]): string | null {
+  const L = new Set(tradingDaysOf(left.map((p) => p.t)));
+  const R = new Set(tradingDaysOf(right.map((p) => p.t)));
+  const both = [...L].filter((td) => R.has(td)).sort();
+  return both.length ? both[both.length - 1] : null;
+}
+
+/** Align two minute legs onto one session axis. Clock match, latest print wins. */
+export function joinSpreadMinute(
+  left: Pt[],
+  right: Pt[],
+  und: string,
+  mult = 1,
+): { cats: string[]; vals: Array<number | null> } {
+  const td = lastOverlapDay(left, right);
+  if (!td) return { cats: [], vals: [] };
+  const leftD = left.filter((p) => tradingDayOf(p.t) === td);
+  const rightD = right.filter((p) => tradingDayOf(p.t) === td);
+  const times = [...leftD, ...rightD].map((p) => p.t);
+  const kind = kindOfUnd(und, times);
+  const { cats } = concatDaySlots([td], kind);
+  const byL = clockLast(leftD);
+  const byR = clockLast(rightD);
+  const vals = cats.map((slot) => {
+    const hm = hmOf(slot);
+    const a = byL.get(hm);
+    const r = byR.get(hm);
+    if (a == null || r == null) return null;
+    return a - r * mult;
+  });
+  return { cats, vals };
+}
 
 /** Unwrap ovlab history: {data: bars} or a bare bar array. */
 export function klineBars(raw: unknown): unknown[] {
@@ -81,7 +136,7 @@ async function loadFut(code: string, mode: Mode): Promise<Pt[]> {
     const kl = await api.ovlabKlineHistory(code, "1D", now - 180 * 86400, now);
     return parseDaily(klineBars(kl?.data ?? kl));
   }
-  const kl = await api.ovlabKlineHistory(code, "1", now - 2 * 86400, now);
+  const kl = await api.ovlabKlineHistory(code, "1", now - MINUTE_LOOKBACK, now);
   return parseMinute(klineBars(kl?.data ?? kl)).map((b) => ({ t: b.t, c: b.close }));
 }
 
@@ -91,9 +146,9 @@ async function loadCash(code: string, mode: Mode): Promise<Pt[]> {
 }
 
 export function SpreadChart({ pick }: { pick: ArbPick | null }) {
-  const [mode, setMode] = useState<Mode>(pick?.kind === "idx" ? "daily" : "minute");
+  const [mode, setMode] = useState<Mode>(defaultMode(pick?.kind));
   useEffect(() => {
-    setMode(pick?.kind === "idx" ? "daily" : "minute");
+    setMode(defaultMode(pick?.kind));
   }, [pick?.kind, pick?.key]);
   const { ref, chartRef, labelsRef, onHoverRef } = useLcChart();
   const seriesRef = useRef<ISeriesApi<"Line"> | null>(null);
@@ -140,25 +195,7 @@ export function SpreadChart({ pick }: { pick: ArbPick | null }) {
       }
       return { cats, vals };
     }
-    const times = [...d.left, ...d.right].map((p) => p.t);
-    const tds = tradingDaysOf(times).slice(-1);
-    const kind = kindOfUnd(pick.leftUnd, times);
-    const { cats } = concatDaySlots(tds, kind);
-    const L = padToSlots(d.left, cats, (x) => x.t);
-    const byR = new Map<string, number>();
-    for (const p of d.right) {
-      byR.set(minuteKey(p.t), p.c);
-      const hm = hmOf(p.t);
-      if (hm) byR.set(hm, p.c);
-    }
-    const vals = L.map((a, i) => {
-      if (!a) return null;
-      const slot = cats[i];
-      const r = byR.get(minuteKey(slot)) ?? byR.get(hmOf(slot));
-      if (r == null) return null;
-      return a.c - r * mult;
-    });
-    return { cats, vals };
+    return joinSpreadMinute(d.left, d.right, pick.leftUnd, mult);
   }, [poll.data, pick, mode]);
 
   const last = useMemo(() => {

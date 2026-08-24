@@ -7,7 +7,7 @@ import {
 } from "@/lib/lcChart";
 import { IvHtmlTip } from "./IvHtmlTip";
 import {
-  OV_MUTED, OV_PURPLE,
+  OV_PURPLE, OV_YDAY,
   atmTermPoints, nearestTermExp, termTipByExp, termTipHtml, termXRange, toLcPts,
 } from "./iv-chart-math";
 
@@ -27,11 +27,7 @@ export function IvTermChart({
   const { ref, chartRef, rev, onHoverRef } = useLcPriceChart();
   const [hover, setHover] = useState<LcPriceHover>(null);
   onHoverRef.current = setHover;
-  const bag = useRef<{
-    rev: number;
-    today: Line | null;
-    yday: Line | null;
-  }>({ rev: -1, today: null, yday: null });
+  const bag = useRef<{ today: Line | null; yday: Line | null }>({ today: null, yday: null });
   const wmRef = useRef<ITextWatermarkPluginApi<Time> | null>(null);
   const { today, yday } = useMemo(() => atmTermPoints(expiries), [expiries]);
   const tips = useMemo(() => termTipByExp(expiries), [expiries]);
@@ -47,11 +43,7 @@ export function IvTermChart({
 
   useEffect(() => {
     const chart = chartRef.current;
-    if (!chart) return;
-    if (bag.current.rev !== rev) {
-      bag.current = { rev, today: null, yday: null };
-      wmRef.current = null;
-    }
+    if (!chart || rev < 1) return;
     if (empty || !xRange) {
       bag.current.today?.setData([]);
       bag.current.yday?.setData([]);
@@ -63,12 +55,12 @@ export function IvTermChart({
         color: OV_PURPLE,
         lineWidth: 2,
         pointMarkersVisible: true,
-        lastValueVisible: true,
+        lastValueVisible: false,
         priceLineVisible: false,
         priceFormat: IV_FMT,
       });
       bag.current.yday = chart.addSeries(LineSeries, {
-        color: OV_MUTED,
+        color: OV_YDAY,
         lineWidth: 1,
         lineStyle: LineStyle.Dotted,
         pointMarkersVisible: true,
@@ -106,7 +98,7 @@ export function IvTermChart({
     <div className="flex min-h-0 flex-1 flex-col px-1.5 pb-1">
       <div className="flex h-5 shrink-0 items-center gap-1.5 font-mono text-[10px] text-slate-500">
         <span style={{ color: OV_PURPLE }}>今</span>
-        <span>昨</span>
+        <span style={{ color: OV_YDAY }}>昨</span>
       </div>
       <LcWell className="min-h-0 flex-1 rounded-md">
         {empty && (

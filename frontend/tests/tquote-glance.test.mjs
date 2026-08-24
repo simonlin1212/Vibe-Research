@@ -143,7 +143,9 @@ test("IvSmileChart LC 复刻 analysis", async () => {
   assert.ok(smile.includes("IvHtmlTip"), "浮窗");
   assert.ok(!tip.includes("bg-white"), "浮窗不白底");
   assert.ok(smile.includes(">今<"), "今");
-  assert.ok(smile.includes(">昨<"), "昨");
+  assert.ok(smile.includes("OV_YDAY }}>昨<"), "昨标灰色, 免看成第二条紫线");
+  assert.ok(smile.includes("rev < 1"), "等 chart boot 完再挂线, 避免叠两条今");
+  assert.doesNotMatch(smile, /bag\.current = \{ rev, today: null, yday: null \}/);
   assert.ok(!smile.includes("echarts"), "不走 ECharts");
   assert.ok(!smile.includes("LcHoverTag"), "浮窗不是十字价签");
   assert.ok(smile.includes("synthSpotTipHtml"), "移到竖线才出合成标的现价");
@@ -171,6 +173,9 @@ test("IvTermChart LC 复刻 vol-ts", async () => {
   assert.ok(term.includes("setPaneWatermark"), "IV期限开淡字水印");
   assert.ok(term.includes("subscribeClick"), "点月切表");
   assert.ok(term.includes("IvHtmlTip"), "浮窗");
+  assert.ok(term.includes("OV_YDAY }}>昨<"), "昨标灰色");
+  assert.ok(term.includes("rev < 1"), "等 chart boot 完再挂线, 避免叠两条今");
+  assert.doesNotMatch(term, /bag\.current = \{ rev, today: null, yday: null \}/);
   assert.ok(!term.includes("echarts"), "不走 ECharts");
   assert.ok(!term.includes("volatility-ts"), "不另打 volatility-ts-all");
   assert.ok(math.includes("* 0.05"), "横轴左右扩 5%");

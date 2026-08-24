@@ -38,11 +38,7 @@ export function IvSmileChart({
   const [hover, setHover] = useState<LcPriceHover>(null);
   const [stem, setStem] = useState<{ x: number; top: number; h: number } | null>(null);
   onHoverRef.current = setHover;
-  const bag = useRef<{
-    rev: number;
-    today: Line | null;
-    yday: Line | null;
-  }>({ rev: -1, today: null, yday: null });
+  const bag = useRef<{ today: Line | null; yday: Line | null }>({ today: null, yday: null });
   const wmRef = useRef<ITextWatermarkPluginApi<Time> | null>(null);
   const { today, yday } = useMemo(
     () => smileSeries(smileTd, smileYd, strikes),
@@ -63,11 +59,7 @@ export function IvSmileChart({
 
   useEffect(() => {
     const chart = chartRef.current;
-    if (!chart) return;
-    if (bag.current.rev !== rev) {
-      bag.current = { rev, today: null, yday: null };
-      wmRef.current = null;
-    }
+    if (!chart || rev < 1) return;
     const applyStem = (next: { x: number; top: number; h: number } | null) => {
       setStem((prev) => {
         if (prev === next) return prev;
@@ -105,7 +97,7 @@ export function IvSmileChart({
         color: OV_PURPLE,
         lineWidth: 2,
         pointMarkersVisible: true,
-        lastValueVisible: true,
+        lastValueVisible: false,
         priceLineVisible: false,
         priceFormat: IV_FMT,
       });
@@ -151,7 +143,7 @@ export function IvSmileChart({
     <div className="flex min-h-0 flex-1 flex-col px-1.5 pb-1">
       <div className="flex h-5 shrink-0 items-center gap-1.5 font-mono text-[10px] text-slate-500">
         <span style={{ color: OV_PURPLE }}>今</span>
-        <span>昨</span>
+        <span style={{ color: OV_YDAY }}>昨</span>
         <span style={{ color: OV_FUTURE }}>合成标的</span>
       </div>
       <LcWell className="min-h-0 flex-1 rounded-md">

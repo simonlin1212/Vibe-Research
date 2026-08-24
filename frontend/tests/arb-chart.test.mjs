@@ -89,18 +89,73 @@ test("现期只挂套利期现卡, A股宏观观察不再画", () => {
   assert.doesNotMatch(goods, /\["spot", "现期"\]/);
 });
 
-test("股指配对默认日度升贴水, 不另开接口", () => {
+test("股指/跨品种默认日K, 跨期才默认分时", () => {
   const cockpit = readFileSync(join(root, "src/pages/ArbCockpit.tsx"), "utf8");
   const basis = readFileSync(join(root, "src/components/arb/BasisPanel.tsx"), "utf8");
-  assert.match(src, /pick\?\.kind === "idx" \? "daily"/);
+  assert.match(src, /kind === "cal" \? "minute" : "daily"/);
+  assert.match(src, /MINUTE_LOOKBACK = 5 \* 86400/);
+  assert.match(src, /export function joinSpreadMinute/);
   assert.match(src, /label: "升贴水"/);
   assert.match(cockpit, /日度升贴水/);
   assert.match(basis, /升贴水/);
   assert.doesNotMatch(src, /api\.spotTable/);
+  assert.doesNotMatch(src, /now - 2 \* 86400/);
 });
 
 test("parseLight 分时保留时分, 日K才收成日期", () => {
   // dayKey("2026-08-19 09:31") -> "2026-08-19". Minute join then has no overlapping slots.
   assert.match(src, /parseLight\(kl\?\.bars,\s*mode === "daily"\)/);
   assert.doesNotMatch(src, /function parseLight\([^)]*\)[^{]*\{[^}]*const t = dayKey\(b\.datetime\)/);
+});
+
+function tradingDayOf(t) {
+  const d = t.slice(0, 10);
+  const hh = Number(t.slice(11, 13));
+  if (hh >= 6 && hh < 20) return d;
+  const dt = new Date(`${d}T00:00:00`);
+  if (hh < 6) dt.setDate(dt.getDate() - 1);
+  do {
+    dt.setDate(dt.getDate() + 1);
+  } while (dt.getDay() === 0 || dt.getDay() === 6);
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+}
+
+function tradingDaysOf(times) {
+  return [...new Set(times.map(tradingDayOf).filter(Boolean))].sort();
+}
+
+function lastOverlapDay(left, right) {
+  const L = new Set(tradingDaysOf(left.map((p) => p.t)));
+  const R = new Set(tradingDaysOf(right.map((p) => p.t)));
+  const both = [...L].filter((td) => R.has(td)).sort();
+  return both.length ? both[both.length - 1] : null;
+}
+
+test("分时对齐取两腿最后共同交易日, 周一早盘空窗不算重叠", () => {
+  // 2-day window on Monday morning: both empty -> 无重叠点
+  assert.equal(lastOverlapDay([], []), null);
+  // One leg only has today, the other still on Friday -> no shared day
+  const mon = [{ t: "2026-08-24 09:01:00", c: 3030 }];
+  const fri = [{ t: "2026-08-21 15:00:00", c: 2860 }];
+  assert.equal(lastOverlapDay(mon, fri), null);
+  // Sunday night rolls to Monday; both printed -> overlap Monday
+  const sunNightL = [
+    { t: "2026-08-21 21:01:00", c: 3000 },
+    { t: "2026-08-23 21:01:00", c: 3010 },
+    { t: "2026-08-24 09:01:00", c: 3030 },
+  ];
+  const sunNightR = [
+    { t: "2026-08-21 21:01:00", c: 720 },
+    { t: "2026-08-23 21:01:00", c: 725 },
+    { t: "2026-08-24 09:01:00", c: 730 },
+  ];
+  assert.equal(lastOverlapDay(sunNightL, sunNightR), "2026-08-24");
+  assert.equal(lastOverlapDay(fri, [{ t: "2026-08-21 09:31:00", c: 2858 }]), "2026-08-21");
+});
+
+test("分时同钟点取更新的一根, 周日夜盘盖住上周五夜盘", () => {
+  assert.match(src, /p\.t > prev\.t/);
+  const later = "2026-08-23 21:01:00";
+  const earlier = "2026-08-21 21:01:00";
+  assert.ok(later > earlier);
 });
