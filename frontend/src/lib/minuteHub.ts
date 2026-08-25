@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useSyncExternalStore } from "react";
-import { hubPollMs, primeTradingDay } from "@/lib/ashareSession";
+import { HUB_POLL_FUTURES_MS, hubPollMs, primeTradingDay } from "@/lib/ashareSession";
+import { isOffshoreCode } from "@/lib/quoteHub";
 import { loadLightKlineBatch } from "@/lib/lightKline";
 import type { AShareLightKline } from "@/lib/api";
 
 /**
  * Merge cockpit minute-spark subscriptions into one batch.
- * Open: 20s. Closed/lunch/holiday: 60s (backend TTL still covers extras).
+ * Open: 20s (5s if any subscribed code is 外盘). Closed: 60s, or 5s if 外盘.
  * Last frame stays in memory and localStorage so a new tab paints the line first.
  */
 
@@ -142,7 +143,11 @@ function arm() {
     timer = null;
     if (!document.hidden) void tick();
     if (looping) arm();
-  }, hubPollMs(MINUTE_POLL_MS));
+  }, hubPollMs(
+    [...refCounts.keys()].some(isOffshoreCode) ? HUB_POLL_FUTURES_MS : MINUTE_POLL_MS,
+    new Date(),
+    [...refCounts.keys()].some(isOffshoreCode),
+  ));
 }
 
 function ensureLoop() {

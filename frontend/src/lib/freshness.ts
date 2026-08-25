@@ -17,6 +17,31 @@ export function formatClock(
   });
 }
 
+/** Upstream quote stamp: "YYYY-MM-DD HH:MM:SS" or YYYYMMDDHHMMSS. */
+export function formatQuoteClock(raw?: string | null): string {
+  const s = (raw || "").trim();
+  if (!s) return "";
+  const clock = s.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+  if (clock) return `${clock[1].padStart(2, "0")}:${clock[2]}:${clock[3] ?? "00"}`;
+  if (/^\d{14}$/.test(s)) return `${s.slice(8, 10)}:${s.slice(10, 12)}:${s.slice(12, 14)}`;
+  return "";
+}
+
+function sessionClock(raw?: string | null): string {
+  const c = formatQuoteClock(raw);
+  // Daily bars are dated 00:00; that must not beat a live 16:32/17:03 stamp.
+  return !c || c === "00:00:00" ? "" : c;
+}
+
+/** Prefer the later clock on the same session. Persist 16:32 must not beat a 17:03 bar. */
+export function laterQuoteClock(a?: string | null, b?: string | null): string {
+  const ca = sessionClock(a);
+  const cb = sessionClock(b);
+  if (!ca) return cb;
+  if (!cb) return ca;
+  return ca >= cb ? ca : cb;
+}
+
 /** Relative age hint for scanability (e.g. "12s 前"). */
 export function formatAge(at: Date | number | null | undefined, now: Date = new Date()): string | null {
   if (at == null) return null;

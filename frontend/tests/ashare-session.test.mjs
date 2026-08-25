@@ -36,8 +36,9 @@ function kind(now, tradingDay = null) {
   return "off";
 }
 
-function hubPollMs(openMs, now, tradingDay = null) {
-  return kind(now, tradingDay) === "open" ? openMs : 60_000;
+function hubPollMs(openMs, now, tradingDay = null, offshore = false) {
+  if (kind(now, tradingDay) === "open") return openMs;
+  return offshore ? 5_000 : 60_000;
 }
 
 /** UTC instant that is this Beijing wall clock. */
@@ -57,9 +58,11 @@ test("clock: open session keeps 5s, rest stretches to 60s", () => {
   assert.equal(hubPollMs(5000, bj(2026, 8, 17, 12, 0)), 60_000);
   assert.equal(hubPollMs(5000, bj(2026, 8, 17, 20, 0)), 60_000);
   assert.equal(hubPollMs(5000, bj(2026, 8, 16, 10, 0)), 60_000);
+  assert.equal(hubPollMs(5000, bj(2026, 8, 17, 20, 0), null, true), 5_000);
 });
 
 test("trading_day false wins over weekday auction hours", () => {
   assert.equal(hubPollMs(5000, bj(2026, 10, 1, 10, 0), false), 60_000);
   assert.equal(hubPollMs(20000, bj(2026, 10, 1, 10, 0), false), 60_000);
+  assert.equal(hubPollMs(20000, bj(2026, 10, 1, 10, 0), false, true), 5_000);
 });

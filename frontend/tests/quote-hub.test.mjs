@@ -8,6 +8,7 @@ const QUOTE = new URL("../src/lib/quoteHub.ts", import.meta.url);
 const MINUTE = new URL("../src/lib/minuteHub.ts", import.meta.url);
 const WORLD = new URL("../src/components/cockpit/WorldIndexPanel.tsx", import.meta.url);
 const SESSION = new URL("../src/lib/ashareSession.ts", import.meta.url);
+const FRESH = new URL("../src/lib/freshness.ts", import.meta.url);
 const DIRECT = new URL("../src/lib/tencentDirect.ts", import.meta.url);
 
 const chartSrc = await readFile(CHART, "utf8");
@@ -17,6 +18,7 @@ const minuteSrc = await readFile(MINUTE, "utf8");
 const worldSrc = await readFile(WORLD, "utf8");
 const sessionSrc = await readFile(SESSION, "utf8");
 const directSrc = await readFile(DIRECT, "utf8");
+const freshSrc = await readFile(FRESH, "utf8");
 
 test("K-line page and watchlist feed subscribe to the quote hub", () => {
   assert.match(chartSrc, /useQuotes\(/);
@@ -24,6 +26,34 @@ test("K-line page and watchlist feed subscribe to the quote hub", () => {
   assert.doesNotMatch(chartSrc, /api\.quote\(/);
   assert.match(feedSrc, /useQuotes\(codes\)/);
   assert.doesNotMatch(feedSrc, /api\.quote\(/);
+});
+
+test("chart last bar overlays quote hub and minutes keep polling", async () => {
+  const klineSrc = await readFile(new URL("../src/lib/lightKline.ts", import.meta.url), "utf8");
+  assert.match(klineSrc, /export function overlayQuoteBar/);
+  assert.match(klineSrc, /newHm > lastHm/);
+  assert.match(klineSrc, /hmOf\(last\.datetime\)/);
+  assert.match(klineSrc, /nowMs: number = Date\.now\(\)/);
+  assert.match(klineSrc, /Never move T backwards/);
+  assert.match(klineSrc, /q\.fromStore/);
+  assert.match(quoteSrc, /fromStore: true/);
+  assert.match(quoteSrc, /old\.fromStore/);
+  assert.match(chartSrc, /bypassCache: !opts\?\.quiet/);
+  assert.match(klineSrc, /FUTURE_TTL_MS = 4_000/);
+  assert.doesNotMatch(klineSrc, /quoteStamp\(q\.updated/);
+  assert.match(chartSrc, /overlayQuoteBar\(minute\.bars/);
+  assert.match(chartSrc, /overlayQuoteBar\(daily\.bars/);
+  assert.match(chartSrc, /isFuturesCode\(code\) \? HUB_POLL_FUTURES_MS : MINUTE_POLL_MS/);
+  assert.match(chartSrc, /quiet: true/);
+  assert.match(chartSrc, /isFuturesCode\(selected\)/);
+  assert.doesNotMatch(chartSrc, /api\.quote\(/);
+});
+
+test("quote clock formats upstream stamps", () => {
+  assert.match(freshSrc, /export function formatQuoteClock/);
+  assert.match(freshSrc, /export function laterQuoteClock/);
+  assert.match(freshSrc, /YYYYMMDDHHMMSS/);
+  assert.match(freshSrc, /00:00:00/);
 });
 
 test("quote hub keeps last price/pct across refresh", () => {
@@ -53,11 +83,15 @@ test("browser-direct Tencent is not used when the server is still in flight", ()
 
 test("quote and minute hubs stretch the interval when A-share is not open", () => {
   assert.match(sessionSrc, /export const HUB_POLL_CLOSED_MS = 60_000/);
+  assert.match(sessionSrc, /export const HUB_POLL_FUTURES_MS = 5_000/);
+  assert.match(sessionSrc, /offshore \? HUB_POLL_FUTURES_MS/);
   assert.match(sessionSrc, /export function hubPollMs/);
   assert.match(sessionSrc, /primeTradingDay/);
   assert.match(sessionSrc, /reviewWarmup/);
-  assert.match(quoteSrc, /hubPollMs\(QUOTE_POLL_MS\)/);
-  assert.match(minuteSrc, /hubPollMs\(MINUTE_POLL_MS\)/);
+  assert.match(quoteSrc, /hubPollMs\(QUOTE_POLL_MS, new Date\(\)/);
+  assert.match(minuteSrc, /HUB_POLL_FUTURES_MS : MINUTE_POLL_MS/);
+  assert.match(minuteSrc, /isOffshoreCode/);
+  assert.match(quoteSrc, /isOffshoreCode/);
   assert.match(quoteSrc, /primeTradingDay/);
   assert.match(minuteSrc, /primeTradingDay/);
   assert.doesNotMatch(quoteSrc, /setInterval/);
@@ -73,6 +107,7 @@ test("browser-direct Tencent fallback keeps PE/PB/total mcap", () => {
   assert.match(directSrc, /is_stale/);
   assert.match(directSrc, /bid_vol/);
   assert.match(directSrc, /vol_ratio/);
+  assert.match(quoteSrc, /time: q\.time/);
   assert.match(quoteSrc, /bid_vol/);
   assert.match(quoteSrc, /float_mcap_yi/);
   assert.match(chartSrc, /q\?\.bid/);

@@ -67,7 +67,8 @@ const INK = "#c8cdd6";
 const GRID = "rgba(255,255,255,0.10)";
 const HAIR = "rgba(255,204,0,0.55)";
 const TAG = "#1a1400";
-const FONT = '"Consolas", "Microsoft YaHei", ui-monospace, sans-serif';
+/** Axis is canvas. Mono fonts slash the zero; YaHei does not. */
+const FONT = '"Microsoft YaHei", "Segoe UI", sans-serif';
 
 /** Logical unix seconds so lunch/night gaps stay one bar, not hours of empty axis. */
 export const LC_ORIGIN = 1_700_000_000;

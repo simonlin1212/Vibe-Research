@@ -722,10 +722,10 @@ export function OptionChartCard({ pick, mode, tick, alerts = NO_ALERTS }: {
         {mode === "daily" ? <LcLegend items={glanceLegend} className="left-1 top-0.5 text-[10px]" /> : null}
         {axis ? (
           <>
-            <span className="pointer-events-none absolute left-1.5 top-0.5 z-10 font-mono text-[11px] tabular-nums text-[#ff2d2d]">{axis.maxPx}</span>
-            <span className="pointer-events-none absolute right-10 top-0.5 z-10 font-mono text-[11px] tabular-nums text-[#ff2d2d]">{axis.maxPct}</span>
-            <span className="pointer-events-none absolute bottom-[24%] left-1.5 z-10 font-mono text-[11px] tabular-nums text-[#00d26a]">{axis.minPx}</span>
-            <span className="pointer-events-none absolute bottom-[24%] right-10 z-10 font-mono text-[11px] tabular-nums text-[#00d26a]">{axis.minPct}</span>
+            <span className="pointer-events-none absolute left-1.5 top-0.5 z-10 font-sans text-[11px] tabular-nums text-[#ff2d2d]">{axis.maxPx}</span>
+            <span className="pointer-events-none absolute right-10 top-0.5 z-10 font-sans text-[11px] tabular-nums text-[#ff2d2d]">{axis.maxPct}</span>
+            <span className="pointer-events-none absolute bottom-[24%] left-1.5 z-10 font-sans text-[11px] tabular-nums text-[#00d26a]">{axis.minPx}</span>
+            <span className="pointer-events-none absolute bottom-[24%] right-10 z-10 font-sans text-[11px] tabular-nums text-[#00d26a]">{axis.minPct}</span>
           </>
         ) : null}
         <LcHoverTag tag={hoverTag} y={tagY} />

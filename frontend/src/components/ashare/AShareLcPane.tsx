@@ -6,6 +6,7 @@ import type { AShareLightBar } from "@/lib/api";
 import {
   concatDaySlots, lastFiniteIdx, padToSlots, tradingDayOf, tradingDaysOf,
 } from "@/lib/derivMinuteAxis";
+import { laterQuoteClock } from "@/lib/freshness";
 import { isFuturesCode } from "@/lib/quoteHub";
 import { cn } from "@/lib/utils";
 import {
@@ -60,6 +61,7 @@ export function AShareLcPane({
   emptyHint,
   visible = true,
   extra,
+  quoteTime,
   onRefresh,
   days = 1,
   bare = false,
@@ -76,6 +78,7 @@ export function AShareLcPane({
   emptyHint: string;
   visible?: boolean;
   extra?: ReactNode;
+  quoteTime?: string;
   onRefresh: () => void;
   days?: 1 | 2;
   bare?: boolean;
@@ -324,6 +327,8 @@ export function AShareLcPane({
     });
   }
 
+  const quoteClock = laterQuoteClock(quoteTime, isDaily ? undefined : bars[bars.length - 1]?.datetime);
+
   const head = (
     <div className={cn("flex items-center justify-between gap-2", bare ? "px-1.5 py-0.5" : "mb-1.5")}>
       <div className="flex min-w-0 flex-1 items-center gap-2">
@@ -333,7 +338,7 @@ export function AShareLcPane({
         ) : null}
         {!bare && bar && chg != null ? (
           <p className={cn(
-            "font-mono text-[11px] tabular-nums",
+            "font-sans text-[11px] tabular-nums",
             chg > 0 ? "text-[#ff2d2d]" : chg < 0 ? "text-[#00d26a]" : "text-slate-500",
           )}>
             {fmtPrice(bar.close)}
@@ -343,6 +348,14 @@ export function AShareLcPane({
         ) : null}
       </div>
       <div className="flex shrink-0 items-center gap-1">
+        {quoteClock ? (
+          <span
+            className="shrink-0 font-sans text-[10px] tabular-nums text-slate-500"
+            title={quoteTime || bars[bars.length - 1]?.datetime}
+          >
+            更新 {quoteClock}
+          </span>
+        ) : null}
         {extra}
         <button
           type="button"
@@ -374,10 +387,10 @@ export function AShareLcPane({
         {isDaily ? <LcLegend items={legend} /> : null}
         {axis ? (
           <>
-            <span className="pointer-events-none absolute left-1.5 top-0.5 z-10 font-mono text-[11px] tabular-nums text-[#ff2d2d]">{axis.maxPx}</span>
-            <span className="pointer-events-none absolute right-10 top-0.5 z-10 font-mono text-[11px] tabular-nums text-[#ff2d2d]">{axis.maxPct}</span>
-            <span className="pointer-events-none absolute bottom-[24%] left-1.5 z-10 font-mono text-[11px] tabular-nums text-[#00d26a]">{axis.minPx}</span>
-            <span className="pointer-events-none absolute bottom-[24%] right-10 z-10 font-mono text-[11px] tabular-nums text-[#00d26a]">{axis.minPct}</span>
+            <span className="pointer-events-none absolute left-1.5 top-0.5 z-10 font-sans text-[11px] tabular-nums text-[#ff2d2d]">{axis.maxPx}</span>
+            <span className="pointer-events-none absolute right-10 top-0.5 z-10 font-sans text-[11px] tabular-nums text-[#ff2d2d]">{axis.maxPct}</span>
+            <span className="pointer-events-none absolute bottom-[24%] left-1.5 z-10 font-sans text-[11px] tabular-nums text-[#00d26a]">{axis.minPx}</span>
+            <span className="pointer-events-none absolute bottom-[24%] right-10 z-10 font-sans text-[11px] tabular-nums text-[#00d26a]">{axis.minPct}</span>
           </>
         ) : null}
         <LcHoverTag tag={hoverTag} y={tagY} />

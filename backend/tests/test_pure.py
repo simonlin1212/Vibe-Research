@@ -230,6 +230,7 @@ def _gtimg_line(**overrides) -> str:
     parts[44] = overrides.get("float_mcap", "15000")
     parts[45] = overrides.get("mcap", "15000")
     parts[46] = overrides.get("pb", "6.41")
+    parts[30] = overrides.get("time", "20260825161402")
     return 'v_sh600519="' + "~".join(parts) + '";'
 
 
@@ -243,6 +244,7 @@ def test_parse_gtimg():
     assert q["pb"] == 6.41
     assert q["mcap_yi"] == 15000
     assert q["float_mcap_yi"] == 15000
+    assert q["time"] == "2026-08-25 16:14:02"
     assert q["is_stale"] is False
 
 

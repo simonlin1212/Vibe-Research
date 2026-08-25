@@ -37,8 +37,8 @@ export interface CommodityDef {
 export const COMMODITIES: CommodityDef[] = [
   { code: "hf_XAU", label: "伦敦金", unit: "现货 · 美元/盎司", accent: "#ffca28" },
   { code: "hf_SI", label: "纽约白银", unit: "COMEX · 美元/盎司", accent: "#c0d0e0" },
-  { code: "hf_CAD", label: "LME伦铜", unit: "美元/吨", accent: "#e8833a" },
-  { code: "hf_CL", label: "NYMEX原油", unit: "美元/桶", accent: "#5aa9e6" },
+  { code: "hf_CAD", label: "伦铜", unit: "美元/吨", accent: "#e8833a" },
+  { code: "hf_CL", label: "纽约原油", unit: "美元/桶", accent: "#5aa9e6" },
   { code: "hf_NQ", label: "纳指期货", unit: "CME · NQ", accent: "#818cf8" },
   { code: "hf_BTC", label: "BTC期货", unit: "CME · CFD", accent: "#f7931a" },
 ];

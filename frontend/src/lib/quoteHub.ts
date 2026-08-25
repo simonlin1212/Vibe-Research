@@ -3,7 +3,8 @@ import { hubPollMs, primeTradingDay } from "@/lib/ashareSession";
 import { api } from "@/lib/api";
 
 /**
- * Cockpit quote hub: 5s when A-share is open, 60s when closed/lunch/holiday.
+ * Cockpit quote hub: 5s when A-share is open or any 外盘 is subscribed;
+ * 60s when closed/lunch/holiday and only A-share codes.
  * Equities/indices and futures are fetched in parallel so a slow Sina
  * tick cannot stall index prices.
  */
@@ -35,6 +36,10 @@ export interface HubQuote {
   mcap_yi?: number;
   is_stale?: boolean;
   stale_reason?: string;
+  /** Upstream tick time, if the quote line has one. */
+  time?: string;
+  /** Hydrated from localStorage; not a live tick this session. */
+  fromStore?: boolean;
   updated: number;
 }
 
@@ -72,7 +77,7 @@ function loadStore() {
     const now = Date.now();
     for (const [k, v] of Object.entries(parsed || {})) {
       if (v && Number.isFinite(v.price) && v.price > 0 && now - (v.updated || 0) < STORE_MAX_AGE_MS) {
-        entries.set(k, v);
+        entries.set(k, { ...v, fromStore: true });
       }
     }
   } catch {
@@ -114,6 +119,11 @@ export function isFuturesCode(code: string): boolean {
   return /^(hf_|nf_)/i.test(code);
 }
 
+/** US / HK / JP / KR / FX / futures still tick when A-share is closed. */
+export function isOffshoreCode(code: string): boolean {
+  return isFuturesCode(code) || /^(us|hk|jp|ks|wh)/i.test(code);
+}
+
 function emit() {
   version += 1;
   listeners.forEach((l) => l());
@@ -143,7 +153,7 @@ function applyQuote(
     open?: number; high?: number; low?: number; amplitude?: number; vol_ratio?: number;
     float_mcap_yi?: number; limit_up?: number; limit_down?: number; pe_static?: number;
     prev?: number; pe_ttm?: number; pb?: number; mcap_yi?: number;
-    is_stale?: boolean; stale_reason?: string;
+    is_stale?: boolean; stale_reason?: string; time?: string;
   },
   now: number,
 ): boolean {
@@ -175,6 +185,7 @@ function applyQuote(
     mcap_yi: q.mcap_yi,
     is_stale: q.is_stale,
     stale_reason: q.stale_reason,
+    time: q.time,
     updated: now,
   };
   const old = entries.get(code);
@@ -188,7 +199,7 @@ function applyQuote(
     || old.limit_up !== next.limit_up || old.limit_down !== next.limit_down
     || old.pe_static !== next.pe_static
     || old.pe_ttm !== next.pe_ttm || old.pb !== next.pb || old.mcap_yi !== next.mcap_yi
-    || old.is_stale !== next.is_stale) {
+    || old.is_stale !== next.is_stale || old.time !== next.time || old.fromStore) {
     entries.set(code, next);
     return true;
   }
@@ -228,7 +239,7 @@ function arm() {
     timer = null;
     if (!document.hidden) void tick();
     if (looping) arm();
-  }, hubPollMs(QUOTE_POLL_MS));
+  }, hubPollMs(QUOTE_POLL_MS, new Date(), [...refCounts.keys()].some(isOffshoreCode)));
 }
 
 function ensureLoop() {

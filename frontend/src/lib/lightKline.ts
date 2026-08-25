@@ -1,7 +1,7 @@
 import { COMMODITIES, COMMODITY_CODES } from "@/config/cockpit";
-import { api, type AShareLightKline, type FutureDaily } from "@/lib/api";
+import { api, type AShareLightBar, type AShareLightKline, type FutureDaily } from "@/lib/api";
 import { hmOf } from "@/lib/derivMinuteAxis";
-import { isFuturesCode } from "@/lib/quoteHub";
+import { isFuturesCode, type HubQuote } from "@/lib/quoteHub";
 import { fetchDirectMinute, withFallback } from "@/lib/tencentDirect";
 
 function toTencentSym(code: string): string {
@@ -19,6 +19,54 @@ function canDirectMinute(code: string): boolean {
 
 function hasBars(kl: AShareLightKline | null | undefined): boolean {
   return (kl?.bars?.length ?? 0) >= 2;
+}
+
+function pad2(n: number) {
+  return String(n).padStart(2, "0");
+}
+
+function quoteStamp(nowMs: number, fallback: string): string {
+  const d = new Date(nowMs);
+  const day = /^\d{4}-\d{2}-\d{2}/.test(fallback)
+    ? fallback.slice(0, 10)
+    : `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  return `${day} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+}
+
+/** Patch last bar with quote-hub last. Same hub as the watch table, no extra poll.
+
+  Live T uses the wall clock, not q.updated (hub only bumps updated when price
+  changes, so a stale persist can rewind T). Never move T backwards.
+  Persist (fromStore) is not overlaid: refresh would paint last session's last.
+ */
+export function overlayQuoteBar(
+  bars: AShareLightBar[],
+  q: Pick<HubQuote, "price" | "high" | "low" | "fromStore"> | undefined,
+  kind: "minute" | "daily",
+  live = true,
+  nowMs: number = Date.now(),
+): AShareLightBar[] {
+  if (!q || q.fromStore || !Number.isFinite(q.price) || q.price <= 0 || bars.length === 0) return bars;
+  const last = bars[bars.length - 1];
+  const px = q.price;
+  const hi = Math.max(last.high || px, Number.isFinite(q.high) ? (q.high as number) : px, px);
+  const lo = Math.min(last.low > 0 ? last.low : px, Number.isFinite(q.low) && (q.low as number) > 0 ? (q.low as number) : px, px);
+  if (kind === "daily") {
+    if (last.close === px && last.high === hi && last.low === lo) return bars;
+    return [...bars.slice(0, -1), { ...last, close: px, high: hi, low: lo }];
+  }
+  if (!live) {
+    if (last.close === px && last.high === hi && last.low === lo) return bars;
+    return [...bars.slice(0, -1), { ...last, close: px, high: hi, low: lo }];
+  }
+  const stamp = quoteStamp(nowMs, last.datetime);
+  const lastHm = hmOf(last.datetime);
+  const newHm = hmOf(stamp);
+  if (newHm && lastHm && newHm > lastHm) {
+    return [...bars, { datetime: stamp, open: px, high: px, low: px, close: px, volume: 0 }];
+  }
+  if (last.close === px && last.high === hi && last.low === lo && last.datetime === stamp) return bars;
+  return [...bars.slice(0, -1), { ...last, close: px, high: hi, low: lo, datetime: stamp }];
 }
 
 function futureName(code: string): string | undefined {
@@ -98,6 +146,7 @@ async function directKline(code: string): Promise<AShareLightKline> {
 }
 
 const TTL_MS = 55_000;
+const FUTURE_TTL_MS = 4_000;
 const MAX_INFLIGHT = 4;
 
 const cache = new Map<string, { at: number; data: AShareLightKline }>();
@@ -124,22 +173,28 @@ function release(): void {
   if (next) next();
 }
 
-/** Shared 55s cache + concurrency 4. Same code/res/num collapses to one fetch. */
+/** Shared 55s cache + concurrency 4. Futures minutes 4s so 外盘 5s polls see new bars. */
 export function loadLightKline(
   code: string,
   resolution = "1",
   num = 240,
+  opts?: { bypassCache?: boolean },
 ): Promise<AShareLightKline> {
+  const ttl = isFuturesCode(code) && resolution !== "1D" ? FUTURE_TTL_MS : TTL_MS;
   const key = `${code}:${resolution}:${num}`;
-  const hit = cache.get(key);
-  if (hit && Date.now() - hit.at < TTL_MS) return Promise.resolve(hit.data);
-  const inflight = pending.get(key);
-  if (inflight) return inflight;
+  if (!opts?.bypassCache) {
+    const hit = cache.get(key);
+    if (hit && Date.now() - hit.at < ttl) return Promise.resolve(hit.data);
+    const inflight = pending.get(key);
+    if (inflight) return inflight;
+  }
   const p = (async () => {
     await acquire();
     try {
-      const again = cache.get(key);
-      if (again && Date.now() - again.at < TTL_MS) return again.data;
+      if (!opts?.bypassCache) {
+        const again = cache.get(key);
+        if (again && Date.now() - again.at < ttl) return again.data;
+      }
       const data = isFuturesCode(code)
         ? await loadFutureKline(code, resolution, num)
         : await withFallback(

@@ -126,6 +126,9 @@ def test_routes_default_last_explicit_refetch():
     assert 'op = _cached if key == "changepercent" else _dc' in src
     assert "_cached" in inspect.getsource(market_routes.market_board_stocks)
     assert "_cached" in inspect.getsource(market_routes.market_lives)
+    assert "_cached" in inspect.getsource(market_routes.market_commodities)
+    assert "_cached" in inspect.getsource(market_routes.market_commodity_minutes)
+    assert ",\n            4," in inspect.getsource(market_routes.market_commodity_minutes)
     assert "jin10" in inspect.getsource(market_routes.market_lives)
     assert "_cached" in inspect.getsource(ashare.fund_flow_minute)
     assert "_cached" in inspect.getsource(fin_routes.fin_suggest)

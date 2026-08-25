@@ -2,11 +2,11 @@ import { klineHref, QuoteLine } from "@/components/cockpit/QuoteLine";
 import { COMMODITIES, COMMODITY_CODES, MACRO_INDEX_DEFS } from "@/config/cockpit";
 import { usePolling } from "@/hooks/usePolling";
 import { api } from "@/lib/api";
+import { HUB_POLL_FUTURES_MS, hubPollMs } from "@/lib/ashareSession";
 import { useMinutes } from "@/lib/minuteHub";
 import { useQuotes } from "@/lib/quoteHub";
 import { sparkSessionForRegion } from "@/lib/sparkAxis";
 
-const MINUTE_MS = 60_000;
 const FUT_CODES = COMMODITIES.map((c) => c.code);
 const MACRO_CODES = MACRO_INDEX_DEFS.map((d) => d.code);
 const FUT_HEAD = COMMODITIES.filter((c) => c.code === "hf_NQ");
@@ -18,7 +18,8 @@ const FUT_TAIL = [
 export function CommodityPanel() {
   const hub = useQuotes([...FUT_CODES, ...MACRO_CODES]);
   const indexMinutes = useMinutes(MACRO_CODES);
-  const { data: minutes, error } = usePolling(() => api.commodityMinutes(COMMODITY_CODES), MINUTE_MS, []);
+  const minMs = hubPollMs(HUB_POLL_FUTURES_MS, new Date(), true);
+  const { data: minutes, error } = usePolling(() => api.commodityMinutes(COMMODITY_CODES), minMs, []);
 
   const futLine = (c: (typeof COMMODITIES)[number]) => {
     const q = hub[c.code];

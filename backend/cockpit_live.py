@@ -113,6 +113,7 @@ def parse_tencent_quote_line(line: str) -> dict | None:
         "pe_ttm": q.get("pe_ttm") or 0.0,
         "pb": q.get("pb") or 0.0,
         "mcap_yi": q.get("mcap_yi") or 0.0,
+        "time": q.get("time") or "",
         "is_stale": bool(q.get("is_stale")),
         "stale_reason": q.get("stale_reason") or "",
         **_quote_board(q),
@@ -230,6 +231,7 @@ def _tencent_quotes(codes: list[str]) -> dict[str, dict]:
             "pe_ttm": q.get("pe_ttm") or 0.0,
             "pb": q.get("pb") or 0.0,
             "mcap_yi": q.get("mcap_yi") or 0.0,
+            "time": q.get("time") or "",
             "is_stale": bool(q.get("is_stale")),
             "stale_reason": q.get("stale_reason") or "",
             **_quote_board(q),
@@ -313,6 +315,7 @@ def _quote_item(q: dict, canon: str, *, amount: float = 0.0, turnover: float = 0
         "pe_ttm": q.get("pe_ttm") or 0.0,
         "pb": q.get("pb") or 0.0,
         "mcap_yi": q.get("mcap_yi") or 0.0,
+        "time": q.get("time") or "",
         **_quote_board(q),
     }
 

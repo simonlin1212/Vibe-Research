@@ -1,4 +1,4 @@
-import { lazy, Suspense, useLayoutEffect, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import {
@@ -25,13 +25,25 @@ import { RankTabBar, StockRankPanel, type RankTab } from "@/components/cockpit/S
 import { CommodityPanel } from "@/components/cockpit/CommodityPanel";
 import { reviewPending } from "@/components/review/reviewPending";
 import { useReviewData } from "@/hooks/useReviewData";
+import { hubPollMs } from "@/lib/ashareSession";
 import { api, ApiError } from "@/lib/api";
+import { QUOTE_POLL_MS } from "@/lib/quoteHub";
 import { collectReviewContext } from "@/lib/reviewContext";
 import { hasLlm, chatStream } from "@/lib/llm";
 
 const AShareLightChart = lazy(() =>
   import("@/pages/AShareLightChart").then((m) => ({ default: m.AShareLightChart })),
 );
+
+/** 行情观察订了外盘, 跟报价中心同一间隔. */
+function WatchPace() {
+  const [ms, setMs] = useState(() => hubPollMs(QUOTE_POLL_MS, new Date(), true));
+  useEffect(() => {
+    const id = window.setInterval(() => setMs(hubPollMs(QUOTE_POLL_MS, new Date(), true)), 15_000);
+    return () => window.clearInterval(id);
+  }, []);
+  return <span className="text-[10px] tabular-nums text-slate-500">{Math.round(ms / 1000)}s</span>;
+}
 
 export function DailyReview() {
   const d = useReviewData();
@@ -104,7 +116,7 @@ export function DailyReview() {
           accent: "#ffcc00",
           defaultW: 0.30,
           mobileH: "h-[64vh]",
-          right: <span className="text-[10px] tabular-nums text-slate-500">5s</span>,
+          right: <WatchPace />,
           body: (
             <div className="flex h-full min-h-0 flex-col sm:flex-row">
               <div className="min-h-0 min-w-0 flex-1 overflow-y-auto border-b border-slate-800/60 sm:border-b-0 sm:border-r">

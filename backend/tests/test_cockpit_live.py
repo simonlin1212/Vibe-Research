@@ -82,6 +82,7 @@ def test_parse_sina_hf_and_nf():
     assert h["hf_GC"]["price"] == 2345.6
     assert h["hf_GC"]["prev"] == 2300.0
     assert h["hf_GC"]["pct"] == cl._pct(2345.6, 2300.0)
+    assert h["hf_GC"]["time"] == "2026-08-15 10:01"
     assert n["nf_AU0"]["name"] == "沪金"
     assert n["nf_AU0"]["price"] == 785
 

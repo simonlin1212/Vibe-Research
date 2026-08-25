@@ -76,9 +76,9 @@ fuyao 网关（`quota-h.10jqka.com.cn`）的快照 / 日 K / 分钟线：股票�
 _Avoid_: hexin-v 逆向, 第二条报价轮询, 199112 当统一涨跌幅
 
 **报价中心**:
-网页里全球指数 / 商品 / 自选 / K 线页 / 自选公告表共用的那一份实时报价。开市 5 秒，休市/午休拉长，仍走这里。间隔问 `ashareSession.hubPollMs`（交易日来自预热状态的 `trading_day`）。
+网页里全球指数 / 商品 / 自选 / K 线页 / 自选公告表共用的那一份实时报价。开市 5 秒，休市/午休拉长，订了外盘（美港日韩汇/期货）报价和分钟都 5s，行情观察同一口。间隔问 `ashareSession.hubPollMs`（交易日来自预热状态的 `trading_day`）。商品快照/分钟过期重取(TTL 4s), 不 last-good 冻死。
 入口: `frontend/src/lib/quoteHub.ts` 的 `useQuotes`。字段用 `pct` / `prev` / `change` / `turnover` / `amount` / `volume` / `bid` / `ask` / `bid_vol` / `ask_vol` / `open` / `high` / `low` / `amplitude` / `vol_ratio` / `limit_up` / `limit_down` / `float_mcap_yi` / `pe_static`，以及腾讯已有的 `pe_ttm` / `pb` / `mcap_yi`。同一份腾讯行透出，不另开轮询。
-K 线挂在 `/a-share` 复盘：首行「行情观察 / 涨跌分布 / 市场板块热点 / 板块资金流向」；第2-3行左「自选」表（代码/名称/现价/涨幅/涨跌/额/换/开高低走报价中心，不再用 QuoteStockRow 分时 SVG / 主力净），正中「分时 / 日K」上下叠（同一 `AShareLightChart` `pane=charts`），右个股榜 + 涨跌停 +「主力 / 龙虎 / 资金 / 产业链」（默认主力净流入排行，本机 `ashare.review.v2`）。共用 `?code=` 与报价中心，不另开轮询；点行出图；旧 `?tab=kline` 落到这一屏。分时照期权卡：轴铺满 09:30-15:00 午休空着，可切一日/两日（两日走腾讯 5 日分时取最近两交易日拼轴、日间断开、昨收按当日，本机 `ashare.minute.days`），量柱按当根相对上一分钟红绿（腾讯分时 O/H/L/C 同价, 不当开收）；A 股分时 T/P/额挂标题行不叠图; 期权分时 T/P/V/IV/OI 同样挂标题行不叠图; 价轴绕昨收对称(上下边距相同, +涨幅=-跌幅), 四角标轴端: 左上最高价红 / 右上最高涨幅红 / 左下最低价绿 / 右下最低涨幅绿; A 股分时下窗画成交额(标「成交额」, 腾讯累计拆成分钟增量), 日K 下窗画成交量(轴从 0 起, 柱高跟量成正比; 对数轴只作用价)；十字右侧价签写成 价格(+/-%) 相对昨收/昨结(白底黑字, 涨跌幅单独红绿, 所有 LC 时间图同一块 `LcHoverTag`, 自带横线价签关掉, 不标距今)；期权日K/分时拆量窗, 分时持仓黄线叠在量窗（独立轴 `oi`）。加自选与复盘自选格同一套 `GET /api/fin/suggest`（名称/拼音/代码）。点其他格股票/指数/商品出分时日K（`?code=`，指数带 sh/sz/us 前缀，商品 `hf_XAU`），不写自选。商品分时走已有 `commodity-minutes`（宏观观察同一把钥匙），日K走 `future-daily`，不进腾讯 light-kline；分时按 24h 原序，不贴 A 股 09:30-15:00。详情/公告仍从分时右上进（`?tab=detail|feed`），A 股顶栏不再切复盘/K线。
+K 线挂在 `/a-share` 复盘：首行「行情观察 / 涨跌分布 / 市场板块热点 / 板块资金流向」；第2-3行左「自选」表（代码/名称/现价/涨幅/涨跌/额/换/开高低走报价中心，不再用 QuoteStockRow 分时 SVG / 主力净），正中「分时 / 日K」上下叠（同一 `AShareLightChart` `pane=charts`），右个股榜 + 涨跌停 +「主力 / 龙虎 / 资金 / 产业链」（默认主力净流入排行，本机 `ashare.review.v2`）。共用 `?code=` 与报价中心，不另开轮询；点行出图；旧 `?tab=kline` 落到这一屏。分时照期权卡：轴铺满 09:30-15:00 午休空着，可切一日/两日（两日走腾讯 5 日分时取最近两交易日拼轴、日间断开、昨收按当日，本机 `ashare.minute.days`），量柱按当根相对上一分钟红绿（腾讯分时 O/H/L/C 同价, 不当开收）；A 股分时 T/P/额挂标题行不叠图, 分时/日K标题行右边标最新行情时间(本轮报价 time, 落盘旧戳不用, 不另开轮询); 期权分时 T/P/V/IV/OI 同样挂标题行不叠图; 价轴绕昨收对称(上下边距相同, +涨幅=-跌幅), 四角标轴端: 左上最高价红 / 右上最高涨幅红 / 左下最低价绿 / 右下最低涨幅绿; A 股分时下窗画成交额(标「成交额」, 腾讯累计拆成分钟增量), 日K 下窗画成交量(轴从 0 起, 柱高跟量成正比; 对数轴只作用价)；十字右侧价签写成 价格(+/-%) 相对昨收/昨结(白底黑字, 涨跌幅单独红绿, 所有 LC 时间图同一块 `LcHoverTag`, 自带横线价签关掉, 不标距今)；期权日K/分时拆量窗, 分时持仓黄线叠在量窗（独立轴 `oi`）。加自选与复盘自选格同一套 `GET /api/fin/suggest`（名称/拼音/代码）。点其他格股票/指数/商品出分时日K（`?code=`，指数带 sh/sz/us 前缀，商品 `hf_XAU`），不写自选。商品分时走已有 `commodity-minutes`（宏观观察同一把钥匙），日K走 `future-daily`，不进腾讯 light-kline；最后一根叠报价中心现价（T/P跟着动，不另开轮询；落盘旧价不叠，等本轮行情），分时按 `hubPollMs` 静默续拉（外盘 5s）；分时按 24h 原序，不贴 A 股 09:30-15:00。详情/公告仍从分时右上进（`?tab=detail|feed`），A 股顶栏不再切复盘/K线。
 `/api/quote` 是遗留 HTTP 适配，新页面订阅报价中心。全 A 横截面不准塞进这里。
 _Avoid_: quoteHub, market quotes client, 第二条报价轮询, 休市再写一套间隔, 5000 只进报价中心
 
@@ -159,7 +159,7 @@ K/分时（A 股轻量图、美股日K、期权日K/分时、套利价差）和�
 - 同花顺行情：`backend/tests/test_ths_quote.py`（市场码归位、pct 现算、缓存上一笔）+ `frontend/tests/ths-cmd-index.test.mjs`（驾驶舱指数 tab 走 `/api/ths`，不进指数目录/报价中心）
 - 品种沉淀资金：`backend/tests/test_fut_spec.py`（公式、按月保证金、复用 `future-ts`、无手写 `SPEC`、不打 `future-ts-all`、不进预热钟）+ `backend/tests/test_qihuo_fee.py`（九期网表一把 `qihuo_fee` 钥匙、乘数反推、CZCE 三位码、不进预热钟）+ `frontend/tests/ths-cmd-index.test.mjs`（股指·商品列：期货走 `/api/ovlab/parked`，ETF 走已有 `etfSharesBatch` 份额×现价）
 - 全球情绪：`backend/tests/test_fear_greed.py`（一份名单、模拟分丢掉、HTTP/问 AI 同一把 `fear_greed` 钥匙、不进预热钟）+ `frontend/tests/spark-axis.test.mjs`（涨跌分布格下部 / 美股页走 `api.fearGreed`，不进报价中心）
-- 报价中心：`frontend/tests/quote-hub.test.mjs`（K 线页 / 自选公告走 `useQuotes`）
+- 报价中心：`frontend/tests/quote-hub.test.mjs`（K 线页 / 自选公告走 `useQuotes`；分时日K最后一根叠报价、分时静默续拉）
 - 缓存键：预热填过 `world_indices` 后，`get_global_indices` 不再打上游；热槽过期仍读上一笔（`backend/tests/test_clock_serve.py`、`backend/tests/test_cache.py`）
 - 标的池 / 横截面：`backend/tests/test_cross_section.py`（只有 `a-share-codes.json`；快照不写报价 5 秒缓存）
 - 全 A 库存：`backend/tests/test_universe_sync.py`（补齐走 `ensure_bars`，已齐跳过，不进预热）

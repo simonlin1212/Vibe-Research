@@ -147,16 +147,11 @@ def light_kline_ttl(sym: str, res: str, session: str | None = None) -> int:
 
 
 def commodity_quote_ttl(session: str | None = None) -> int:
-    """Commodities TTL outlasts keep-warm (20s open / 60s closed). Same key as HTTP."""
-    kind = session if session is not None else _session_kind()
-    if kind == "open":
-        return 45
-    if kind == "lunch":
-        return 180
-    return 90
+    """Commodities TTL. 4s so 外盘 5s polls see new ticks. Same key as HTTP."""
+    return 4
 
 
-def put_commodities(codes: str | None = None) -> list:
+def put_commodities(codes: str | None = None) -> dict | list:
     """Fetch and write the same key GET /market/commodities uses. Warmup only."""
     import cockpit_live
 
@@ -166,9 +161,9 @@ def put_commodities(codes: str | None = None) -> list:
         raw,
         commodity_quote_ttl(),
         lambda: cockpit_live.futures_quotes(raw),
-        valid=lambda d: isinstance(d, list) and bool(d),
+        valid=lambda d: isinstance(d, (dict, list)) and bool(d),
     )
-    return data if isinstance(data, list) else []
+    return data if isinstance(data, (dict, list)) and data else {}
 
 
 def put_light_kline(sym: str, res: str = "1", num: int = 240) -> dict:

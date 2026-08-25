@@ -8,9 +8,10 @@ import { PageFallback } from "@/components/ui/PageFallback";
 import { WatchlistFeed } from "@/components/WatchlistFeed";
 import { ApiError, type AShareLightBar } from "@/lib/api";
 import { isFuturesCode, useQuotes, type HubQuote } from "@/lib/quoteHub";
-import { loadLightKline } from "@/lib/lightKline";
+import { loadLightKline, overlayQuoteBar } from "@/lib/lightKline";
+import { MINUTE_POLL_MS } from "@/lib/minuteHub";
 import { createSeriesGate } from "@/lib/seriesGate";
-import { getAShareSession } from "@/lib/ashareSession";
+import { getAShareSession, HUB_POLL_FUTURES_MS, hubPollMs } from "@/lib/ashareSession";
 import { storageGet, storageSet } from "@/lib/storage";
 import { SuggestHits, useSuggestSearch } from "@/hooks/useSuggestSearch";
 import { peekChartCode } from "@/components/cockpit/QuoteLine";
@@ -149,7 +150,7 @@ function basicTd(key: ColKey, c: string, q: HubQuote | undefined) {
 
 const MINUTE_DAYS_KEY = "ashare.minute.days";
 
-function useAShareSeries(code: string, res: "1" | "5" | "1D", num: number) {
+function useAShareSeries(code: string, res: "1" | "5" | "1D", num: number, poll = false) {
   const [bars, setBars] = useState<AShareLightBar[]>([]);
   const [meta, setMeta] = useState<{
     code: string; name?: string; adjust?: string; prev_close?: number | null;
@@ -158,7 +159,7 @@ function useAShareSeries(code: string, res: "1" | "5" | "1D", num: number) {
   const [err, setErr] = useState<string | null>(null);
   const gate = useRef(createSeriesGate());
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (opts?: { quiet?: boolean }) => {
     const mine = gate.current.begin();
     if (!code) {
       if (!gate.current.take(mine, true)) return;
@@ -168,10 +169,10 @@ function useAShareSeries(code: string, res: "1" | "5" | "1D", num: number) {
       setLoading(false);
       return;
     }
-    setLoading(true);
-    setErr(null);
+    if (!opts?.quiet) setLoading(true);
+    if (!opts?.quiet) setErr(null);
     try {
-      const data = await loadLightKline(code, res, num);
+      const data = await loadLightKline(code, res, num, { bypassCache: !opts?.quiet });
       const snap = gate.current.take(mine, {
         bars: data.bars ?? [],
         meta: {
@@ -187,6 +188,10 @@ function useAShareSeries(code: string, res: "1" | "5" | "1D", num: number) {
       setErr(null);
     } catch (e) {
       if (!gate.current.take(mine, true)) return;
+      if (opts?.quiet) {
+        setErr(e instanceof ApiError ? e.message : "K 线加载失败");
+        return;
+      }
       setBars([]);
       setMeta(null);
       setErr(e instanceof ApiError ? e.message : "K 线加载失败");
@@ -196,6 +201,27 @@ function useAShareSeries(code: string, res: "1" | "5" | "1D", num: number) {
   }, [code, res, num]);
 
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    if (!code || !poll) return;
+    let id = 0;
+    const arm = () => {
+      id = window.setTimeout(() => {
+        if (!document.hidden) void load({ quiet: true });
+        arm();
+      }, hubPollMs(
+        isFuturesCode(code) ? HUB_POLL_FUTURES_MS : MINUTE_POLL_MS,
+        new Date(),
+        isFuturesCode(code),
+      ));
+    };
+    arm();
+    const onVis = () => { if (!document.hidden) void load({ quiet: true }); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      window.clearTimeout(id);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, [code, load, poll]);
   return { bars, meta, loading, err, reload: load };
 }
 
@@ -297,8 +323,19 @@ export function AShareLightChart({
   const rows = useMemo(() => sortWatchCodes(codes, quotes, sort), [codes, quotes, sort]);
   const wantMin = !embedded || pane === "minute" || pane === "charts";
   const wantDay = !embedded || pane === "daily" || pane === "charts";
-  const minute = useAShareSeries(wantMin ? selected : "", minuteDays === 2 ? "5" : "1", minuteDays === 2 ? 1000 : 240);
+  const minute = useAShareSeries(wantMin ? selected : "", minuteDays === 2 ? "5" : "1", minuteDays === 2 ? 1000 : 240, true);
   const daily = useAShareSeries(wantDay ? selected : "", "1D", KLINE_NUM);
+  const liveQuote = Boolean(selected && (isFuturesCode(selected) || session.kind === "open"));
+  const qSel = selected ? quotes[selected] : undefined;
+  const quoteTime = qSel && !qSel.fromStore ? qSel.time : undefined;
+  const minBars = useMemo(
+    () => overlayQuoteBar(minute.bars, qSel, "minute", liveQuote),
+    [minute.bars, qSel, liveQuote],
+  );
+  const dayBars = useMemo(
+    () => overlayQuoteBar(daily.bars, qSel, "daily", liveQuote),
+    [daily.bars, qSel, liveQuote],
+  );
   const wmName = minute.meta?.name || daily.meta?.name || (selected ? quotes[selected]?.name : "") || "";
 
   useEffect(() => {
@@ -386,7 +423,7 @@ export function AShareLightChart({
             kind="minute"
             code={selected}
             name={wmName}
-            bars={minute.bars}
+            bars={minBars}
             prevClose={minute.meta?.prev_close}
             loading={minute.loading}
             err={minute.err}
@@ -395,6 +432,7 @@ export function AShareLightChart({
             days={minuteDays}
             bare
             extra={minuteExtra}
+            quoteTime={quoteTime}
             onRefresh={() => { void minute.reload(); }}
           />
           <AShareLcPane
@@ -402,13 +440,14 @@ export function AShareLightChart({
             kind="daily"
             code={selected}
             name={wmName}
-            bars={daily.bars}
+            bars={dayBars}
             prevClose={daily.meta?.prev_close}
             loading={daily.loading}
             err={daily.err}
             emptyHint="点自选或榜单一只"
             visible
             bare
+            quoteTime={quoteTime}
             onRefresh={() => { void daily.reload(); }}
           />
         </div>
@@ -421,7 +460,7 @@ export function AShareLightChart({
           kind="minute"
           code={selected}
           name={wmName}
-          bars={minute.bars}
+          bars={minBars}
           prevClose={minute.meta?.prev_close}
           loading={minute.loading}
           err={minute.err}
@@ -430,6 +469,7 @@ export function AShareLightChart({
           days={minuteDays}
           bare
           extra={minuteExtra}
+          quoteTime={quoteTime}
           onRefresh={() => { void minute.reload(); }}
         />
       );
@@ -441,13 +481,14 @@ export function AShareLightChart({
           kind="daily"
           code={selected}
           name={wmName}
-          bars={daily.bars}
+          bars={dayBars}
           prevClose={daily.meta?.prev_close}
           loading={daily.loading}
           err={daily.err}
           emptyHint="点自选或榜单一只"
           visible
           bare
+          quoteTime={quoteTime}
           onRefresh={() => { void daily.reload(); }}
         />
       );
@@ -685,7 +726,7 @@ export function AShareLightChart({
               kind="minute"
               code={selected}
               name={wmName}
-              bars={minute.bars}
+              bars={minBars}
               prevClose={minute.meta?.prev_close}
               loading={minute.loading}
               err={minute.err}
@@ -693,6 +734,7 @@ export function AShareLightChart({
               visible={showKline}
               days={minuteDays}
               extra={minuteExtra}
+              quoteTime={quoteTime}
               onRefresh={() => { void minute.reload(); }}
             />
             <AShareLcPane
@@ -700,12 +742,13 @@ export function AShareLightChart({
               kind="daily"
               code={selected}
               name={wmName}
-              bars={daily.bars}
+              bars={dayBars}
               prevClose={daily.meta?.prev_close}
               loading={daily.loading}
               err={daily.err}
               emptyHint="先从左侧表格点一只"
               visible={showKline}
+              quoteTime={quoteTime}
               onRefresh={() => { void daily.reload(); }}
             />
           </div>

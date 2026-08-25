@@ -169,7 +169,7 @@ def live_jobs(*, sector_kind: str = "01", news_source: str = "cls") -> list[Job]
         ),
         (
             "commodities",
-            lambda: _read(
+            lambda: _cached(
                 "commodities",
                 cockpit_live.DEFAULT_FUTURES,
                 commodity_quote_ttl(),
@@ -424,7 +424,7 @@ def warm_minutes() -> tuple[int, int, list[dict]]:
             [c.strip() for c in raw.split(",") if c.strip()],
         )
         if cockpit_live.future_minutes_filled(data):
-            _put("commodity_minutes", raw, data, 90)
+            _put("commodity_minutes", raw, data, 4)
             ok += 1
         else:
             fail += 1

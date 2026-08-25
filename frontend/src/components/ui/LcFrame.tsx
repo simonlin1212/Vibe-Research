@@ -52,7 +52,7 @@ export function LcLegend({
   return (
     <div
       className={cn(
-        "pointer-events-none absolute left-2 top-1.5 z-10 flex max-w-[calc(100%-96px)] flex-wrap gap-x-2.5 gap-y-0.5 font-mono text-[11px] tabular-nums tracking-tight",
+        "pointer-events-none absolute left-2 top-1.5 z-10 flex max-w-[calc(100%-96px)] flex-wrap gap-x-2.5 gap-y-0.5 font-sans text-[11px] tabular-nums tracking-tight",
         className,
       )}
     >
@@ -77,7 +77,7 @@ export function LcHoverTag({
   if (!tag || y == null) return null;
   return (
     <div
-      className="pointer-events-none absolute z-20 -translate-y-1/2 rounded-sm px-1 py-px font-mono text-[11px] font-medium tabular-nums text-slate-900 shadow-sm"
+      className="pointer-events-none absolute z-20 -translate-y-1/2 rounded-sm px-1 py-px font-sans text-[11px] font-medium tabular-nums text-slate-900 shadow-sm"
       style={{ top: y, right: 0, background: "#fff" }}
     >
       {tag.px}

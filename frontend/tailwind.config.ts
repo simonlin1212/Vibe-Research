@@ -21,7 +21,7 @@ export default {
       },
       fontFamily: {
         sans: ["Microsoft YaHei", "PingFang SC", "Geist", "system-ui", "sans-serif"],
-        mono: ["JetBrains Mono Variable", "Geist Mono", "ui-monospace", "monospace"],
+        mono: ["Consolas", "Microsoft YaHei", "ui-monospace", "monospace"],
       },
       borderRadius: { lg: "var(--radius)", md: "calc(var(--radius) - 4px)", sm: "calc(var(--radius) - 8px)" },
       boxShadow: {

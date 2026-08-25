@@ -12,6 +12,8 @@ test("lcChart 是 K/分时共用封装, 不画 TradingView logo", () => {
   assert.match(src, /from "lightweight-charts"/);
   assert.match(src, /createChart/);
   assert.match(src, /attributionLogo: false/);
+  assert.match(src, /Microsoft YaHei/);
+  assert.match(src, /fontFamily: FONT/);
   assert.match(src, /LC_ORIGIN/);
   assert.match(src, /BaselineSeries/);
   assert.match(src, /CandlestickSeries/);
@@ -135,6 +137,12 @@ test("四张 K/分时卡走 LC, 不直接 echarts.init", () => {
   assert.match(src, /minimumWidth: 40/);
   assert.match(pane, /minuteScaleRange/);
   assert.match(pane, /styleMinuteSymScale/);
+  assert.match(pane, /laterQuoteClock/);
+  assert.match(pane, /isDaily \? undefined/);
+  assert.match(pane, /更新 \{quoteClock\}/);
+  assert.match(pane, /flex shrink-0 items-center gap-1[\s\S]*更新 \{quoteClock\}[\s\S]*\{extra\}/);
+  assert.match(ashare, /qSel && !qSel\.fromStore \? qSel\.time/);
+  assert.match(ashare, /quoteTime=\{quoteTime\}/);
   assert.match(pane, /!isDaily && legend\.length/);
   assert.match(pane, /axis\.maxPx/);
   assert.match(pane, /bottom-\[24%\]/);

@@ -15,6 +15,9 @@ export interface AShareSession {
 /** Quote / minute hub interval when not in continuous auction. */
 export const HUB_POLL_CLOSED_MS = 60_000;
 
+/** 外盘 quotes and minutes stay at 5s while A-share is closed. */
+export const HUB_POLL_FUTURES_MS = 5_000;
+
 /** null = calendar not loaded; false = 休市 (weekend or holiday). */
 let _tradingDay: boolean | null = null;
 let _primed = false;
@@ -42,8 +45,9 @@ export function primeTradingDay(): Promise<void> {
   return _prime;
 }
 
-export function hubPollMs(openMs: number, now: Date = new Date()): number {
-  return getAShareSession(now).kind === "open" ? openMs : HUB_POLL_CLOSED_MS;
+export function hubPollMs(openMs: number, now: Date = new Date(), offshore = false): number {
+  if (getAShareSession(now).kind === "open") return openMs;
+  return offshore ? HUB_POLL_FUTURES_MS : HUB_POLL_CLOSED_MS;
 }
 
 function beijingParts(now: Date): { weekday: number; minutes: number } {

@@ -233,6 +233,15 @@ def _gtimg_num(vals: list[str], i: int) -> float:
         return 0.0
 
 
+def _gtimg_time(vals: list[str], i: int = 30) -> str:
+    """Field 30 is YYYYMMDDHHMMSS. Empty if missing."""
+    raw = vals[i] if i < len(vals) else ""
+    s = str(raw or "").strip()
+    if len(s) >= 14 and s[:14].isdigit():
+        return f"{s[0:4]}-{s[4:6]}-{s[6:8]} {s[8:10]}:{s[10:12]}:{s[12:14]}"
+    return ""
+
+
 def parse_gtimg_line(line: str) -> dict | None:
     """Parse one `v_symbol="f0~f1~..."` line. FX (wh*) uses a shorter layout."""
     m = _GTIMG_LINE_RE.search(line or "")
@@ -276,6 +285,7 @@ def parse_gtimg_line(line: str) -> dict | None:
             "limit_down": 0.0,
             "vol_ratio": 0.0,
             "pe_static": 0.0,
+            "time": "",
         })
     if len(vals) < 33:
         return None
@@ -285,6 +295,7 @@ def parse_gtimg_line(line: str) -> dict | None:
     return _apply_quote_stale({
         "symbol": symbol,
         "name": vals[1],
+        "time": _gtimg_time(vals),
         "price": n(vals, 3),
         "last_close": n(vals, 4),
         "prev": n(vals, 4),

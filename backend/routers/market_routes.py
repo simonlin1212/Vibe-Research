@@ -469,11 +469,11 @@ def market_board_flow_intraday(
 def market_commodities(
     codes: str = Query("", description="hf_XAU,hf_CL,hf_BTC"),
 ):
-    """大宗商品快照. TTL 随交易时段, 与预热强制重写同一把钥匙."""
+    """大宗商品快照. TTL 随交易时段, 过期重取(外盘不能 last-good 冻死)."""
     import cockpit_live
     raw = (codes or "").strip() or cockpit_live.DEFAULT_FUTURES
     try:
-        data = _dc(
+        data = _cached(
             "commodities",
             raw,
             commodity_quote_ttl(),
@@ -488,14 +488,14 @@ def market_commodities(
 def market_commodity_minutes(
     codes: str = Query("", description="comma-separated hf_/nf_"),
 ):
-    """大宗商品分钟线. 缓存 60 秒."""
+    """大宗商品分钟线. 缓存 4 秒, 外盘 5s 轮询能跟上."""
     import cockpit_live
     raw = (codes or "").strip() or cockpit_live.DEFAULT_FUTURES
     try:
-        data = _dc(
+        data = _cached(
             "commodity_minutes",
             raw,
-            90,
+            4,
             lambda: cockpit_live.future_minutes([c.strip() for c in raw.split(",") if c.strip()]),
             valid=cockpit_live.future_minutes_filled,
         )
