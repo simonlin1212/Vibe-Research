@@ -11,7 +11,7 @@ import { isFuturesCode } from "@/lib/quoteHub";
 import { cn } from "@/lib/utils";
 import {
   CandlestickSeries, HistogramSeries, LineSeries, MA_COLORS, MA_PERIODS, applyTimeLabels,
-  barOpenForVol, candleOpts, candleValues, ensureUpDown, lineValues,
+  barOpenForVol, bindChgPriceAxis, candleOpts, candleValues, chgToneCls, type ChgPriceAxisPrimitive, ensureUpDown, lineValues,
   minuteLineOpts, minuteScaleRange, overlayLineOpts, paintCandles, paintHist, paintLine, paintUpDown, resizeLc,
   seriesAlive, setLogScale, setPaneWatermark, setRefPriceLine, showLatest,
   showSession, sma, sparseLine, styleLastTag, styleMinuteSymScale, styleVolPane, useLcChart,
@@ -38,6 +38,11 @@ function fmtVol(v: number | null | undefined) {
   if (v >= 1e8) return (v / 1e8).toFixed(2) + "亿";
   if (v >= 1e4) return (v / 1e4).toFixed(1) + "万";
   return String(Math.round(v));
+}
+
+/** True if minute bars carry turnover or volume. Offshore hf_ often has neither. */
+export function minuteHasFlow(bars: AShareLightBar[]): boolean {
+  return bars.some((b) => Number(b.amount) > 0 || Number(b.volume) > 0);
 }
 
 export function ashareMinuteFrame(bars: AShareLightBar[], days: 1 | 2 = 1) {
@@ -94,9 +99,11 @@ export function AShareLcPane({
     paintedPx: Array<LineData | WhitespaceData> | CandlestickData[] | null;
     paintedVol: Array<HistogramData | WhitespaceData> | null;
     paintedMa: Array<Array<LineData | WhitespaceData>> | null;
+    chgAxis: { prim: ChgPriceAxisPrimitive | null };
   }>({
     kind: null, main: null, vol: null, mas: null,
     paintedTick: null, paintedPx: null, paintedVol: null, paintedMa: null,
+    chgAxis: { prim: null },
   });
   const refLine = useRef<IPriceLine | null>(null);
   const wmRef = useRef<ITextWatermarkPluginApi<Time> | null>(null);
@@ -106,6 +113,7 @@ export function AShareLcPane({
   onHoverRef.current = setHoverIdx;
 
   const isDaily = kind === "daily";
+  const showVol = isDaily || minuteHasFlow(bars);
   const wmName = name.trim();
   const minute = useMemo(
     () => (isDaily || isFuturesCode(code) ? null : ashareMinuteFrame(bars, days)),
@@ -120,6 +128,7 @@ export function AShareLcPane({
       bag.current = {
         kind: null, main: null, vol: null, mas: null,
         paintedTick: null, paintedPx: null, paintedVol: null, paintedMa: null,
+        chgAxis: { prim: null },
       };
       refLine.current = null;
       wmRef.current = null;
@@ -145,7 +154,7 @@ export function AShareLcPane({
         : (finitePx[0] ?? 0);
       const needWipe = bag.current.kind !== seriesKind
         || !seriesAlive(chart, bag.current.main)
-        || !seriesAlive(chart, bag.current.vol)
+        || (showVol ? !seriesAlive(chart, bag.current.vol) : bag.current.vol != null)
         || (isDaily && !bag.current.mas?.[0]);
       if (needWipe) {
         wipeBag();
@@ -155,9 +164,11 @@ export function AShareLcPane({
         } else {
           bag.current.main = chart.addSeries(LineSeries, minuteLineOpts());
         }
-        bag.current.vol = chart.addSeries(HistogramSeries, volPaneOpts(), 1);
+        if (showVol) {
+          bag.current.vol = chart.addSeries(HistogramSeries, volPaneOpts(), 1);
+          styleVolPane(chart, isDaily ? 0.22 : 0.24);
+        }
         bag.current.kind = seriesKind;
-        styleVolPane(chart, isDaily ? 0.22 : 0.24);
       }
       setPaneWatermark(chart, wmRef, wmName ? [wmName, code] : code, 72);
 
@@ -192,6 +203,14 @@ export function AShareLcPane({
           paintedMa.push(pts);
         });
         bag.current.paintedMa = paintedMa;
+        if (bag.current.main) {
+          bindChgPriceAxis(
+            chart,
+            bag.current.main,
+            bag.current.chgAxis,
+            bars.length > 1 ? bars[bars.length - 2].close : null,
+          );
+        }
         if (!lastOnly) showLatest(chart, bars.length, VIEW_DAYS);
         return;
       }
@@ -219,22 +238,27 @@ export function AShareLcPane({
       });
       styleMinuteSymScale(chart);
       setLogScale(chart, false);
-      let prevPx: number | null = baseline > 0 ? baseline : null;
-      const volPts = volValues(padded.map((b) => {
-        const px = b && Number.isFinite(b.close) ? b.close : null;
-        const up = volUp(px, barOpenForVol(b?.open, px), prevPx);
-        if (px != null) prevPx = px;
-        return { value: b?.amount ?? null, up };
-      }), false);
-      if (bag.current.vol) {
-        paintHist(bag.current.vol, volPts, bag.current.paintedVol);
-        bag.current.paintedVol = volPts;
+      if (showVol) {
+        let prevPx: number | null = baseline > 0 ? baseline : null;
+        const volPts = volValues(padded.map((b) => {
+          const px = b && Number.isFinite(b.close) ? b.close : null;
+          const up = volUp(px, barOpenForVol(b?.open, px), prevPx);
+          if (px != null) prevPx = px;
+          return { value: b?.amount ?? null, up };
+        }), false);
+        if (bag.current.vol) {
+          paintHist(bag.current.vol, volPts, bag.current.paintedVol);
+          bag.current.paintedVol = volPts;
+        }
+      }
+      if (bag.current.main) {
+        bindChgPriceAxis(chart, bag.current.main, bag.current.chgAxis, baseline > 0 ? baseline : prevClose);
       }
       if (!lastOnly) showSession(chart, cats.length);
     } catch {
       /* LC throws Value is null if wipe/resize races; keep the pane */
     }
-  }, [bars, prevClose, wmName, code, isDaily, days, loading, minute, lcRef, labelsRef]);
+  }, [bars, prevClose, wmName, code, isDaily, showVol, days, loading, minute, lcRef, labelsRef]);
 
   useEffect(() => {
     if (!visible) return;
@@ -275,11 +299,15 @@ export function AShareLcPane({
     const px = (minute?.padded ?? bars).map((b) => (b && Number.isFinite(b.close) ? b.close : null));
     const rng = minuteScaleRange(px, prevClose);
     if (!rng || rng.prev === 0) return null;
+    const maxPct = ((rng.max - rng.prev) / rng.prev) * 100;
+    const minPct = ((rng.min - rng.prev) / rng.prev) * 100;
     return {
       maxPx: fmtPrice(rng.max),
       minPx: fmtPrice(rng.min),
-      maxPct: fmtPct(((rng.max - rng.prev) / rng.prev) * 100),
-      minPct: fmtPct(((rng.min - rng.prev) / rng.prev) * 100),
+      maxPct: fmtPct(maxPct),
+      minPct: fmtPct(minPct),
+      maxTone: chgToneCls(maxPct),
+      minTone: chgToneCls(minPct),
     };
   }, [isDaily, minute, bars, prevClose]);
   const { tag: hoverTag, y: tagY } = useLcHoverTag(
@@ -316,8 +344,8 @@ export function AShareLcPane({
       legend.push(
         { k: "T", v: days === 2 ? (bar.datetime.slice(5, 16) || bar.datetime) : (bar.datetime.slice(11, 16) || bar.datetime), tone: "muted" },
         { k: "P", v: fmtPrice(bar.close), tone: lcTone(chg) },
-        { k: "额", v: fmtVol(bar.amount), tone: "muted" },
       );
+      if (showVol) legend.push({ k: "额", v: fmtVol(bar.amount), tone: "muted" });
     }
   } else if (emptySlot) {
     legend.push({
@@ -387,14 +415,14 @@ export function AShareLcPane({
         {isDaily ? <LcLegend items={legend} /> : null}
         {axis ? (
           <>
-            <span className="pointer-events-none absolute left-1.5 top-0.5 z-10 font-sans text-[11px] tabular-nums text-[#ff2d2d]">{axis.maxPx}</span>
-            <span className="pointer-events-none absolute right-10 top-0.5 z-10 font-sans text-[11px] tabular-nums text-[#ff2d2d]">{axis.maxPct}</span>
-            <span className="pointer-events-none absolute bottom-[24%] left-1.5 z-10 font-sans text-[11px] tabular-nums text-[#00d26a]">{axis.minPx}</span>
-            <span className="pointer-events-none absolute bottom-[24%] right-10 z-10 font-sans text-[11px] tabular-nums text-[#00d26a]">{axis.minPct}</span>
+            <span className={cn("pointer-events-none absolute left-1.5 top-0.5 z-10 font-sans text-[11px] tabular-nums", axis.maxTone)}>{axis.maxPx}</span>
+            <span className={cn("pointer-events-none absolute right-10 top-0.5 z-10 font-sans text-[11px] tabular-nums", axis.maxTone)}>{axis.maxPct}</span>
+            <span className={cn("pointer-events-none absolute left-1.5 z-10 font-sans text-[11px] tabular-nums", axis.minTone, showVol ? "bottom-[24%]" : "bottom-1")}>{axis.minPx}</span>
+            <span className={cn("pointer-events-none absolute right-10 z-10 font-sans text-[11px] tabular-nums", axis.minTone, showVol ? "bottom-[24%]" : "bottom-1")}>{axis.minPct}</span>
           </>
         ) : null}
         <LcHoverTag tag={hoverTag} y={tagY} />
-        {code && bars.length > 0 && (
+        {code && bars.length > 0 && showVol && (
           <div className="pointer-events-none absolute bottom-[6%] left-2 z-10 text-[10px] text-slate-400">
             {isDaily ? "成交量" : "成交额"}
           </div>

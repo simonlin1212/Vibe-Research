@@ -120,9 +120,12 @@ test("四张 K/分时卡走 LC, 不直接 echarts.init", () => {
   assert.match(pane, /showSession/);
   assert.match(pane, /paintHist/);
   assert.doesNotMatch(pane, /sessionMarkIdxs/);
+  assert.match(pane, /export function minuteHasFlow/);
+  assert.match(pane, /showVol/);
   assert.match(pane, /styleVolPane/);
   assert.match(pane, /volPaneOpts\(\), 1/);
   assert.match(pane, /成交额/);
+  assert.match(pane, /showVol \? "bottom-\[24%\]"/);
   assert.match(pane, /成交量/);
   assert.match(pane, /b\?\.amount/);
   assert.match(pane, /b\.volume/);
@@ -130,7 +133,17 @@ test("四张 K/分时卡走 LC, 不直接 echarts.init", () => {
   assert.match(pane, /\"量\"/);
   assert.doesNotMatch(pane, /距今/);
   assert.match(src, /export function vsRefPct/);
+  assert.match(src, /export function chgToneCls/);
+  assert.match(src, /export function chgToneHex/);
+  assert.match(src, /export function nicePriceTicks/);
+  assert.match(src, /export function bindChgPriceAxis/);
+  assert.match(src, /export class ChgPriceAxisPrimitive/);
+  assert.match(src, /tickVisible\(\) \{ return false; \}/);
+  assert.match(src, /textColor: "rgba\(0,0,0,0\)"/);
   assert.match(src, /export function hoverPxPct/);
+  assert.match(pane, /chgToneCls/);
+  assert.match(pane, /bindChgPriceAxis/);
+  assert.match(pane, /axis\.maxTone/);
   assert.match(src, /export function minuteScaleRange/);
   assert.match(src, /export function styleMinuteSymScale/);
   assert.match(src, /scaleMargins: \{ top: 0\.02, bottom: 0\.02 \}/);
@@ -337,6 +350,11 @@ function vsRefPct(price, ref) {
   return ((price - ref) / ref) * 100;
 }
 
+function chgToneCls(pct) {
+  if (pct == null || !Number.isFinite(pct)) return "text-slate-400";
+  return pct >= 0 ? "text-[#ff2d2d]" : "text-[#00d26a]";
+}
+
 function hoverPxPct(price, ref) {
   if (price == null || !Number.isFinite(price)) return null;
   const chg = vsRefPct(price, ref);
@@ -364,6 +382,53 @@ test("minuteScaleRange 绕昨收对称, 至少 1%", () => {
   assert.equal(tight.max, 10.1);
   assert.equal(tight.min, 9.9);
   assert.equal(minuteScaleRange([], 10), null);
+});
+
+test("chgToneCls +0% 及以上红, 小于 0 绿", () => {
+  assert.equal(chgToneCls(0), "text-[#ff2d2d]");
+  assert.equal(chgToneCls(1.2), "text-[#ff2d2d]");
+  assert.equal(chgToneCls(-0.01), "text-[#00d26a]");
+  assert.equal(chgToneCls(null), "text-slate-400");
+});
+
+function nicePriceTicks(lo, hi, maxN = 7) {
+  if (!Number.isFinite(lo) || !Number.isFinite(hi) || hi <= lo) return [];
+  const span = hi - lo;
+  const raw = span / Math.max(2, maxN - 1);
+  const mag = 10 ** Math.floor(Math.log10(raw));
+  const err = raw / mag;
+  const step = (err >= 5 ? 5 : err >= 2 ? 2 : 1) * mag;
+  const start = Math.ceil((lo - step * 1e-9) / step) * step;
+  const out = [];
+  for (let p = start; p <= hi + step * 1e-9; p += step) {
+    out.push(Number(p.toPrecision(12)));
+  }
+  return out;
+}
+
+function formatAxisPx(p, precision = 2) {
+  if (Math.abs(p - Math.round(p)) < 1e-6 && Math.abs(p) >= 10) return String(Math.round(p));
+  return p.toFixed(precision);
+}
+
+function chgToneHex(pct) {
+  if (pct == null || !Number.isFinite(pct)) return "#c8cdd6";
+  return pct >= 0 ? "#ff2d2d" : "#00d26a";
+}
+
+test("nicePriceTicks 走出 4660/4680 这种整数档", () => {
+  const ticks = nicePriceTicks(4654, 4708);
+  assert.ok(ticks.includes(4660));
+  assert.ok(ticks.includes(4680));
+  assert.equal(formatAxisPx(4660), "4660");
+  assert.equal(formatAxisPx(12.35), "12.35");
+});
+
+test("chgToneHex 价轴字 +0% 及以上红, 小于 0 绿", () => {
+  assert.equal(chgToneHex(vsRefPct(4680, 4660)), "#ff2d2d");
+  assert.equal(chgToneHex(vsRefPct(4660, 4660)), "#ff2d2d");
+  assert.equal(chgToneHex(vsRefPct(4640, 4660)), "#00d26a");
+  assert.equal(chgToneHex(null), "#c8cdd6");
 });
 
 test("vsRefPct 是相对昨收/昨结, 不是距今", () => {

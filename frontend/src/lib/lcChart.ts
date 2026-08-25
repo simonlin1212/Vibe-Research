@@ -30,6 +30,9 @@ import {
   type SeriesMarker,
   type SeriesType,
   type Time,
+  type ISeriesPrimitive,
+  type ISeriesPrimitiveAxisView,
+  type SeriesAttachedParameter,
 } from "lightweight-charts";
 
 export {
@@ -243,7 +246,146 @@ export function vsRefPct(price: number | null | undefined, ref: number | null | 
   return ((price - ref) / ref) * 100;
 }
 
-/** Symmetric 分时 scale around prev close. Corners: max px/% red, min px/% green. */
+/** Y-axis / corner text: +0% and up red, below 0 green. */
+export function chgToneCls(pct: number | null | undefined): string {
+  if (pct == null || !Number.isFinite(pct)) return "text-slate-400";
+  return pct >= 0 ? "text-[#ff2d2d]" : "text-[#00d26a]";
+}
+
+export function chgToneHex(pct: number | null | undefined): string {
+  if (pct == null || !Number.isFinite(pct)) return INK;
+  return pct >= 0 ? UP : DN;
+}
+
+/** Nice 1/2/5 * 10^n ticks so the right scale reads 4660 / 4680, not 4663. */
+export function nicePriceTicks(lo: number, hi: number, maxN = 7): number[] {
+  if (!Number.isFinite(lo) || !Number.isFinite(hi) || hi <= lo) return [];
+  const span = hi - lo;
+  const raw = span / Math.max(2, maxN - 1);
+  const mag = 10 ** Math.floor(Math.log10(raw));
+  const err = raw / mag;
+  const step = (err >= 5 ? 5 : err >= 2 ? 2 : 1) * mag;
+  const start = Math.ceil((lo - step * 1e-9) / step) * step;
+  const out: number[] = [];
+  for (let p = start; p <= hi + step * 1e-9; p += step) {
+    out.push(Number(p.toPrecision(12)));
+  }
+  return out;
+}
+
+export function formatAxisPx(p: number, precision = 2): string {
+  if (Math.abs(p - Math.round(p)) < 1e-6 && Math.abs(p) >= 10) return String(Math.round(p));
+  return p.toFixed(precision);
+}
+
+class ChgTickView implements ISeriesPrimitiveAxisView {
+  constructor(private y: number, private label: string, private color: string) {}
+  /** Negative so LC auto-layout does not reserve a blank slot next to the fixed label. */
+  coordinate() { return -10000; }
+  fixedCoordinate() { return this.y; }
+  text() { return this.label; }
+  textColor() { return this.color; }
+  backColor() { return "rgba(0,0,0,0)"; }
+  tickVisible() { return false; }
+}
+
+/** Recolor the right price scale vs 昨收/昨结. Native labels stay transparent. */
+export class ChgPriceAxisPrimitive implements ISeriesPrimitive {
+  private _ref: number | null = null;
+  private _chart: IChartApi | null = null;
+  private _series: ISeriesApi<SeriesType> | null = null;
+  private _request: (() => void) | null = null;
+  private _views: ISeriesPrimitiveAxisView[] = [];
+
+  setRef(ref: number | null | undefined) {
+    this._ref = ref != null && Number.isFinite(ref) && ref > 0 ? ref : null;
+    this.updateAllViews();
+    this._request?.();
+  }
+
+  attached(param: SeriesAttachedParameter) {
+    this._chart = param.chart as IChartApi;
+    this._series = param.series as ISeriesApi<SeriesType>;
+    this._request = param.requestUpdate;
+    this.updateAllViews();
+  }
+
+  detached() {
+    this._chart = null;
+    this._series = null;
+    this._request = null;
+    this._views = [];
+  }
+
+  updateAllViews() {
+    const chart = this._chart;
+    const series = this._series;
+    if (!chart || !series) {
+      this._views = [];
+      return;
+    }
+    let rng: { from: number; to: number } | null = null;
+    try {
+      rng = chart.priceScale("right").getVisibleRange();
+    } catch {
+      rng = null;
+    }
+    if (!rng || !Number.isFinite(rng.from) || !Number.isFinite(rng.to)) {
+      this._views = [];
+      return;
+    }
+    let precision = 2;
+    try {
+      const fmt = series.options().priceFormat as { precision?: number };
+      if (typeof fmt.precision === "number") precision = fmt.precision;
+    } catch {
+      /* series gone */
+    }
+    const next: ISeriesPrimitiveAxisView[] = [];
+    for (const p of nicePriceTicks(rng.from, rng.to)) {
+      let y: number | null = null;
+      try {
+        y = series.priceToCoordinate(p);
+      } catch {
+        y = null;
+      }
+      if (y == null || !Number.isFinite(y)) continue;
+      next.push(new ChgTickView(y, formatAxisPx(p, precision), chgToneHex(vsRefPct(p, this._ref))));
+    }
+    this._views = next;
+  }
+
+  priceAxisViews() {
+    return this._views;
+  }
+}
+
+export function hideNativePriceLabels(chart: IChartApi): void {
+  try {
+    chart.priceScale("right").applyOptions({
+      textColor: "rgba(0,0,0,0)",
+      ticksVisible: false,
+    });
+  } catch {
+    /* scale gone */
+  }
+}
+
+export function bindChgPriceAxis(
+  chart: IChartApi,
+  series: ISeriesApi<SeriesType>,
+  slot: { prim: ChgPriceAxisPrimitive | null },
+  ref: number | null | undefined,
+): void {
+  if (!slot.prim) {
+    slot.prim = new ChgPriceAxisPrimitive();
+    series.attachPrimitive(slot.prim);
+    hideNativePriceLabels(chart);
+  }
+  slot.prim.setRef(ref);
+}
+
+/** Symmetric 分时 scale around prev close. Corner color follows that end's pct. */
 export function minuteScaleRange(
   prices: Array<number | null | undefined>,
   prev: number | null | undefined,
@@ -553,9 +695,10 @@ export function styleMinuteSymScale(chart: IChartApi): void {
   try {
     chart.priceScale("right").applyOptions({
       scaleMargins: { top: 0.02, bottom: 0.02 },
-      ensureEdgeTickMarksVisible: false,
-      alignLabels: false,
+      ensureEdgeTickMarksVisible: true,
+      alignLabels: true,
       ticksVisible: false,
+      textColor: "rgba(0,0,0,0)",
       minimumWidth: 40,
     });
   } catch {

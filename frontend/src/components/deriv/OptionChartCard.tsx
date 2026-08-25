@@ -13,7 +13,7 @@ import { derivSession } from "./derivShared";
 import {
   CandlestickSeries, HistogramSeries, LineSeries, UP, DN, applyTimeLabels,
   candleOpts, candleValues, finiteLine, fmtPx, hoverIdxFromParam, lcTime,
-  ensureUpDown, lineValues, minuteLineOpts, minuteScaleRange, overlayLineOpts, paintCandles, paintHist, paintLine, paintUpDown,
+  bindChgPriceAxis, chgToneCls, type ChgPriceAxisPrimitive, ensureUpDown, lineValues, minuteLineOpts, minuteScaleRange, overlayLineOpts, paintCandles, paintHist, paintLine, paintUpDown,
   priceFormatOf, seriesAlive, setPaneWatermark, setRefPriceLine, setSeriesMarks, showLatest,
   showSession, sparseLine, styleIvOverlay, styleLastTag, styleMinuteSymScale, styleOiPane,
   styleVolPane, useLcChart, useLcHoverTag, volPaneOpts, volUp, volValues, wipeLc, guardLc, IV_COLOR, OI_COLOR,
@@ -342,9 +342,11 @@ export function OptionChartCard({ pick, mode, tick, alerts = NO_ALERTS }: {
     paintedVol: Array<HistogramData | WhitespaceData> | null;
     paintedOi: Array<LineData | WhitespaceData> | null;
     paintedTick: LineData[] | null;
+    chgAxis: { prim: ChgPriceAxisPrimitive | null };
   }>({
     kind: null, px: null, iv: null, vol: null, oi: null,
     paintedPx: null, paintedIv: null, paintedVol: null, paintedOi: null, paintedTick: null,
+    chgAxis: { prim: null },
   });
   const refLine = useRef<IPriceLine | null>(null);
   const marksRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
@@ -443,6 +445,7 @@ export function OptionChartCard({ pick, mode, tick, alerts = NO_ALERTS }: {
       kind: null as "daily" | "minute" | null,
       px: null, iv: null, vol: null, oi: null,
       paintedPx: null, paintedIv: null, paintedVol: null, paintedOi: null, paintedTick: null,
+      chgAxis: { prim: null as ChgPriceAxisPrimitive | null },
     });
     const reset = () => {
       wipeLc(chart);
@@ -509,6 +512,9 @@ export function OptionChartCard({ pick, mode, tick, alerts = NO_ALERTS }: {
       }
       const days = dailyBars.map((b) => b.t);
       setSeriesMarks(bag.current.px, marksRef, toMarks(alertMarkIdxs(days, alerts, pick.code)));
+      if (bag.current.px) {
+        bindChgPriceAxis(chart, bag.current.px, bag.current.chgAxis, prevClose);
+      }
       if (!lastOnly) showLatest(chart, dailyBars.length, 80);
       return;
     }
@@ -587,6 +593,9 @@ export function OptionChartCard({ pick, mode, tick, alerts = NO_ALERTS }: {
       bag.current.paintedOi = oiPts;
     }
     setSeriesMarks(bag.current.px, marksRef, toMarks(alertMarkIdxs(cats, alerts, pick.code)));
+    if (bag.current.px) {
+      bindChgPriceAxis(chart, bag.current.px, bag.current.chgAxis, pre !== null && pre > 0 ? pre : baseline);
+    }
     if (!lastOnly) showSession(chart, cats.length);
   };
 
@@ -621,11 +630,15 @@ export function OptionChartCard({ pick, mode, tick, alerts = NO_ALERTS }: {
     if (mode !== "minute" || !minData) return null;
     const rng = minuteScaleRange(minData.prices, minData.pre);
     if (!rng || rng.prev === 0) return null;
+    const maxPct = ((rng.max - rng.prev) / rng.prev) * 100;
+    const minPct = ((rng.min - rng.prev) / rng.prev) * 100;
     return {
       maxPx: fmtPx(rng.max, pick?.und),
       minPx: fmtPx(rng.min, pick?.und),
-      maxPct: fmtAxisPct(((rng.max - rng.prev) / rng.prev) * 100),
-      minPct: fmtAxisPct(((rng.min - rng.prev) / rng.prev) * 100),
+      maxPct: fmtAxisPct(maxPct),
+      minPct: fmtAxisPct(minPct),
+      maxTone: chgToneCls(maxPct),
+      minTone: chgToneCls(minPct),
     };
   }, [mode, minData, pick?.und]);
 
@@ -722,10 +735,10 @@ export function OptionChartCard({ pick, mode, tick, alerts = NO_ALERTS }: {
         {mode === "daily" ? <LcLegend items={glanceLegend} className="left-1 top-0.5 text-[10px]" /> : null}
         {axis ? (
           <>
-            <span className="pointer-events-none absolute left-1.5 top-0.5 z-10 font-sans text-[11px] tabular-nums text-[#ff2d2d]">{axis.maxPx}</span>
-            <span className="pointer-events-none absolute right-10 top-0.5 z-10 font-sans text-[11px] tabular-nums text-[#ff2d2d]">{axis.maxPct}</span>
-            <span className="pointer-events-none absolute bottom-[24%] left-1.5 z-10 font-sans text-[11px] tabular-nums text-[#00d26a]">{axis.minPx}</span>
-            <span className="pointer-events-none absolute bottom-[24%] right-10 z-10 font-sans text-[11px] tabular-nums text-[#00d26a]">{axis.minPct}</span>
+            <span className={cn("pointer-events-none absolute left-1.5 top-0.5 z-10 font-sans text-[11px] tabular-nums", axis.maxTone)}>{axis.maxPx}</span>
+            <span className={cn("pointer-events-none absolute right-10 top-0.5 z-10 font-sans text-[11px] tabular-nums", axis.maxTone)}>{axis.maxPct}</span>
+            <span className={cn("pointer-events-none absolute bottom-[24%] left-1.5 z-10 font-sans text-[11px] tabular-nums", axis.minTone)}>{axis.minPx}</span>
+            <span className={cn("pointer-events-none absolute bottom-[24%] right-10 z-10 font-sans text-[11px] tabular-nums", axis.minTone)}>{axis.minPct}</span>
           </>
         ) : null}
         <LcHoverTag tag={hoverTag} y={tagY} />
