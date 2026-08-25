@@ -43,15 +43,32 @@ def test_light_kline_map_accepts_fx():
 
 
 def test_light_kline_ttl_outlasts_keep_warm():
-    assert api_common.light_kline_ttl("sh000001", "1", session="open") == 45
-    assert api_common.light_kline_ttl("usIXIC", "1", session="open") == 45
-    assert api_common.light_kline_ttl("jpN225", "1", session="open") == 45
-    assert api_common.light_kline_ttl("ksKOSPI", "1", session="open") == 45
-    assert api_common.light_kline_ttl("whUSDCNY", "1", session="open") == 45
+    assert api_common.light_kline_ttl("sh000001", "1", session="open") == 4
+    assert api_common.light_kline_ttl("usIXIC", "1", session="open") == 4
+    assert api_common.light_kline_ttl("jpN225", "1", session="open") == 4
+    assert api_common.light_kline_ttl("ksKOSPI", "1", session="open") == 4
+    assert api_common.light_kline_ttl("whUSDCNY", "1", session="open") == 4
     assert api_common.light_kline_ttl("sh600519", "1", session="open") == 120
     assert api_common.light_kline_ttl("sh000001", "1", session="lunch") == 180
     assert api_common.light_kline_ttl("sh000001", "1", session="closed") == 960
     assert api_common.light_kline_ttl("sh000001", "1D") == 60
+
+
+def test_catalog_minute_refetches_when_open(monkeypatch):
+    calls: list[str] = []
+    monkeypatch.setattr(
+        api_common.astock,
+        "light_kline",
+        lambda sym, res, num=240: calls.append(sym) or {"symbol": sym, "bars": [{"close": len(calls)}]},
+    )
+    monkeypatch.setattr(api_common, "_session_kind", lambda: "open")
+    api_common._DC_CACHE.clear()
+    first = api_common.serve_light_kline("sh000001", "1", 240)
+    api_common._DC_CACHE.expire(("ashare_light:1:240", "sh000001"))
+    second = api_common.serve_light_kline("sh000001", "1", 240)
+    assert calls == ["sh000001", "sh000001"]
+    assert first["bars"][0]["close"] == 1
+    assert second["bars"][0]["close"] == 2
 
 
 def test_put_light_kline_rewrites_same_key(monkeypatch):

@@ -65,20 +65,31 @@ def test_watchlist_minute_refetches_after_expire(monkeypatch):
     assert calls == ["sh600519", "sh600519"]
 
 
-def test_catalog_quotes_do_not_stale_refresh(monkeypatch):
+def test_catalog_quotes_stale_refresh(monkeypatch):
     api_common._DC_CACHE.clear()
     calls: list[list[str]] = []
 
     def fake_map(codes):
         calls.append(list(codes))
-        return {c: {"symbol": c, "name": c, "price": 10.0, "pct": 0.1} for c in codes}
+        return {c: {"symbol": c, "name": c, "price": 10.0 + len(calls), "pct": 0.1} for c in codes}
+
+    class ImmediateThread:
+        def __init__(self, target=None, args=(), kwargs=None, **_):
+            self._target = target
+            self._args = args
+            self._kwargs = kwargs or {}
+
+        def start(self):
+            self._target(*self._args, **self._kwargs)
 
     monkeypatch.setattr(cl, "quotes_map", fake_map)
+    monkeypatch.setattr(cl.threading, "Thread", ImmediateThread)
     cl.quotes_cached(["sh000001"])
     api_common._DC_CACHE.expire(("quote_one", "sh000001"))
     out = cl.quotes_cached(["sh000001"])
-    assert out["sh000001"]["price"] == 10.0
-    assert calls == [["sh000001"]]
+    assert out["sh000001"]["price"] == 11.0
+    assert calls == [["sh000001"], ["sh000001"]]
+    assert cl.quotes_cached(["sh000001"])["sh000001"]["price"] == 12.0
 
 
 def test_stock_flow_warmup_uses_http_key():

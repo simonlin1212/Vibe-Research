@@ -415,18 +415,11 @@ def _refresh_stale_quotes(codes: list[str]) -> None:
                 _STALE_INFLIGHT.discard(c.lower())
 
 
-def _clock_quote(key: str) -> bool:
-    """Index catalog (and resolved alias) is clock-fed. Watchlist stays first-ask."""
-    from api_common import is_catalog_symbol
-
-    if is_catalog_symbol(key):
-        return True
-    resolved = astock.resolve_symbol(key) or ""
-    return bool(resolved) and is_catalog_symbol(resolved)
-
-
 def quotes_cached(codes: list[str]) -> dict[str, dict]:
-    """One in-process copy. Fresh hit, else last tick, else fetch. Tabs share it."""
+    """One in-process copy. Fresh hit, else last tick, else fetch. Tabs share it.
+
+    Catalog indices stale-refresh like the watchlist so 行情观察 5s polls move.
+    """
     from api_common import _DC_CACHE
 
     out: dict[str, dict] = {}
@@ -442,7 +435,7 @@ def quotes_cached(codes: list[str]) -> dict[str, dict]:
         last = _DC_CACHE.get_last(slot)
         if isinstance(last, dict) and last.get("price"):
             out[key] = last
-            if slot not in _DC_CACHE and not _clock_quote(key):
+            if slot not in _DC_CACHE:
                 stale.append(key)
         else:
             unseen.append(key)

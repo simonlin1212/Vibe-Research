@@ -95,14 +95,15 @@ def _read(endpoint: str, code: str, ttl: float, fetch, valid=is_nonempty, defaul
 
 
 def serve_light_kline(sym: str, res: str, num: int):
-    """Catalog 1-min 240: last-good. Watchlist / 5 / 1D stay first-ask."""
+    """Catalog 1-min 240: last-good when closed. Open session expire-refetches."""
     ep = f"ashare_light:{res}:{num}"
+    catalog_min = res == "1" and int(num) == 240 and is_catalog_symbol(sym)
     return _dc(
         ep,
         sym,
         light_kline_ttl(sym, res),
         lambda: astock.light_kline(sym, res, num=num),
-        last=res == "1" and int(num) == 240 and is_catalog_symbol(sym),
+        last=catalog_min and _session_kind() != "open",
     )
 
 
@@ -130,9 +131,9 @@ def _session_kind() -> str:
 
 
 def light_kline_ttl(sym: str, res: str, session: str | None = None) -> int:
-    """Minute TTL outlasts the keep-warm gap so a refresh is a cache hit.
+    """Index minutes: 4s open so 行情观察 5s polls see new bars. Stocks 120s.
 
-    Open: warmup rewrites every 20s, TTL 45/120. Closed: 960s (full warmup is 900s).
+    Closed/lunch still outlast keep-warm (960/180) and stay last-good.
     """
     if res != "1":
         return 60
@@ -140,7 +141,7 @@ def light_kline_ttl(sym: str, res: str, session: str | None = None) -> int:
     s = (sym or "").lower()
     index = s.startswith(("sh000", "sz399", "hk", "us", "wh", "jp", "ks"))
     if kind == "open":
-        return 45 if index else 120
+        return 4 if index else 120
     if kind == "lunch":
         return 180
     return 960

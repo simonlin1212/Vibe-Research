@@ -458,12 +458,22 @@ def test_quotes_cached_serves_last_when_fresh_expires(monkeypatch):
         calls.append(list(codes))
         return {c: {"symbol": c, "name": c, "price": 10.0, "pct": 0.1} for c in codes}
 
+    class ImmediateThread:
+        def __init__(self, target=None, args=(), kwargs=None, **_):
+            self._target = target
+            self._args = args
+            self._kwargs = kwargs or {}
+
+        def start(self):
+            self._target(*self._args, **self._kwargs)
+
     monkeypatch.setattr(cl, "quotes_map", fake_map)
+    monkeypatch.setattr(cl.threading, "Thread", ImmediateThread)
     cl.quotes_cached(["sh000001"])
     api_common._DC_CACHE.expire(("quote_one", "sh000001"))
     out = cl.quotes_cached(["sh000001"])
     assert out["sh000001"]["price"] == 10.0
-    assert calls == [["sh000001"]]
+    assert calls == [["sh000001"], ["sh000001"]]
 
 
 def test_stock_boards_map_aliases_and_skips(monkeypatch):

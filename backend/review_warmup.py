@@ -107,7 +107,7 @@ def interval_for_session(kind: str) -> int:
 
 
 def minute_interval_for_session(kind: str) -> int:
-    """Keep-warm cadence. Must be shorter than light_kline_ttl for that session."""
+    """Keep-warm cadence. Closed TTL still outlasts this; open index minutes are 4s."""
     if kind == "open":
         return 20
     return 60
