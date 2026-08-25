@@ -200,6 +200,10 @@ test("IndexFutPanel 行点击出标的图, 不再跳独立 K线页", async () =>
   assert.ok(src.includes("contractCode(row)"), "标的码用主力合约");
   assert.ok(src.includes("undOfRow(row)"), "空 prodUnd 用目录 und 调 T 表");
   assert.ok(!src.includes("onPickSymbol"), "不再跳独立 K线页");
+  assert.ok(src.includes("api.ovlabParked"), "期货沉淀本地算");
+  assert.ok(src.includes("etfSharesBatch"), "ETF 沉淀走已有份额接口");
+  assert.ok(src.includes("etfParkedYuan"));
+  assert.ok(src.includes('"parked"'));
 });
 
 test("分时卡可切两日, 按交易日拼轴", async () => {

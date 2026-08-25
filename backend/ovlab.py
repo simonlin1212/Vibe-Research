@@ -1256,6 +1256,64 @@ def get_surfacemap(params: dict[str, Any] | None = None) -> dict[str, Any]:
     )
 
 
+def _fut_unds(rows: list[dict[str, Any]] | None, tab: Any = None) -> list[str]:
+    import qihuo_fee  # noqa: PLC0415
+
+    out: list[str] = []
+    for r in rows or []:
+        u = str(r.get("prodUnd") or "").strip().upper()
+        if not u or u.isdigit():
+            continue
+        if qihuo_fee.und_mult(u, tab):
+            out.append(u)
+    return sorted(set(out))
+
+
+def _parked_one(und: str, tab: Any = None) -> dict[str, Any] | None:
+    import fut_spec  # noqa: PLC0415
+    import qihuo_fee  # noqa: PLC0415
+
+    mult = qihuo_fee.und_mult(und, tab)
+    fb = qihuo_fee.und_margin(und, tab)
+    if mult is None or fb is None:
+        return None
+    mm = qihuo_fee.month_margins(und, tab)
+    y = fut_spec.parked_from_ts(get_future_term_structure(und), mult, fb, mm)
+    if y is None:
+        return None
+    return {"und": und, "parked": y, "mult": mult, "margin": fb}
+
+
+def _build_parked(unds: list[str], tab: Any = None) -> dict[str, Any]:
+    rows: list[dict[str, Any]] = []
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        for row in pool.map(lambda u: _parked_one(u, tab), unds):
+            if row:
+                rows.append(row)
+    rows.sort(key=lambda r: r["parked"], reverse=True)
+    return {"rows": rows}
+
+
+def get_parked_capital() -> dict[str, Any]:
+    """Product parked from future-ts + 9qihuo spec. Reuses ovlab_future_ts::.
+
+    Margin and multiplier from 9qihuo (key qihuo_fee). No local SPEC.
+    Not the all-months dump. Not review warmup. Key ovlab_parked, 300s.
+    """
+    import qihuo_fee  # noqa: PLC0415
+
+    tab = qihuo_fee.margins()
+    unds = _fut_unds(get_market_overview(), tab)
+    if not unds:
+        return {"rows": []}
+    return _cached(
+        "ovlab_parked",
+        lambda: _build_parked(unds, tab),
+        valid=lambda v: isinstance(v, dict) and bool(v.get("rows")),
+        ttl=300,
+    )
+
+
 # ---------------------------------------------------------------------------
 # 启动预热
 # ---------------------------------------------------------------------------

@@ -21,9 +21,11 @@ test("行情观察 tab 自选右侧是指数, 切到才挂载, 走 /api/ths", as
   const watchAt = tabs.indexOf('["watch", "自选"]');
   const indexAt = tabs.indexOf('["index", "指数"]');
   assert.ok(watchAt >= 0 && indexAt > watchAt, "自选右边是指数");
+  assert.ok(!tabs.includes("沉淀"), "沉淀不是独立 tab");
   assert.ok(page.includes("boardTab === \"index\""));
   assert.ok(page.includes("<ThsCmdIndexPanel"));
   assert.ok(!page.includes("<ThsCmdIndexPanel") || page.includes('boardTab === "index"'), "指数面板条件挂载");
+  assert.ok(!page.includes("<CapitalPanel"), "沉淀不再单独成板");
 
   const panel = await readFile(new URL("../src/components/deriv/ThsCmdIndexPanel.tsx", import.meta.url), "utf8");
   assert.ok(panel.includes("api.thsSnapshot"));
@@ -32,7 +34,17 @@ test("行情观察 tab 自选右侧是指数, 切到才挂载, 走 /api/ths", as
   assert.ok(panel.includes("thsSessionPrices"), "分钟线按交易日切开");
   assert.ok(panel.includes("tradingDayOf"), "夜盘归次交易日");
 
+  const board = await readFile(new URL("../src/components/deriv/IndexFutPanel.tsx", import.meta.url), "utf8");
+  assert.ok(board.includes("api.ovlabParked"));
+  assert.ok(board.includes("etfSharesBatch"));
+  assert.ok(board.includes("ETF_SHARE_WATCH"));
+  assert.ok(board.includes("etfParkedYuan"));
+  assert.ok(board.includes('"parked"'));
+  assert.ok(board.includes("九期网"));
+  assert.doesNotMatch(board, /useQuotes|quoteHub|commodity-minutes|杠杆/);
+
   const api = await readFile(new URL("../src/lib/api.ts", import.meta.url), "utf8");
   assert.ok(api.includes("/ths/snapshot?codes="));
   assert.ok(api.includes("/ths/kline?code="));
+  assert.ok(api.includes("/ovlab/parked"));
 });

@@ -443,6 +443,12 @@ export interface DxxBoard {
   fupan?: DxxFupan | null;
   wajue?: { rows: DxxWajueRow[] } | null;
 }
+export interface OvlabParkedRow {
+  und: string; parked: number; mult?: number; margin?: number;
+}
+export interface OvlabParked {
+  rows: OvlabParkedRow[];
+}
 export interface StockBoards {
   code: string; name: string; industry: string; area: string;
   concepts: string[]; source?: string;
@@ -1875,6 +1881,7 @@ export const api = {
   ovlabVolatilityTs: () => get<OvlabVolatilityTs>("/ovlab/volatility-ts"),
   ovlabFutureTsAll: () => get<OvlabFutureTsAll>("/ovlab/future-ts-all"),
   ovlabFutureTs: (prodUnd: string) => get<OvlabFutureTs>(`/ovlab/future-ts?prod_und=${encodeURIComponent(prodUnd)}`),
+  ovlabParked: () => get<OvlabParked>("/ovlab/parked"),
   ovlabArbBoard: () => get<ArbBoard>("/ovlab/arb-board"),
   ovlabFlowAlert: () => get<OvlabFlowAlert[]>("/ovlab/flow-alert"),
   ovlabMqtt: (pin?: string[]) => {

@@ -1,19 +1,43 @@
 import { useMemo, useState } from "react";
-import { api, type OvlabMarketRow } from "@/lib/api";
+import { api, ETF_SHARE_WATCH, type OvlabMarketRow, type OvlabParkedRow } from "@/lib/api";
 import { usePolling } from "@/hooks/usePolling";
 import type { DerivData } from "@/hooks/useDerivData";
 import { cn } from "@/lib/utils";
+import { fmtAmt } from "@/components/review/format";
 import { nextSort, num, prevCloseOf, previewCode, toSparkMap, TrendSparkSvg, type SortState } from "@/components/ovlab/shared";
 import { CellEmpty, cmpVal, contractCode, CtnText, IV_SORT_COLS, IvTriple, NightMoon, SortableHd, undOfRow } from "./derivShared";
 
-type BoardKey = "product_alias" | "price" | "ctn" | "atmv_current" | "atmv_percentile" | "carry";
+type BoardKey = "product_alias" | "price" | "ctn" | "parked" | "atmv_current" | "atmv_percentile" | "carry";
 
 const COLS: { key: BoardKey; label: string; cls: string; title?: string }[] = [
   { key: "product_alias", label: "品种", cls: "w-[3.8rem] justify-start text-left" },
   { key: "price", label: "最新", cls: "w-[3.8rem] justify-end text-right" },
   { key: "ctn", label: "涨跌", cls: "w-[3.6rem] justify-end text-right" },
+  { key: "parked", label: "沉淀", cls: "w-[4rem] justify-end text-right", title: "期货=持仓x价格x乘数x九期网交易所保证金; ETF=份额x现价" },
   ...IV_SORT_COLS,
 ];
+
+function parkedByUnd(rows: OvlabParkedRow[] | undefined): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const r of rows ?? []) {
+    const u = (r.und || "").trim().toUpperCase();
+    if (u && Number.isFinite(r.parked)) m.set(u, r.parked);
+  }
+  return m;
+}
+
+/** 亿份 * 现价 -> 元. 和复盘 ETF 份额同一口径. */
+export function etfParkedYuan(sharesYi: number | null | undefined, price: number | null | undefined): number | null {
+  if (sharesYi == null || price == null || !Number.isFinite(sharesYi) || !Number.isFinite(price)) return null;
+  if (sharesYi <= 0 || price <= 0) return null;
+  return sharesYi * 1e8 * price;
+}
+
+function parkedOf(row: OvlabMarketRow, cap: Map<string, number>, sharesYi: Map<string, number>): number | null {
+  const und = undOfRow(row).toUpperCase();
+  if (und && cap.has(und)) return cap.get(und)!;
+  return etfParkedYuan(sharesYi.get(und), num(row.price));
+}
 
 interface BoardItem {
   key: string;
@@ -21,8 +45,15 @@ interface BoardItem {
   row: OvlabMarketRow;
 }
 
-function fieldOf(row: OvlabMarketRow, label: string, key: BoardKey): unknown {
+function fieldOf(
+  row: OvlabMarketRow,
+  label: string,
+  key: BoardKey,
+  cap: Map<string, number>,
+  sharesYi: Map<string, number>,
+): unknown {
   if (key === "product_alias") return label;
+  if (key === "parked") return parkedOf(row, cap, sharesYi);
   return row[key];
 }
 
@@ -42,6 +73,21 @@ export function IndexFutPanel({ d, nightOnly = false, onPickProduct }: {
   onPickProduct?: (prodUnd: string, undChart?: { code: string; name: string }) => void;
 }) {
   const [sort, setSort] = useState<SortState<Record<BoardKey, unknown>>>({ key: null, dir: "desc" });
+  const capPoll = usePolling(() => api.ovlabParked(), 300_000, []);
+  const capMap = useMemo(() => parkedByUnd(capPoll.data?.rows), [capPoll.data]);
+  const sharePoll = usePolling(
+    () => api.etfSharesBatch([...ETF_SHARE_WATCH.map((x) => x.code)], 80),
+    300_000,
+    [],
+  );
+  const sharesYi = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const it of sharePoll.data?.items ?? []) {
+      const yi = it.latest?.shares_yi;
+      if (it.code && yi != null && Number.isFinite(yi)) m.set(it.code, yi);
+    }
+    return m;
+  }, [sharePoll.data]);
   const items = useMemo(() => {
     const nightOk = (r: OvlabMarketRow) => !nightOnly || Number(r.has_night_trading) === 1;
     const indexItems: BoardItem[] = d.catalogRows
@@ -59,9 +105,13 @@ export function IndexFutPanel({ d, nightOnly = false, onPickProduct }: {
     if (!sort.key) return list;
     const key = sort.key;
     return [...list].sort((a, b) =>
-      cmpVal(fieldOf(a.row, a.label, key), fieldOf(b.row, b.label, key), sort.dir),
+      cmpVal(
+        fieldOf(a.row, a.label, key, capMap, sharesYi),
+        fieldOf(b.row, b.label, key, capMap, sharesYi),
+        sort.dir,
+      ),
     );
-  }, [d.catalogRows, d.rows, nightOnly, sort]);
+  }, [d.catalogRows, d.rows, nightOnly, sort, capMap, sharesYi]);
 
   // d.sparks 只覆盖目录码; 非目录品种 (LPG/燃油/乙二醇等) 按可见码补拉
   const missingKey = useMemo(() => {
@@ -107,6 +157,7 @@ export function IndexFutPanel({ d, nightOnly = false, onPickProduct }: {
           const pc = previewCode(row);
           const spark = d.sparks[pc] ?? extraSparks[pc];
           const price = num(row.price);
+          const parked = parkedOf(row, capMap, sharesYi);
           const prodUnd = undOfRow(row);
           return (
             <button
@@ -133,6 +184,12 @@ export function IndexFutPanel({ d, nightOnly = false, onPickProduct }: {
               </span>
               <span className="w-[3.6rem] shrink-0 text-right text-[12px]">
                 <CtnText value={row.ctn} boldOver={3} />
+              </span>
+              <span
+                className="w-[4rem] shrink-0 text-right text-[11px] tabular-nums text-slate-200"
+                title={/^\d{6}$/.test(prodUnd) ? "ETF 份额x现价" : "持仓x价格x乘数x九期网交易所保证金"}
+              >
+                {parked == null ? "-" : fmtAmt(parked)}
               </span>
               <IvTriple row={row} />
               <span className="flex h-6 min-w-0 flex-1 items-center">

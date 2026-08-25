@@ -12,7 +12,7 @@ import { CockpitLayout, type CockpitRow } from "@/components/cockpit/CockpitLayo
 import { useDerivData, type DerivData } from "@/hooks/useDerivData";
 import { daysToExpiry, num } from "@/components/ovlab/shared";
 import { formatClock } from "@/lib/freshness";
-import { ApiError } from "@/lib/api";
+import { api, ApiError, type EtfShares, type OvlabParked } from "@/lib/api";
 import { chatStream, hasLlm } from "@/lib/llm";
 import { cn } from "@/lib/utils";
 import { IndexFutPanel } from "@/components/deriv/IndexFutPanel";
@@ -26,6 +26,49 @@ import { OptionChartCard } from "@/components/deriv/OptionChartCard";
 import { FreshTag, NightOnlySwitch, SessionBadge, contractCode, findRowByUnd, undSpotLast } from "@/components/deriv/derivShared";
 
 /** Pack the visible cells in-browser for Ask AI; missing cells say 未取到. */
+function packCapitalLines(cap: OvlabParked | null): string {
+  if (!cap?.rows?.length) return "\n\n期货沉淀: 未取到";
+  const lines = ["", "## 期货沉淀 (持仓x价格x乘数x九期网保证金, 前8)"];
+  for (const r of cap.rows.slice(0, 8)) {
+    lines.push(`- ${r.und}: ${r.parked}`);
+  }
+  return `\n${lines.join("\n")}`;
+}
+
+function packEtfParked(d: DerivData, items: EtfShares[] | undefined): string {
+  const yi = new Map((items ?? []).map((it) => [it.code, it.latest?.shares_yi]));
+  const lines = ["", "## ETF沉淀 (份额x行情观察现价)"];
+  let n = 0;
+  for (const { def, row } of d.catalogRows) {
+    if (def.group !== "etf") continue;
+    n += 1;
+    const s = yi.get(def.und);
+    const px = num(row.price);
+    if (s == null || px == null) {
+      lines.push(`- ${def.label}(${def.und}): 未取到`);
+      continue;
+    }
+    lines.push(`- ${def.label}(${def.und}): 份额 ${s}亿份 x 价 ${px.toFixed(3)} = ${(s * px).toFixed(2)}亿`);
+  }
+  return n ? `\n${lines.join("\n")}` : "\n\nETF沉淀(份额x现价): 未取到";
+}
+
+async function packDerivContextFull(d: DerivData): Promise<string> {
+  const base = packDerivContext(d);
+  let extra = "";
+  try {
+    extra += packCapitalLines(await api.ovlabParked());
+  } catch {
+    extra += packCapitalLines(null);
+  }
+  try {
+    extra += packEtfParked(d, (await api.etfSharesBatch()).items);
+  } catch {
+    extra += packEtfParked(d, undefined);
+  }
+  return base + extra;
+}
+
 function packDerivContext(d: DerivData): string {
   const lines: string[] = ["# 期权/期货驾驶舱快照", `行情时间: ${formatClock(d.marketUpdated) || "未取到"}`];
   if (!d.rows) {
@@ -123,7 +166,7 @@ export function DerivCockpit() {
     setReviewLoading(true);
     setReview("");
     try {
-      const snap = packDerivContext(d);
+      const snap = await packDerivContextFull(d);
       const prompt = [
         `以下是期权/期货驾驶舱的客观快照(与当前看板同源):\n${snap}`,
         "请写一段简洁的衍生品盘面复盘(中文, 300字内): 先总述股指/商品情绪与涨跌分布, 再点出隐波百分位极端(>=90 或 <=10)的品种, 最后列值得关注的异动合约。只陈述快照事实, 不做投资建议。",
@@ -311,13 +354,14 @@ export function DerivCockpit() {
       </button>
       <AskAiButton
         context=""
-        getContext={() => packDerivContext(d)}
+        getContext={() => packDerivContextFull(d)}
         label="问 AI"
         scopeKey="deriv"
         suggestions={[
           "今天哪些品种隐波百分位极端?",
           "本月还有哪些合约到期?",
           "最新异动集中在哪些合约?",
+          "哪些品种沉淀资金最大?",
         ]}
       />
     </>
