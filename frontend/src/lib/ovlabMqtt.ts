@@ -193,8 +193,11 @@ export function dvShortCode(code: string): string | null {
   return spot ? spot[1] : null;
 }
 
-function dvLast(row: Record<string, unknown>): number | null {
-  for (const k of ["last_trade_price", "lastTradePrice", "last_price", "lastPrice", "last", "close", "price", "value"]) {
+function dvLast(row: Record<string, unknown>, code = ""): number | null {
+  const keys = ["last_trade_price", "lastTradePrice", "last_price", "lastPrice", "last", "close", "price"];
+  // value is the last on FUT_CFFEX_IF:202608; short commodity ticks use it for other crumbs.
+  if (/^(FUT_|OPT_)/i.test(code)) keys.push("value");
+  for (const k of keys) {
     const v = finite(row[k]);
     if (v != null && v > 0) return v;
   }
@@ -218,7 +221,7 @@ export function asDvTicks(topic: string, data: unknown): OvlabDataviewTick[] {
   for (const row of rows) {
     const code = String(row.instr ?? row.symbol ?? instrFromTopic(topic) ?? "").trim();
     if (!code || code === "+") continue;
-    const last = dvLast(row);
+    const last = dvLast(row, code);
     const oi = dvOi(row);
     if (last == null && oi == null) continue;
     const tick: OvlabDataviewTick = { instr: code, at };

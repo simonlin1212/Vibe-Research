@@ -225,6 +225,7 @@ test("驾驶舱日K分时吃 dataview tick", async () => {
   const src = await readFile(new URL("../src/pages/DerivCockpit.tsx", import.meta.url), "utf8");
   const card = await readFile(new URL("../src/components/deriv/OptionChartCard.tsx", import.meta.url), "utf8");
   assert.ok(src.includes("undSpotLast"), "期货图叠行情观察主力价");
+  assert.ok(card.includes("UND_TICK_MAX_REL"), "期货叠价丢掉偏离过大的碎价");
   assert.ok(src.includes('optPick.kind !== "und"'), "期权图只叠 dataview");
   assert.ok((src.match(/tick=\{chartTick\}/g) || []).length >= 2, "日K和分时都叠 chartTick");
   assert.ok(src.includes("useDerivData(optPick ? [optPick.code, optPick.und] : [])"), "钉住当前图合约");

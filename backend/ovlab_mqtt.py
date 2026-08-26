@@ -363,8 +363,8 @@ def _ingest_cta(data: Any) -> list[dict[str, Any]]:
     return out
 
 
-def _dv_last(row: dict[str, Any]) -> float | None:
-    for k in (
+def _dv_last(row: dict[str, Any], code: str = "") -> float | None:
+    keys = (
         "last_trade_price",
         "lastTradePrice",
         "last_price",
@@ -372,8 +372,11 @@ def _dv_last(row: dict[str, Any]) -> float | None:
         "last",
         "close",
         "price",
-        "value",
-    ):
+    )
+    # value is the last on FUT_CFFEX_IF:202608; short SI2610 ticks use it for other crumbs.
+    if _FUT_LONG_RE.match(code or "") or str(code).upper().startswith("OPT_"):
+        keys = (*keys, "value")
+    for k in keys:
         v = _finite(row.get(k))
         if v is not None and v > 0:
             return v
@@ -427,7 +430,7 @@ def _ingest_dv(topic: str, data: Any) -> list[dict[str, Any]]:
         ).strip()
         if not code or code == "+":
             continue
-        last = _dv_last(row)
+        last = _dv_last(row, code)
         oi = _dv_oi(row)
         if last is None and oi is None:
             continue

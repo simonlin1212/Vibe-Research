@@ -45,6 +45,19 @@ export function findRowByUnd<T extends Pick<OvlabMarketRow, "prodUnd" | "product
 
 /** Dataview last is only trusted this many seconds in a live session. */
 export const TICK_FRESH_S = 8;
+/** Futures overlay vs 行情观察/history. SI option crumbs (~70) must not replace SI2610 (~8700). */
+export const UND_TICK_MAX_REL = 0.35;
+
+export function pxNear(
+  a: number | null | undefined,
+  b: number | null | undefined,
+  maxRel = UND_TICK_MAX_REL,
+): boolean {
+  const x = num(a);
+  const y = num(b);
+  if (x == null || y == null || y <= 0) return false;
+  return Math.abs(x - y) / y <= maxRel;
+}
 
 export function tickFresh(
   tick: Pick<OvlabDataviewTick, "last" | "at"> | null | undefined,
@@ -68,14 +81,16 @@ export function undSpotLast(
 ): number | null {
   const want = code.trim().toUpperCase();
   if (!want) return null;
-  const tick = ticks[want];
-  if (tickFresh(tick, nowSec, live)) return num(tick.last);
+  let spot: number | null = null;
   for (const r of rows ?? []) {
     if (contractCode(r).toUpperCase() !== want) continue;
     const px = num(r.price);
-    if (px != null) return px;
+    if (px != null) { spot = px; break; }
   }
-  return null;
+  const tick = ticks[want];
+  const livePx = tickFresh(tick, nowSec, live) ? num(tick.last) : null;
+  if (livePx != null && (spot == null || pxNear(livePx, spot))) return livePx;
+  return spot;
 }
 
 /** 异动标的 -> 中文名: 目录码双向 (IO/IF 都指沪深300) + 目录外 ETF 补充. */

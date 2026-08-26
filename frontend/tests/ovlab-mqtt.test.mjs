@@ -82,6 +82,7 @@ function dvShortCode(code) {
 test("dataview value 是最新价, 长码收成短码", () => {
   assert.ok(src.includes('"value"'));
   assert.ok(src.includes("dvShortCode"));
+  assert.ok(src.includes("/^(FUT_|OPT_)/i"));
   assert.equal(dvShortCode("FUT_CFFEX_IF:202608"), "IF2608");
   assert.equal(dvShortCode("FUT_SHFE_AG:202609"), "AG2609");
   assert.equal(dvShortCode("SHSE_510300"), "510300");

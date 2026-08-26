@@ -83,6 +83,7 @@ test("异动卡 MQTT 实时 overlay: REST seed + 本机 mqtt 状态, 不另开 m
   const panel = await readFile(new URL("../src/components/deriv/AlertPanel.tsx", import.meta.url), "utf8");
   const apiSrc = await readFile(new URL("../src/lib/api.ts", import.meta.url), "utf8");
   const vite = await readFile(new URL("../vite.config.ts", import.meta.url), "utf8");
+  const shared = await readFile(new URL("../src/components/deriv/derivShared.tsx", import.meta.url), "utf8");
   assert.ok(hook.includes("useOvlabMqtt"), "驾驶舱接 MQTT hook");
   assert.ok(mqttLib.includes("wss://emqx.openvlab.cn/mqtt"), "网页直连 OpenVlab EMQX");
   assert.ok(mqttLib.includes("mqtt.connect"), "mqtt.js 同 OpenVlab");
@@ -108,6 +109,8 @@ test("异动卡 MQTT 实时 overlay: REST seed + 本机 mqtt 状态, 不另开 m
   assert.ok(apiSrc.includes("?pin="), "mqtt pin 查询串");
   assert.ok(vite.includes("\"/api/ovlab/mqtt/stream\""), "vite 单独代理 SSE 兜底");
   assert.ok(vite.includes("timeout: 0"), "SSE 代理不掐 180s");
+  assert.ok(shared.includes("pxNear"), "期货叠价丢掉偏离过大的碎价");
+  assert.ok(shared.includes("UND_TICK_MAX_REL"));
 });
 
 function mergeFlowAlerts(rest, live) {
@@ -303,18 +306,33 @@ function findRowByUnd(rows, prod) {
     return u === want || String(r.product ?? "").trim().toUpperCase() === want;
   });
 }
+function pxNear(a, b, maxRel = 0.35) {
+  if (a == null || b == null || !(b > 0)) return false;
+  return Math.abs(a - b) / b <= maxRel;
+}
 function undSpotLast(code, ticks, rows, nowSec, live = true) {
   const want = code.trim().toUpperCase();
-  const tick = ticks[want];
-  if (tickFresh(tick, nowSec, live)) return Number(tick.last);
+  let spot = null;
   for (const r of rows ?? []) {
     if (contractCode(r).toUpperCase() === want) {
       const px = Number(r.price);
-      if (Number.isFinite(px)) return px;
+      if (Number.isFinite(px)) { spot = px; break; }
     }
   }
-  return null;
+  const tick = ticks[want];
+  const livePx = tickFresh(tick, nowSec, live) ? Number(tick.last) : null;
+  if (livePx != null && Number.isFinite(livePx) && (spot == null || pxNear(livePx, spot))) return livePx;
+  return spot;
 }
+
+test("SI2610 丢掉期权碎价 69.73, 回落行情观察", () => {
+  const now = 1_000_000;
+  const rows = [{ prodUnd: "SI", exp: "202610", price: 8730 }];
+  const bad = { SI2610: { instr: "si2610", last: 69.73, at: now - 1 } };
+  assert.equal(undSpotLast("SI2610", bad, rows, now, true), 8730);
+  const ok = { SI2610: { instr: "si2610", last: 8720, at: now - 1 } };
+  assert.equal(undSpotLast("SI2610", ok, rows, now, true), 8720);
+});
 
 test("主力图优先新鲜 dataview, 陈旧才用行情观察", () => {
   const now = 1_000_000;

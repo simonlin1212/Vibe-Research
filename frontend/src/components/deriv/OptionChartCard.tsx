@@ -9,7 +9,7 @@ import {
 } from "@/lib/derivMinuteAxis";
 import type { OptionPick } from "./TQuotePanel";
 import type { OvlabDataviewTick, OvlabFlowAlert, OvlabOptionDailyBar } from "@/lib/api";
-import { derivSession } from "./derivShared";
+import { UND_TICK_MAX_REL, derivSession, pxNear } from "./derivShared";
 import {
   CandlestickSeries, HistogramSeries, LineSeries, UP, DN, applyTimeLabels,
   candleOpts, candleValues, finiteLine, fmtPx, hoverIdxFromParam, lcTime,
@@ -131,9 +131,18 @@ export function applyMinuteTick(
   frame: typeof EMPTY_MIN,
   tick: Pick<OvlabDataviewTick, "last" | "oi"> | null | undefined,
   now = new Date(),
+  maxRel?: number,
 ): typeof EMPTY_MIN {
   const last = num(tick?.last);
   if (last == null || frame.cats.length === 0) return frame;
+  if (maxRel != null) {
+    let ref: number | null = null;
+    for (let k = frame.prices.length - 1; k >= 0; k--) {
+      const v = frame.prices[k];
+      if (v != null && Number.isFinite(v)) { ref = v; break; }
+    }
+    if (ref != null && !pxNear(last, ref, maxRel)) return frame;
+  }
   const stamp = `${ymdOf(now)} ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:00`;
   const td = tradingDayOf(stamp);
   const hm = hmOf(stamp);
@@ -160,9 +169,12 @@ export function applyDailyTick(
   bars: OvlabOptionDailyBar[],
   tick: Pick<OvlabDataviewTick, "last"> | null | undefined,
   now = new Date(),
+  maxRel?: number,
 ): OvlabOptionDailyBar[] {
   const last = num(tick?.last);
   if (last == null || bars.length === 0) return bars;
+  const ref = bars[bars.length - 1]?.close;
+  if (maxRel != null && ref != null && Number.isFinite(ref) && !pxNear(last, ref, maxRel)) return bars;
   const stamp = `${ymdOf(now)} ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:00`;
   const td = tradingDayOf(stamp);
   const i = bars.length - 1;
@@ -407,14 +419,14 @@ export function OptionChartCard({ pick, mode, tick, alerts = NO_ALERTS }: {
       days,
       kl?.data,
     );
-    return applyMinuteTick(frame, liveTick);
-  }, [minute.data, mode, pick?.code, pick?.und, days, liveTick]);
+    return applyMinuteTick(frame, liveTick, undefined, pick?.kind === "und" ? UND_TICK_MAX_REL : undefined);
+  }, [minute.data, mode, pick?.code, pick?.und, days, liveTick, pick?.kind]);
 
   const dailyStale = Boolean(daily.data?.code && daily.data.code !== pick?.code);
   const dailyMatch = mode === "daily" && daily.data && daily.data.code === pick?.code ? daily.data : null;
   const dailyBars = useMemo(
-    () => applyDailyTick(dailyMatch?.bars ?? [], liveTick),
-    [dailyMatch, liveTick],
+    () => applyDailyTick(dailyMatch?.bars ?? [], liveTick, undefined, pick?.kind === "und" ? UND_TICK_MAX_REL : undefined),
+    [dailyMatch, liveTick, pick?.kind],
   );
   const dailyIv = useMemo(
     () => alignSeries(dailyMatch?.iv, dailyBars.map((b) => b.t)),

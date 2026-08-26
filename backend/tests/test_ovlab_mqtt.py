@@ -235,6 +235,18 @@ def test_dataview_value_aliases_if2608():
     assert by["IF2608"]["oi"] == 20110
 
 
+def test_dataview_si2610_value_is_not_last():
+    ovlab_mqtt.remember(
+        {
+            "topic": "vlab/stream/dataview/guest/instr/SI2610",
+            "source": "dataview",
+            "data": {"instr": "SI2610", "value": 69.73, "oi": 1},
+        }
+    )
+    rows = ovlab_mqtt.snapshot()["dataview"]
+    assert rows == [] or all(t.get("last") != 69.73 for t in rows)
+
+
 def test_dv_aliases_option_mixed_case():
     aliases = ovlab_mqtt.dv_aliases("AG2609C16000")
     assert "AG2609C16000" in aliases
