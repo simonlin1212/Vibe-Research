@@ -20,6 +20,9 @@ test("event page reuses telegraphHub and one polymarket board", () => {
   assert.match(cal, /今天/);
   assert.match(cal, /明天/);
   assert.match(cal, /周一/);
+  assert.match(cal, /grid-cols-\[1fr_auto_1fr\]/, "日期居中, 今天和条数分列两边");
+  assert.match(cal, /WD_TONE/, "周一到周日字色");
+  assert.match(cal, /lab\.tone/);
   assert.match(page, /api\.polymarketWatch/);
   assert.match(page, /event\.pm\.watch|addPmWatch|loadPmWatch/);
   assert.match(page, /api\.polymarketBoard/);
