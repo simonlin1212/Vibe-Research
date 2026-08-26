@@ -208,6 +208,7 @@ test("IndexFutPanel 行点击出标的图, 不再跳独立 K线页", async () =>
   assert.ok(src.includes("etfSharesBatch"), "ETF 沉淀走已有份额接口");
   assert.ok(src.includes("etfParkedYuan"));
   assert.ok(src.includes('"parked"'));
+  assert.ok(src.includes("nightFlag(row.has_night_trading)"), "迷你分时白盘不铺夜盘轴");
 });
 
 test("分时卡可切两日, 按交易日拼轴", async () => {
@@ -245,7 +246,11 @@ test("驾驶舱日K分时吃 dataview tick", async () => {
   assert.ok(card.includes("export function alertMatchesCode"), "异动对 T 表短码 / OPT_ 长码");
   assert.ok(card.includes('pick?.kind === "und"') && card.includes("ovlabLastBar"), "期货标的 last-bar 做底");
   assert.ok(card.includes("liveAxisKind"), "夜盘无分钟点也铺当夜轴");
-  assert.ok(card.includes("frameTradingDays(all.map((b) => b.t), days, now, und)"), "股指晚上不滚到下一交易日");
+  assert.ok(card.includes("hasNight"), "白盘走行情观察夜盘旗");
+  assert.ok(src.includes("nightTradingOf"), "分时轴读行情观察 has_night_trading");
+  const shared = await readFile(new URL("../src/components/deriv/derivShared.tsx", import.meta.url), "utf8");
+  assert.ok(shared.includes("export function nightFlag"), "夜盘旗字符串 0/1");
+  assert.ok(card.includes("frameTradingDays(all.map((b) => b.t), days, now, und, hasNight)"), "股指晚上不滚到下一交易日");
   assert.ok(card.includes("showSession"), "分时开盘贴左, 不 fitContent 挤到右侧");
   assert.ok(card.includes("minuteScaleRange"), "分时价轴绕昨结对称, 同 A 股");
   assert.ok(card.includes("styleMinuteSymScale"), "分时价轴边距同 A 股");
@@ -256,6 +261,7 @@ test("自选最新叠 dataview", async () => {
   assert.ok(src.includes("d.ticks[code.toUpperCase()]"), "自选最新叠 dataview");
   assert.ok(src.includes("tickFresh"), "陈旧 dataview 回落 last-bar");
   assert.ok(src.includes("api.ovlabLastBar"), "last-bar 仍做底");
+  assert.ok(src.includes("nightFlag(prod?.has_night_trading)"), "自选迷你分时也走夜盘旗");
 });
 
 function minuteKey(t) {

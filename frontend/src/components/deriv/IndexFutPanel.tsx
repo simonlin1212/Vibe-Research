@@ -5,7 +5,7 @@ import type { DerivData } from "@/hooks/useDerivData";
 import { cn } from "@/lib/utils";
 import { fmtAmt } from "@/components/review/format";
 import { nextSort, num, prevCloseOf, previewCode, toSparkMap, TrendSparkSvg, type SortState } from "@/components/ovlab/shared";
-import { CellEmpty, cmpVal, contractCode, CtnText, IV_SORT_COLS, IvTriple, NightMoon, SortableHd, undOfRow } from "./derivShared";
+import { CellEmpty, cmpVal, contractCode, CtnText, IV_SORT_COLS, IvTriple, NightMoon, nightFlag, SortableHd, undOfRow } from "./derivShared";
 
 type BoardKey = "product_alias" | "price" | "ctn" | "parked" | "atmv_current" | "atmv_percentile" | "carry";
 
@@ -202,6 +202,7 @@ export function IndexFutPanel({ d, nightOnly = false, onPickProduct }: {
                   fill
                   className="h-6"
                   und={undOfRow(row)}
+                  hasNight={nightFlag(row.has_night_trading)}
                 />
               </span>
             </button>

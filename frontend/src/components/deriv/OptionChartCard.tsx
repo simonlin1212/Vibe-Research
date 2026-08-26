@@ -102,13 +102,14 @@ export function minuteFrame(
   days: MinuteDays,
   rawKl: unknown,
   now = new Date(),
+  hasNight?: boolean | null,
 ): typeof EMPTY_MIN {
   const stamp = `${ymdOf(now)} ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:00`;
-  const tds = frameTradingDays(all.map((b) => b.t), days, now, und);
+  const tds = frameTradingDays(all.map((b) => b.t), days, now, und, hasNight);
   if (tds.length === 0) return { ...EMPTY_MIN, days };
   const want = new Set(tds);
   const bars = all.filter((b) => want.has(tradingDayOf(b.t)));
-  const kind = liveAxisKind(und, [...all.map((b) => b.t), stamp], now);
+  const kind = liveAxisKind(und, [...all.map((b) => b.t), stamp], now, hasNight);
   const { cats, splitAt } = concatDaySlots(tds, kind);
   const padded = padToSlots(bars, cats, (b) => b.t);
   const prices = padded.map((b) => b?.close ?? null);
@@ -328,11 +329,12 @@ export { tradingDayOf } from "@/lib/derivMinuteAxis";
 /** 期权联动图卡: mode=daily 日K(分钟聚合+量+标的IV日线) / minute 分时(价线+量+仓+合约IV分钟). */
 const NO_ALERTS: OvlabFlowAlert[] = [];
 
-export function OptionChartCard({ pick, mode, tick, alerts = NO_ALERTS }: {
+export function OptionChartCard({ pick, mode, tick, alerts = NO_ALERTS, hasNight }: {
   pick: OptionPick | null;
   mode: "daily" | "minute";
   tick?: OvlabDataviewTick | null;
   alerts?: OvlabFlowAlert[];
+  hasNight?: boolean | null;
 }) {
   const { ref, chartRef, labelsRef, onHoverRef } = useLcChart("glance");
   const [hover, setHover] = useState<number | null>(null);
@@ -418,9 +420,11 @@ export function OptionChartCard({ pick, mode, tick, alerts = NO_ALERTS }: {
       pick?.und,
       days,
       kl?.data,
+      undefined,
+      hasNight,
     );
     return applyMinuteTick(frame, liveTick, undefined, pick?.kind === "und" ? UND_TICK_MAX_REL : undefined);
-  }, [minute.data, mode, pick?.code, pick?.und, days, liveTick, pick?.kind]);
+  }, [minute.data, mode, pick?.code, pick?.und, days, liveTick, pick?.kind, hasNight]);
 
   const dailyStale = Boolean(daily.data?.code && daily.data.code !== pick?.code);
   const dailyMatch = mode === "daily" && daily.data && daily.data.code === pick?.code ? daily.data : null;

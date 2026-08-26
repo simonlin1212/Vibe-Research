@@ -6,6 +6,7 @@ import { num } from "@/components/ovlab/shared";
 import { formatAge } from "@/lib/freshness";
 import { storageGet, storageSet } from "@/lib/storage";
 import { DERIV_DEFS } from "@/config/deriv";
+import { undRootOf } from "@/lib/derivMinuteAxis";
 
 /** 主力合约码: prodUnd + exp tail (e.g. IF2608). MQTT ctamap 常空 prodUnd, 用目录 AG_O->AG. */
 export function undOfRow(r: Pick<OvlabMarketRow, "prodUnd" | "product">): string {
@@ -41,6 +42,32 @@ export function findRowByUnd<T extends Pick<OvlabMarketRow, "prodUnd" | "product
     const u = undOfRow(r).toUpperCase();
     return u === want || String(r.product ?? "").trim().toUpperCase() === want;
   });
+}
+
+/** Upstream 夜盘 is often the string "0"/"1". */
+export function nightFlag(v: unknown): boolean | undefined {
+  if (v === false || v === 0 || v === "0") return false;
+  if (v === true || v === 1 || v === "1") return true;
+  const n = Number(v);
+  if (n === 0) return false;
+  if (n === 1) return true;
+  return undefined;
+}
+
+/** 行情观察 夜盘 flag. undefined = row missing, keep axis fallback. */
+export function nightTradingOf(
+  rows: Array<Pick<OvlabMarketRow, "prodUnd" | "product" | "has_night_trading">> | null | undefined,
+  und: string,
+): boolean | undefined {
+  const want = undRootOf(und);
+  if (!want || !rows?.length) return undefined;
+  const row = rows.find((r) => {
+    const u = undRootOf(undOfRow(r));
+    const p = undRootOf(String(r.product ?? "").replace(/_O$/i, ""));
+    return u === want || p === want;
+  });
+  if (!row) return undefined;
+  return nightFlag(row.has_night_trading);
 }
 
 /** Dataview last is only trusted this many seconds in a live session. */

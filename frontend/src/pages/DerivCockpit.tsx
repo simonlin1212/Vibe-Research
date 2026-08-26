@@ -23,7 +23,7 @@ import { WatchPanel } from "@/components/deriv/WatchPanel";
 import { ThsCmdIndexPanel } from "@/components/deriv/ThsCmdIndexPanel";
 import { TQuotePanel, type OptionPick } from "@/components/deriv/TQuotePanel";
 import { OptionChartCard } from "@/components/deriv/OptionChartCard";
-import { FreshTag, NightOnlySwitch, SessionBadge, contractCode, findRowByUnd, undSpotLast } from "@/components/deriv/derivShared";
+import { FreshTag, NightOnlySwitch, SessionBadge, contractCode, findRowByUnd, nightTradingOf, undSpotLast } from "@/components/deriv/derivShared";
 
 /** Pack the visible cells in-browser for Ask AI; missing cells say 未取到. */
 function packCapitalLines(cap: OvlabParked | null): string {
@@ -134,6 +134,10 @@ export function DerivCockpit() {
     if (last == null) return t;
     return { instr: optPick.code, last, oi: t?.oi };
   }, [optPick, d.ticks, d.rows]);
+  const chartHasNight = useMemo(
+    () => (optPick ? nightTradingOf(d.rows, optPick.und) : undefined),
+    [optPick, d.rows],
+  );
   const [headerSlot, setHeaderSlot] = useState<HTMLElement | null>(null);
   const [nightOnly, setNightOnly] = useState(false);
   const [boardTab, setBoardTab] = useState<"spot" | "watch" | "index">("spot");
@@ -314,6 +318,7 @@ export function DerivCockpit() {
                 mode="minute"
                 tick={chartTick}
                 alerts={d.alerts ?? undefined}
+                hasNight={chartHasNight}
               />
               <OptionChartCard
                 pick={optPick}

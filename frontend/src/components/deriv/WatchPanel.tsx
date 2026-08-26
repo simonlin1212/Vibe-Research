@@ -6,7 +6,7 @@ import { usePolling } from "@/hooks/usePolling";
 import { cn } from "@/lib/utils";
 import { nextSort, num, TrendPreviewCell, type PreviewSeries, type SortState } from "@/components/ovlab/shared";
 import { storageGet, storageSet } from "@/lib/storage";
-import { CellEmpty, cmpVal, contractCode, findRowByUnd, IvpBar, NightMoon, SortableHd, tickFresh, undOfRow } from "./derivShared";
+import { CellEmpty, cmpVal, contractCode, findRowByUnd, IvpBar, NightMoon, nightFlag, SortableHd, tickFresh, undOfRow } from "./derivShared";
 
 const WATCH_KEY = "deriv.watch";
 const MAX_WATCH = 20;
@@ -225,7 +225,7 @@ export function WatchPanel({ d, onPick, compact = false }: {
                 <PctText value={pct} />
                 {!compact && <IvpBar value={prod?.atmv_percentile} />}
               </button>
-              <TrendPreviewCell series={sparks[code]} loading={sparkLoading && !sparks[code]} base={pre} und={code} />
+              <TrendPreviewCell series={sparks[code]} loading={sparkLoading && !sparks[code]} base={pre} und={code} hasNight={nightFlag(prod?.has_night_trading)} />
               <button
                 type="button"
                 onClick={() => save(watch.filter((w) => w !== code))}

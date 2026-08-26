@@ -3,6 +3,8 @@
 export type DerivAxisKind = "etf" | "cmd" | "cmd23" | "cmdDay";
 
 const INDEX_ROOTS = new Set(["IF", "IH", "IM", "IO", "HO", "MO"]);
+/** GFEX 白盘: no 21:00. Other day-only cmds use has_night_trading=0 from 行情观察. */
+const CMD_DAY_ROOTS = new Set(["SI", "LC", "PS"]);
 
 function pad2(n: number): string {
   return String(n).padStart(2, "0");
@@ -91,11 +93,24 @@ export function isDaySessionUnd(und?: string): boolean {
   return /^\d{6}$/.test(u) || INDEX_ROOTS.has(u);
 }
 
-export function kindOfUnd(und: string | undefined, times: string[]): DerivAxisKind {
+/** No night axis: index/ETF, GFEX 白盘, or 行情观察 has_night_trading=0. */
+export function isDayOnlyUnd(und?: string, hasNight?: boolean | null): boolean {
+  if (isDaySessionUnd(und)) return true;
+  if (hasNight === false) return true;
+  if (hasNight === true) return false;
+  return CMD_DAY_ROOTS.has(undRootOf(und || ""));
+}
+
+export function kindOfUnd(
+  und: string | undefined,
+  times: string[],
+  hasNight?: boolean | null,
+): DerivAxisKind {
   const u = undRootOf(und || "");
   // 同花顺商品指数 850xxx/851xxx: 6 位数字但走商品时段, 不是 ETF
   if (/^85[01]\d{3}$/.test(u)) return times.some(isNightTime) ? cmdNightKind(times) : "cmdDay";
   if (isDaySessionUnd(und)) return "etf";
+  if (isDayOnlyUnd(und, hasNight)) return "cmdDay";
   // EG/AU 等商品有夜盘. 周一 history 常缺周五夜, 不能因此改走 09:00 日盘轴.
   return cmdNightKind(times);
 }
@@ -118,10 +133,11 @@ export function liveAxisKind(
   und: string | undefined,
   times: string[],
   now = new Date(),
+  hasNight?: boolean | null,
 ): DerivAxisKind {
-  const base = kindOfUnd(und, times);
-  // Index/ETF stay 09:30-15:00. Commodity with night keeps last night 21:00 on the left.
-  if (isDaySessionUnd(und) || !isNightTime(clockStamp(now))) return base;
+  const base = kindOfUnd(und, times, hasNight);
+  // Index/ETF/白盘 stay day axis. Commodity with night keeps last night 21:00 on the left.
+  if (isDayOnlyUnd(und, hasNight) || !isNightTime(clockStamp(now))) return base;
   return cmdNightKind(times);
 }
 
@@ -131,9 +147,10 @@ export function frameTradingDays(
   days: 1 | 2,
   now = new Date(),
   und?: string,
+  hasNight?: boolean | null,
 ): string[] {
   let tds = tradingDaysOf(times).slice(-(days === 2 ? 2 : 1));
-  if (isDaySessionUnd(und) && isNightTime(clockStamp(now))) return tds;
+  if (isDayOnlyUnd(und, hasNight) && isNightTime(clockStamp(now))) return tds;
   const nowTd = tradingDayOf(clockStamp(now));
   if (derivLiveNow(now) && nowTd && tds[tds.length - 1] !== nowTd) {
     tds = days === 2 && tds.length ? [...tds.slice(-1), nowTd] : [nowTd];

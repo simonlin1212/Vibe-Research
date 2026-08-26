@@ -85,7 +85,7 @@ export function toSparkMap(items: OvlabPriceVolSeriesItem[] | null | undefined):
 
 /** Dual-line SVG spark: price vs base (prev close, fallback first print), A股 MinuteSpark palette; IV in violet. */
 export function TrendSparkSvg({
-  prices, volatilities, base, width = 88, height = 36, className, fill = false, und,
+  prices, volatilities, base, width = 88, height = 36, className, fill = false, und, hasNight,
 }: {
   prices: Array<[string, number]>;
   volatilities: Array<[string, number]>;
@@ -98,6 +98,7 @@ export function TrendSparkSvg({
   fill?: boolean;
   /** Underlying root (IF / AU / 510050). Picks session template. */
   und?: string;
+  hasNight?: boolean | null;
 }) {
   const pad = 2;
   const uid = useId().replace(/:/g, "");
@@ -125,7 +126,7 @@ export function TrendSparkSvg({
 
   const innerW = width - pad * 2;
   const innerH = height - pad * 2;
-  const kind = kindOfUnd(und, [...pricePtsRaw.map((p) => p.t), ...volPtsRaw.map((p) => p.t)]);
+  const kind = kindOfUnd(und, [...pricePtsRaw.map((p) => p.t), ...volPtsRaw.map((p) => p.t)], hasNight);
   const span = derivSessionSpan(kind);
   const xAtT = (t: string) => {
     const idx = derivSessionIdx(t, kind);
@@ -198,8 +199,9 @@ export function TrendSparkSvg({
 }
 
 /** Inline spark + hover enlarged overlay (price + IV), like openvlab.cn/market TrendPreviewCell. */
-export function TrendPreviewCell({ series, loading, base, und }: {
+export function TrendPreviewCell({ series, loading, base, und, hasNight }: {
   series?: PreviewSeries; loading?: boolean; base?: number | null; und?: string;
+  hasNight?: boolean | null;
 }) {
   const anchorRef = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState(false);
@@ -251,7 +253,7 @@ export function TrendPreviewCell({ series, loading, base, und }: {
       )}>
         {empty
           ? <span className="text-xs text-muted-foreground/40">-</span>
-          : <TrendSparkSvg prices={prices} volatilities={vols} base={base} und={und} />}
+          : <TrendSparkSvg prices={prices} volatilities={vols} base={base} und={und} hasNight={hasNight} />}
       </div>
       {hover && !empty && pos && createPortal(
         <div
@@ -269,7 +271,7 @@ export function TrendPreviewCell({ series, loading, base, und }: {
               <span className="inline-flex items-center gap-1"><span className="h-1.5 w-3 rounded-full bg-violet-400" />隐波</span>
             </span>
           </div>
-          <TrendSparkSvg prices={prices} volatilities={vols} base={base} width={256} height={96} und={und} />
+          <TrendSparkSvg prices={prices} volatilities={vols} base={base} width={256} height={96} und={und} hasNight={hasNight} />
           <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] tabular-nums">
             <div>
               <div className="text-muted-foreground">价格</div>
