@@ -22,9 +22,13 @@ export function WorldIndexPanel() {
   ];
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-y-auto p-1">
+    <div className="flex h-full min-h-0 flex-col overflow-y-auto p-0.5">
       {groups.map((g, i) => (
-        <div key={g.id} className={i > 0 ? "mt-0.5 border-t border-slate-700/70 pt-0.5" : undefined}>
+        <div
+          key={g.id}
+          className={i > 0 ? "mt-0.5 flex min-h-0 flex-col border-t border-slate-700/70 pt-0.5" : "flex min-h-0 flex-col"}
+          style={{ flex: g.defs.length }}
+        >
           {g.defs.map((d) => {
             const h = hub[d.code];
             const kl = minutes[d.code];

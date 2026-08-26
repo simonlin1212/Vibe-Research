@@ -117,10 +117,10 @@ export function QuoteLine({
   );
   const inner = variant === "index" ? (
     <div
-      className="grid h-5 items-center gap-x-1.5"
+      className="grid h-full min-h-5 w-full items-center gap-x-1.5"
       title={[unit, amount != null && amount > 0 ? fmtAmtInt(amount) : ""].filter(Boolean).join(" · ")}
       style={{
-        gridTemplateColumns: `${badge ? "auto " : ""}minmax(3.2rem,4.6rem) minmax(0,1fr) 3.6rem 2.8rem`,
+        gridTemplateColumns: `${badge ? "auto " : ""}minmax(5rem,1.2fr) minmax(2.5rem,1fr) 3.6rem 2.8rem`,
       }}
     >
       {badge && (
@@ -131,7 +131,7 @@ export function QuoteLine({
       <span className="truncate text-[11px] leading-none text-slate-200" style={accent ? { color: accent } : undefined}>
         {name}
       </span>
-      <div className="flex h-3.5 min-w-0 items-center">{spark("h-3.5")}</div>
+      <div className="flex h-[70%] min-h-3.5 max-h-6 min-w-0 items-center">{spark("h-full")}</div>
       <span className={cn("text-right text-[12px] font-bold leading-none tabular-nums", pctColor(pct ?? 0))}>
         {price != null && Number.isFinite(price) ? fmtPrice(price) : "—"}
       </span>
@@ -180,7 +180,7 @@ export function QuoteLine({
     />
   ) : null;
   const cls = variant === "index"
-    ? "block w-full rounded px-1.5 py-px hover:bg-slate-800/40"
+    ? "flex min-h-5 w-full flex-1 items-center rounded px-1.5 hover:bg-slate-800/40"
     : cn(
       "relative grid grid-cols-[minmax(4.5rem,1fr)_minmax(3rem,1.2fr)_4.2rem_3.1rem] items-center gap-1.5 rounded px-1.5 py-0.5 hover:bg-slate-800/40",
     );
