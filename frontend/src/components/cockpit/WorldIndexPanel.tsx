@@ -17,17 +17,14 @@ export function WorldIndexPanel() {
   const hub = useQuotes(INDEX_CODES);
   const minutes = useMinutes(KLINE_SYMS);
   const groups = [
-    { name: "A股", defs: PANEL_DEFS.filter((d) => d.region === "CN") },
-    { name: "美股 · 汇率", defs: PANEL_DEFS.filter((d) => d.region !== "CN") },
+    { id: "cn", defs: PANEL_DEFS.filter((d) => d.region === "CN") },
+    { id: "usfx", defs: PANEL_DEFS.filter((d) => d.region !== "CN") },
   ];
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-y-auto p-1">
-      {groups.map((g) => (
-        <div key={g.name}>
-          <div className="px-1 pb-0.5 pt-1 text-[9px] font-medium uppercase tracking-widest text-slate-500">
-            {g.name}
-          </div>
+      {groups.map((g, i) => (
+        <div key={g.id} className={i > 0 ? "mt-0.5 border-t border-slate-700/70 pt-0.5" : undefined}>
           {g.defs.map((d) => {
             const h = hub[d.code];
             const kl = minutes[d.code];

@@ -104,7 +104,7 @@ export function DailyReview() {
     moneyDone: d.moneyDone,
   };
 
-  const topRows: CockpitRow[] = [
+  const watchRows: CockpitRow[] = [
     {
       defaultH: 1,
       panels: [
@@ -114,7 +114,7 @@ export function DailyReview() {
           hint: "全球关键指数 + 宏观观察",
           icon: <Globe size={14} />,
           accent: "#ffcc00",
-          defaultW: 0.30,
+          defaultW: 1,
           mobileH: "h-[64vh]",
           right: <WatchPace />,
           body: (
@@ -128,12 +128,20 @@ export function DailyReview() {
             </div>
           ),
         },
+      ],
+    },
+  ];
+
+  const topRightRows: CockpitRow[] = [
+    {
+      defaultH: 1,
+      panels: [
         {
           id: "sentiment",
           title: "涨跌分布 / 广度",
           icon: <BarChart3 size={14} />,
           accent: "#ffcc00",
-          defaultW: 0.16,
+          defaultW: 0.229,
           mobileH: "h-[380px]",
           right: (
             <span className="flex items-center gap-1.5 text-[10px] tabular-nums text-slate-500">
@@ -156,7 +164,7 @@ export function DailyReview() {
           hint: "点击板块看个股列表",
           icon: <Layers size={14} />,
           accent: "#00d26a",
-          defaultW: 0.27,
+          defaultW: 0.3855,
           mobileH: "h-[420px]",
           right: (
             <SectorHotBar
@@ -178,7 +186,7 @@ export function DailyReview() {
           title: "板块资金流向",
           icon: <Activity size={14} />,
           accent: "#ff4d4f",
-          defaultW: 0.27,
+          defaultW: 0.3855,
           mobileH: "h-[380px]",
           right: flowRight,
           body: (
@@ -362,19 +370,26 @@ export function DailyReview() {
   return (
     <div className="relative flex flex-col bg-background lg:h-full lg:min-h-0 lg:flex-1 lg:overflow-hidden">
       {headerSlot ? createPortal(headerActions, headerSlot) : null}
-      <div className="flex min-h-0 flex-1 flex-col gap-px bg-[#2a2a2a] lg:h-full">
-        <div className="flex min-h-0 flex-col lg:h-[30%]">
-          <CockpitLayout rows={topRows} />
-        </div>
-        <div className="flex min-h-0 flex-1 flex-col gap-px lg:h-[70%] lg:flex-row">
-          <div className="flex min-h-0 flex-col lg:h-full lg:w-[30%]">
+      <div className="flex min-h-0 flex-1 flex-col gap-px bg-[#2a2a2a] lg:h-full lg:flex-row">
+        <div className="flex min-h-0 flex-col lg:h-full lg:w-[30%]">
+          <div className="flex min-h-0 flex-col lg:h-[40%]">
+            <CockpitLayout rows={watchRows} />
+          </div>
+          <div className="flex min-h-0 flex-1 flex-col lg:h-[60%]">
             <CockpitLayout rows={bottomLeft} />
           </div>
-          <div className="flex min-h-0 flex-col lg:h-full lg:w-[43%]">
-            <CockpitLayout rows={bottomCenter} />
+        </div>
+        <div className="flex min-h-0 flex-1 flex-col gap-px lg:h-full lg:w-[70%]">
+          <div className="flex min-h-0 flex-col lg:h-[30%]">
+            <CockpitLayout rows={topRightRows} />
           </div>
-          <div className="flex min-h-0 flex-col lg:h-full lg:w-[27%]">
-            <CockpitLayout rows={bottomRight} />
+          <div className="flex min-h-0 flex-1 flex-col gap-px lg:h-[70%] lg:flex-row">
+            <div className="flex min-h-0 flex-col lg:h-full lg:min-w-0 lg:flex-[43]">
+              <CockpitLayout rows={bottomCenter} />
+            </div>
+            <div className="flex min-h-0 flex-col lg:h-full lg:min-w-0 lg:flex-[27]">
+              <CockpitLayout rows={bottomRight} />
+            </div>
           </div>
         </div>
       </div>

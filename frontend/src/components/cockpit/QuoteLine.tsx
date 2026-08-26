@@ -117,35 +117,27 @@ export function QuoteLine({
   );
   const inner = variant === "index" ? (
     <div
-      className="grid items-center gap-x-1.5"
+      className="grid h-5 items-center gap-x-1.5"
+      title={[unit, amount != null && amount > 0 ? fmtAmtInt(amount) : ""].filter(Boolean).join(" · ")}
       style={{
-        gridTemplateColumns: `${badge ? "auto " : ""}72px minmax(0,1fr) 70px`,
-        gridTemplateRows: "16px 14px",
+        gridTemplateColumns: `${badge ? "auto " : ""}minmax(3.2rem,4.6rem) minmax(0,1fr) 3.6rem 2.8rem`,
       }}
     >
       {badge && (
-        <div className="row-span-2 self-center">
-          <span className="inline-block w-6 shrink-0 rounded-sm bg-slate-700/50 text-center text-[8px] leading-3 text-slate-400">
-            {badge}
-          </span>
-        </div>
-      )}
-      <div className="row-span-2 flex min-w-0 flex-col justify-center gap-0.5 leading-none">
-        <span className="truncate text-[11px] text-slate-200" style={accent ? { color: accent } : undefined}>
-          {name}
+        <span className="inline-block w-6 shrink-0 rounded-sm bg-slate-700/50 text-center text-[8px] leading-3 text-slate-400">
+          {badge}
         </span>
-        {unit && <span className="truncate text-[9px] text-slate-500">{unit}</span>}
-      </div>
-      <div className="flex h-4 min-w-0 items-center self-center">{spark("h-4")}</div>
-      <span className={cn("self-center text-right text-[12px] font-bold leading-none tabular-nums", pctColor(pct ?? 0))}>
-        {price != null && Number.isFinite(price) ? fmtPrice(price) : "—"}
+      )}
+      <span className="truncate text-[11px] leading-none text-slate-200" style={accent ? { color: accent } : undefined}>
+        {name}
       </span>
-      <span className="self-center truncate text-right text-[9px] leading-none tabular-nums text-slate-500">
-        {amount != null && amount > 0 ? fmtAmtInt(amount) : "—"}
+      <div className="flex h-3.5 min-w-0 items-center">{spark("h-3.5")}</div>
+      <span className={cn("text-right text-[12px] font-bold leading-none tabular-nums", pctColor(pct ?? 0))}>
+        {price != null && Number.isFinite(price) ? fmtPrice(price) : "—"}
       </span>
       <span
         className={cn(
-          "self-center justify-self-end rounded px-0.5 text-[10px] font-semibold leading-none tabular-nums",
+          "justify-self-end rounded px-0.5 text-[10px] font-semibold leading-none tabular-nums",
           pct != null && Number.isFinite(pct) ? bgChg(pct) : "text-slate-600",
         )}
       >
@@ -188,7 +180,7 @@ export function QuoteLine({
     />
   ) : null;
   const cls = variant === "index"
-    ? "block w-full rounded px-1.5 py-[2px] hover:bg-slate-800/40"
+    ? "block w-full rounded px-1.5 py-px hover:bg-slate-800/40"
     : cn(
       "relative grid grid-cols-[minmax(4.5rem,1fr)_minmax(3rem,1.2fr)_4.2rem_3.1rem] items-center gap-1.5 rounded px-1.5 py-0.5 hover:bg-slate-800/40",
     );

@@ -98,11 +98,15 @@ test("A股不分复盘/K线页签, 分时日K叠在第2/3行正中", () => {
   assert.match(review, /pane="table"/);
   assert.match(review, /pane="charts"/);
   assert.match(review, /id: "ashare-chart"/);
+  assert.match(review, /id: "market-watch"/);
+  assert.match(review, /lg:h-\[40%\]/);
+  assert.match(review, /lg:h-\[60%\]/);
   assert.match(review, /lg:h-\[30%\]/);
   assert.match(review, /lg:h-\[70%\]/);
-  assert.match(review, /defaultW: 0\.30/);
   assert.match(review, /lg:w-\[30%\]/);
-  assert.match(review, /lg:w-\[27%\]/);
+  assert.match(review, /lg:flex-\[43\]/);
+  assert.match(review, /lg:flex-\[27\]/);
+  assert.ok(review.indexOf('id: "market-watch"') < review.indexOf('id: "watch"'), "行情观察在左上, 自选在左下");
   assert.ok(review.indexOf('id: "watch"') < review.indexOf('id: "ashare-chart"'), "自选在左下, 图在正中");
   assert.ok(review.indexOf('id: "sectors"') < review.indexOf('id: "flow"'), "首行热点左、板块资金右");
   assert.doesNotMatch(review, /pane="minute"/);
