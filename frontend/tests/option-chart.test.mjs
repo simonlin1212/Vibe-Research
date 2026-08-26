@@ -102,6 +102,7 @@ test("OptionChartCard 用 hoverIdxOf, 分时白线无均价", async () => {
   assert.ok(src.includes("overlayAxis(dailyIv)"), "日K隐波同一比例");
   assert.ok(src.includes("LcHoverTag"), "十字右侧价签同 A 股");
   assert.ok(src.includes("useLcHoverTag"), "价签涨跌相对昨结");
+  assert.ok(src.includes("minuteHiLo"), "四角是区间最高最低");
   assert.ok(src.includes("chgToneCls"), "四角按涨跌幅红绿");
   assert.ok(src.includes("bindChgPriceAxis"), "右侧价轴刻度按昨结红绿");
   assert.ok(src.includes("axis.maxTone"), "上沿跟该端涨跌幅");

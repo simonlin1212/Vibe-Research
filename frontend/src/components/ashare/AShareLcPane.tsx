@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 import {
   CandlestickSeries, HistogramSeries, LineSeries, MA_COLORS, MA_PERIODS, applyTimeLabels,
   barOpenForVol, bindChgPriceAxis, candleOpts, candleValues, chgToneCls, type ChgPriceAxisPrimitive, ensureUpDown, lineValues,
-  minuteLineOpts, minuteScaleRange, overlayLineOpts, paintCandles, paintHist, paintLine, paintUpDown, resizeLc,
+  minuteHiLo, minuteLineOpts, minuteScaleRange, overlayLineOpts, paintCandles, paintHist, paintLine, paintUpDown, resizeLc,
   seriesAlive, setLogScale, setPaneWatermark, setRefPriceLine, showLatest,
   showSession, sma, sparseLine, styleLastTag, styleMinuteSymScale, styleVolPane, useLcChart,
   useLcHoverTag, volPaneOpts, volUp, volValues, wipeLc,
@@ -297,17 +297,15 @@ export function AShareLcPane({
   const axis = useMemo(() => {
     if (isDaily) return null;
     const px = (minute?.padded ?? bars).map((b) => (b && Number.isFinite(b.close) ? b.close : null));
-    const rng = minuteScaleRange(px, prevClose);
-    if (!rng || rng.prev === 0) return null;
-    const maxPct = ((rng.max - rng.prev) / rng.prev) * 100;
-    const minPct = ((rng.min - rng.prev) / rng.prev) * 100;
+    const ext = minuteHiLo(px, prevClose);
+    if (!ext) return null;
     return {
-      maxPx: fmtPrice(rng.max),
-      minPx: fmtPrice(rng.min),
-      maxPct: fmtPct(maxPct),
-      minPct: fmtPct(minPct),
-      maxTone: chgToneCls(maxPct),
-      minTone: chgToneCls(minPct),
+      maxPx: fmtPrice(ext.hi),
+      minPx: fmtPrice(ext.lo),
+      maxPct: fmtPct(ext.hiPct),
+      minPct: fmtPct(ext.loPct),
+      maxTone: chgToneCls(ext.hiPct),
+      minTone: chgToneCls(ext.loPct),
     };
   }, [isDaily, minute, bars, prevClose]);
   const { tag: hoverTag, y: tagY } = useLcHoverTag(

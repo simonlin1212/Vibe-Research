@@ -13,7 +13,7 @@ import { derivSession } from "./derivShared";
 import {
   CandlestickSeries, HistogramSeries, LineSeries, UP, DN, applyTimeLabels,
   candleOpts, candleValues, finiteLine, fmtPx, hoverIdxFromParam, lcTime,
-  bindChgPriceAxis, chgToneCls, type ChgPriceAxisPrimitive, ensureUpDown, lineValues, minuteLineOpts, minuteScaleRange, overlayLineOpts, paintCandles, paintHist, paintLine, paintUpDown,
+  bindChgPriceAxis, chgToneCls, type ChgPriceAxisPrimitive, ensureUpDown, lineValues, minuteHiLo, minuteLineOpts, minuteScaleRange, overlayLineOpts, paintCandles, paintHist, paintLine, paintUpDown,
   priceFormatOf, seriesAlive, setPaneWatermark, setRefPriceLine, setSeriesMarks, showLatest,
   showSession, sparseLine, styleIvOverlay, styleLastTag, styleMinuteSymScale, styleOiPane,
   styleVolPane, useLcChart, useLcHoverTag, volPaneOpts, volUp, volValues, wipeLc, guardLc, IV_COLOR, OI_COLOR,
@@ -628,17 +628,15 @@ export function OptionChartCard({ pick, mode, tick, alerts = NO_ALERTS }: {
   );
   const axis = useMemo(() => {
     if (mode !== "minute" || !minData) return null;
-    const rng = minuteScaleRange(minData.prices, minData.pre);
-    if (!rng || rng.prev === 0) return null;
-    const maxPct = ((rng.max - rng.prev) / rng.prev) * 100;
-    const minPct = ((rng.min - rng.prev) / rng.prev) * 100;
+    const ext = minuteHiLo(minData.prices, minData.pre);
+    if (!ext) return null;
     return {
-      maxPx: fmtPx(rng.max, pick?.und),
-      minPx: fmtPx(rng.min, pick?.und),
-      maxPct: fmtAxisPct(maxPct),
-      minPct: fmtAxisPct(minPct),
-      maxTone: chgToneCls(maxPct),
-      minTone: chgToneCls(minPct),
+      maxPx: fmtPx(ext.hi, pick?.und),
+      minPx: fmtPx(ext.lo, pick?.und),
+      maxPct: ext.hiPct == null ? "—" : fmtAxisPct(ext.hiPct),
+      minPct: ext.loPct == null ? "—" : fmtAxisPct(ext.loPct),
+      maxTone: chgToneCls(ext.hiPct),
+      minTone: chgToneCls(ext.loPct),
     };
   }, [mode, minData, pick?.und]);
 

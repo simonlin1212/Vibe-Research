@@ -385,11 +385,23 @@ export function bindChgPriceAxis(
   slot.prim.setRef(ref);
 }
 
-/** Symmetric 分时 scale around prev close. Corner color follows that end's pct. */
+/** Session high / low vs 昨收. Corner labels use this, not the padded scale ends. */
+export function minuteHiLo(
+  prices: Array<number | null | undefined>,
+  prev: number | null | undefined,
+): { hi: number; lo: number; hiPct: number | null; loPct: number | null } | null {
+  const finite = prices.filter((p): p is number => p != null && Number.isFinite(p));
+  if (!finite.length) return null;
+  const hi = Math.max(...finite);
+  const lo = Math.min(...finite);
+  return { hi, lo, hiPct: vsRefPct(hi, prev), loPct: vsRefPct(lo, prev) };
+}
+
+/** Symmetric 分时 scale around prev close. Span is the larger of session high / low vs 昨收. */
 export function minuteScaleRange(
   prices: Array<number | null | undefined>,
   prev: number | null | undefined,
-  minPct = 0.01,
+  minPct = 0.002,
 ): { min: number; max: number; prev: number } | null {
   const finite = prices.filter((p): p is number => p != null && Number.isFinite(p));
   if (!finite.length) return null;
@@ -400,7 +412,8 @@ export function minuteScaleRange(
     const pad = Math.max((hi - lo) * 0.08, Math.abs(hi) * minPct, 1e-6);
     return { min: lo - pad, max: hi + pad, prev: (hi + lo) / 2 };
   }
-  const span = Math.max(hi - base, base - lo, base * minPct);
+  const dataSpan = Math.max(hi - base, base - lo, 0);
+  const span = dataSpan > 0 ? dataSpan : Math.max(base * minPct, 1e-6);
   return { min: base - span, max: base + span, prev: base };
 }
 

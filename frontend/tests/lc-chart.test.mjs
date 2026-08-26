@@ -144,11 +144,13 @@ test("四张 K/分时卡走 LC, 不直接 echarts.init", () => {
   assert.match(pane, /chgToneCls/);
   assert.match(pane, /bindChgPriceAxis/);
   assert.match(pane, /axis\.maxTone/);
+  assert.match(src, /export function minuteHiLo/);
   assert.match(src, /export function minuteScaleRange/);
   assert.match(src, /export function styleMinuteSymScale/);
   assert.match(src, /scaleMargins: \{ top: 0\.02, bottom: 0\.02 \}/);
   assert.match(src, /minimumWidth: 40/);
   assert.match(pane, /minuteScaleRange/);
+  assert.match(pane, /minuteHiLo/);
   assert.match(pane, /styleMinuteSymScale/);
   assert.match(pane, /laterQuoteClock/);
   assert.match(pane, /isDaily \? undefined/);
@@ -331,7 +333,7 @@ function httpDetail(detail, status) {
   return `HTTP ${status}`;
 }
 
-function minuteScaleRange(prices, prev, minPct = 0.01) {
+function minuteScaleRange(prices, prev, minPct = 0.002) {
   const finite = prices.filter((p) => p != null && Number.isFinite(p));
   if (!finite.length) return null;
   const hi = Math.max(...finite);
@@ -341,8 +343,17 @@ function minuteScaleRange(prices, prev, minPct = 0.01) {
     const pad = Math.max((hi - lo) * 0.08, Math.abs(hi) * minPct, 1e-6);
     return { min: lo - pad, max: hi + pad, prev: (hi + lo) / 2 };
   }
-  const span = Math.max(hi - base, base - lo, base * minPct);
+  const dataSpan = Math.max(hi - base, base - lo, 0);
+  const span = dataSpan > 0 ? dataSpan : Math.max(base * minPct, 1e-6);
   return { min: base - span, max: base + span, prev: base };
+}
+
+function minuteHiLo(prices, prev) {
+  const finite = prices.filter((p) => p != null && Number.isFinite(p));
+  if (!finite.length) return null;
+  const hi = Math.max(...finite);
+  const lo = Math.min(...finite);
+  return { hi, lo, hiPct: vsRefPct(hi, prev), loPct: vsRefPct(lo, prev) };
 }
 
 function vsRefPct(price, ref) {
@@ -375,13 +386,23 @@ test("guardLc 吞掉 LC Value is null, 不把图打翻", () => {
   assert.equal(n, 1);
 });
 
-test("minuteScaleRange 绕昨收对称, 至少 1%", () => {
+test("minuteScaleRange 绕昨收对称, 幅度跟区间高低", () => {
   assert.deepEqual(minuteScaleRange([10.2, 9.9], 10), { min: 9.8, max: 10.2, prev: 10 });
   const tight = minuteScaleRange([10.01], 10);
   assert.equal(tight.prev, 10);
-  assert.equal(tight.max, 10.1);
-  assert.equal(tight.min, 9.9);
+  assert.equal(tight.max, 10.01);
+  assert.equal(tight.min, 9.99);
+  const flat = minuteScaleRange([10], 10);
+  assert.equal(Number(flat.max.toFixed(4)), 10.02);
   assert.equal(minuteScaleRange([], 10), null);
+});
+
+test("minuteHiLo 四角是区间最高最低, 不是轴端垫幅", () => {
+  const ext = minuteHiLo([10.2, 9.97], 10);
+  assert.equal(ext.hi, 10.2);
+  assert.equal(ext.lo, 9.97);
+  assert.equal(Number(ext.hiPct.toFixed(2)), 2);
+  assert.equal(Number(ext.loPct.toFixed(2)), -0.3);
 });
 
 test("chgToneCls +0% 及以上红, 小于 0 绿", () => {
