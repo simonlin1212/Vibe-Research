@@ -16,6 +16,7 @@ const Ovlab = lazy(() => import("@/pages/DerivCockpit").then((m) => ({ default: 
 const Arb = lazy(() => import("@/pages/ArbCockpit").then((m) => ({ default: m.ArbCockpit })));
 const Event = lazy(() => import("@/pages/EventCockpit").then((m) => ({ default: m.EventCockpit })));
 const Dxx = lazy(() => import("@/pages/DxxCockpit").then((m) => ({ default: m.DxxCockpit })));
+const Macro = lazy(() => import("@/pages/MacroCockpit").then((m) => ({ default: m.MacroCockpit })));
 const UsMarket = lazy(() => import("@/pages/UsMarket").then((m) => ({ default: m.UsMarket })));
 const Settings = lazy(() => import("@/pages/Settings").then((m) => ({ default: m.Settings })));
 const AiWatch = lazy(() => import("@/pages/AiWatch").then((m) => ({ default: m.AiWatch })));
@@ -40,6 +41,7 @@ export const router = createBrowserRouter([
           { path: "/dxx", element: <Dxx /> },
           { path: "/ovlab", element: <OvlabRedirect /> },
           { path: "/us-market", element: <UsMarket /> },
+          { path: "/macro", element: <Macro /> },
           { path: "/research", element: <Research /> },
           { path: "/backtest", element: <Backtest /> },
           { path: "/data", element: <Data /> },

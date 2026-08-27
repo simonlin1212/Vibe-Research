@@ -70,6 +70,11 @@ _Avoid_: 第二条报价轮询, 第二把 dxx 钥匙, 塞进复盘预热, 日历
 入口: `backend/fear_greed.py`；HTTP `GET /api/market/fear-greed`（钥匙 `fear_greed`，300s 过期再取）。不进指数目录、不进报价中心、不进预热钟。模拟分丢掉。
 _Avoid_: 第二份情绪名单, 第二条报价轮询, 把大盘股 52 周位置塞进来
 
+**宏观驾驶舱**:
+`/macro` 顶栏紧挨美股。格子：上海航运交易所 [CTFI](https://www.sse.net.cn/index/singleIndex?indexType=ctfi) 综合 + CT1/CT2（基期 2012-11-28=1000，涨跌按点数换算百分比）+ 官方走势图（`indexImg?name=ctfi`）。日更，钥匙 `ctfi`（`latest` / `img`）4h 上一笔。不进指数目录、不进报价中心、不进预热钟、不进行情观察。
+入口: `frontend/src/pages/MacroCockpit.tsx` + `backend/ctfi.py`；HTTP `GET /api/market/ctfi` · `/api/market/ctfi-img`。
+_Avoid_: 塞进指数目录, 第二条报价轮询, 复盘预热钟, 挂回 A 股行情观察
+
 **同花顺行情**:
 fuyao 网关（`quota-h.10jqka.com.cn`）的快照 / 日 K / 分钟线：股票（沪 17 深 33）、指数（沪 16 深 32）、同花顺指数（64，含商品 850xxx）、板块（48）。免鉴权，Referer 必须带 stockpage 代码路径，裸域名 403。字段是数字 ID；涨跌幅不取上游 199112（语义随市场漂移），由 最新/昨收 现算。不进报价中心、不进复盘清单，是独立数据源。
 入口: `backend/ths_quote.py`；HTTP `GET /api/ths/snapshot` · `GET /api/ths/kline`（period: day_1/min_1/min_5）。期权驾驶舱行情观察「指数」tab 挂这份快照+分钟线。
@@ -159,6 +164,7 @@ K/分时（A 股轻量图、美股日K、期权日K/分时、套利价差）和�
 - 同花顺行情：`backend/tests/test_ths_quote.py`（市场码归位、pct 现算、缓存上一笔）+ `frontend/tests/ths-cmd-index.test.mjs`（驾驶舱指数 tab 走 `/api/ths`，不进指数目录/报价中心）
 - 品种沉淀资金：`backend/tests/test_fut_spec.py`（公式、按月保证金、复用 `future-ts`、无手写 `SPEC`、不打 `future-ts-all`、不进预热钟）+ `backend/tests/test_qihuo_fee.py`（九期网表一把 `qihuo_fee` 钥匙、乘数反推、CZCE 三位码、不进预热钟）+ `frontend/tests/ths-cmd-index.test.mjs`（股指·商品列：期货走 `/api/ovlab/parked`，ETF 走已有 `etfSharesBatch` 份额×现价）
 - 全球情绪：`backend/tests/test_fear_greed.py`（一份名单、模拟分丢掉、HTTP/问 AI 同一把 `fear_greed` 钥匙、不进预热钟）+ `frontend/tests/spark-axis.test.mjs`（涨跌分布格下部 / 美股页走 `api.fearGreed`，不进报价中心）
+- 宏观 / CTFI：`backend/tests/test_ctfi.py`（官方页解析综合/CT1/CT2、一把 `ctfi` 钥匙、不进预热钟）+ `frontend/tests/macro-page.test.mjs`（`/macro` 走 `api.ctfi`，不进报价中心/行情观察）+ `frontend/tests/page-nav.test.mjs`
 - 报价中心：`frontend/tests/quote-hub.test.mjs`（K 线页 / 自选公告走 `useQuotes`；分时日K最后一根叠报价、分时静默续拉）+ `backend/tests/test_clock_serve.py`（指数目录报价过期补腾讯）+ `backend/tests/test_light_kline_batch.py`（盘中指数分时 TTL 4s 过期重取）
 - 缓存键：预热填过 `world_indices` 后，`get_global_indices` 不再打上游；热槽过期仍读上一笔（`backend/tests/test_clock_serve.py`、`backend/tests/test_cache.py`）
 - 标的池 / 横截面：`backend/tests/test_cross_section.py`（只有 `a-share-codes.json`；快照不写报价 5 秒缓存）

@@ -352,6 +352,16 @@ export interface FearGreedBoard {
   items: FearGreedItem[];
   updated?: string;
 }
+export interface CtfiQuote {
+  date?: string | null;
+  price: number;
+  chg?: number | null;
+  pct?: number | null;
+  extra?: string | null;
+  routes?: Record<string, number>;
+  source?: string;
+  url?: string;
+}
 export interface PmOutcome {
   label: string;
   pct: number | null;
@@ -1703,6 +1713,22 @@ export const api = {
   commodities: (codes?: string) =>
     get<Record<string, CommodityQuote>>(`/market/commodities${codes ? `?codes=${encodeURIComponent(codes)}` : ""}`),
   fearGreed: () => get<FearGreedBoard>("/market/fear-greed"),
+  ctfi: () => get<CtfiQuote>("/market/ctfi"),
+  ctfiImg: async () => {
+    let resp: Response;
+    try {
+      resp = await fetch("/api/market/ctfi-img", { cache: "no-store", headers: authHeaders() });
+    } catch {
+      throw new ApiError("连接不到后端，请先启动 backend（uvicorn app:app --port 8900）", 0);
+    }
+    if (!resp.ok) {
+      if (resp.status === 401) {
+        throw new ApiError("后端开启了访问鉴权（VR_API_KEY）：请在「接入 AI」页底部填写后端访问密钥", 401);
+      }
+      throw new ApiError(`CTFI 图 HTTP ${resp.status}`, resp.status);
+    }
+    return resp.blob();
+  },
   polymarketBoard: (limit = 30) => get<PmBoard>(`/polymarket/board?limit=${limit}`),
   polymarketEvent: (slug: string) =>
     get<PmEvent>(`/polymarket/event?slug=${encodeURIComponent(slug)}`),

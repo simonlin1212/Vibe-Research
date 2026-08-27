@@ -55,6 +55,7 @@ test("/derivatives sits right after /a-share and is primary", () => {
   assert.match(layout, /pathname\.startsWith\("\/arb"\)/);
   assert.match(layout, /pathname\.startsWith\("\/event"\)/);
   assert.match(layout, /pathname\.startsWith\("\/dxx"\)/);
+  assert.match(layout, /pathname\.startsWith\("\/macro"\)/);
   const arb = readFileSync(join(root, "src/pages/ArbCockpit.tsx"), "utf8");
   assert.match(arb, /export function ArbCockpit/);
   assert.doesNotMatch(arb, /CtpPortfolio/);
@@ -63,6 +64,7 @@ test("/derivatives sits right after /a-share and is primary", () => {
   assert.match(router, /path: "\/arb"/);
   assert.match(router, /path: "\/event"/);
   assert.match(router, /path: "\/dxx"/);
+  assert.match(router, /path: "\/macro"/);
   const event = readFileSync(join(root, "src/pages/EventCockpit.tsx"), "utf8");
   assert.match(event, /export function EventCockpit/);
   assert.doesNotMatch(event, /CtpPortfolio/);

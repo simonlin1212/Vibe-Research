@@ -10,6 +10,7 @@ import {
   GitCompare,
   Globe2,
   Radio,
+  Ship,
   Zap,
   LineChart,
   MoreHorizontal,
@@ -29,6 +30,7 @@ const NAV_ICONS: Record<string, LucideIcon> = {
   "/a-share": CandlestickChart,
   "/fin": FileSpreadsheet,
   "/us-market": Globe2,
+  "/macro": Ship,
   "/research": BookOpen,
   "/backtest": FlaskConical,
   "/data": Database,
@@ -50,6 +52,7 @@ function isCockpitPath(pathname: string, tab: string | null) {
   if (pathname.startsWith("/arb")) return true;
   if (pathname.startsWith("/event")) return true;
   if (pathname.startsWith("/dxx")) return true;
+  if (pathname.startsWith("/macro")) return true;
   if (!pathname.startsWith("/a-share")) return false;
   if (tab === "detail" || tab === "feed") return false;
   return true;

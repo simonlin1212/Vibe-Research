@@ -534,6 +534,32 @@ def market_fear_greed():
         raise HTTPException(502, f"全球情绪异常：{e}") from e
 
 
+@router.get("/api/market/ctfi")
+def market_ctfi():
+    """上海航运交易所 CTFI 综合指数. 钥匙 ctfi, 4h 上一笔."""
+    import ctfi
+
+    try:
+        data = _cached("ctfi", "latest", ctfi.TTL, ctfi.latest, valid=ctfi.latest_ok)
+        return {"data": data}
+    except Exception as e:
+        raise HTTPException(502, f"CTFI 异常：{e}") from e
+
+
+@router.get("/api/market/ctfi-img")
+def market_ctfi_img():
+    """官方 CTFI 走势图. 同把钥匙 ctfi / img."""
+    from fastapi.responses import Response
+
+    import ctfi
+
+    try:
+        raw = _cached("ctfi", "img", ctfi.TTL, ctfi.fetch_img, valid=ctfi.img_ok)
+        return Response(content=raw, media_type="image/png")
+    except Exception as e:
+        raise HTTPException(502, f"CTFI 图异常：{e}") from e
+
+
 @router.get("/api/market/spot-table")
 def market_spot_table():
     """生意社现货/期货基差对照表. 缓存 8 小时."""

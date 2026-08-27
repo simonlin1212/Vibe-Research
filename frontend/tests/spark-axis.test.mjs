@@ -168,6 +168,7 @@ test("macro 标的 draws HK JP KR under NQ", async () => {
   assert.match(goods, /sparkSessionForRegion/);
   assert.doesNotMatch(goods, /setTab/);
   assert.doesNotMatch(goods, /\["fut", "标的"\]/);
+  assert.doesNotMatch(goods, /api\.ctfi/);
   assert.match(world, /region === "CN" \|\| d\.region === "US" \|\| d\.region === "FX"/);
   assert.match(cfg, /MACRO_INDEX_DEFS/);
   const axis = await readFile(new URL("../src/lib/sparkAxis.ts", import.meta.url), "utf8");
