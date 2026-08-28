@@ -69,13 +69,13 @@ function IndexBasisTable({
         <span className="min-w-0 flex-1">配对</span>
         <span className="w-[3.4rem] text-right">期货</span>
         <span className="w-[3.4rem] text-right">现货</span>
-        <span className="w-[3.4rem] text-right">升贴水</span>
-        <span className="w-[3.2rem] text-right">升贴水率</span>
+        <span className="w-[3.4rem] text-right">基差</span>
+        <span className="w-[3.2rem] text-right">基差率</span>
       </div>
       {list.map((r) => {
         const q = quotes[r.cashCode];
         const cash = q?.price != null ? q.price * r.cashMult : null;
-        const basis = cash != null && cash !== 0 ? r.near.px - cash : null;
+        const basis = cash != null && cash !== 0 ? cash - r.near.px : null;
         const rate = cash != null && cash !== 0 && basis != null ? (basis / cash) * 100 : null;
         const key = `idx:${r.id}`;
         const active = pick?.key === key;

@@ -54,6 +54,49 @@ def test_light_kline_ttl_outlasts_keep_warm():
     assert api_common.light_kline_ttl("sh000001", "1D") == 60
 
 
+def test_catalog_minute_incomplete_refetch_when_closed(monkeypatch):
+    calls: list[str] = []
+    monkeypatch.setattr(api_common, "_session_kind", lambda: "closed")
+    monkeypatch.setattr(
+        api_common.astock,
+        "light_kline",
+        lambda sym, res, num=240: calls.append(sym) or {
+            "symbol": sym,
+            "bars": [{"datetime": "2026-08-28 15:00", "close": 2}],
+        },
+    )
+    api_common._DC_CACHE.clear()
+    api_common._put(
+        "ashare_light:1:240",
+        "sh000300",
+        {"symbol": "sh000300", "bars": [{"datetime": "2026-08-28 13:03", "close": 1}]},
+        960,
+    )
+    out = api_common.serve_light_kline("sh000300", "1", 240)
+    assert calls == ["sh000300"]
+    assert out["bars"][-1]["datetime"] == "2026-08-28 15:00"
+
+
+def test_catalog_minute_complete_stays_last_when_closed(monkeypatch):
+    calls: list[str] = []
+    monkeypatch.setattr(api_common, "_session_kind", lambda: "closed")
+    monkeypatch.setattr(
+        api_common.astock,
+        "light_kline",
+        lambda *_a, **_k: calls.append("hit") or {"bars": [{"datetime": "2026-08-28 15:00"}]},
+    )
+    api_common._DC_CACHE.clear()
+    api_common._put(
+        "ashare_light:1:240",
+        "sh000300",
+        {"symbol": "sh000300", "bars": [{"datetime": "2026-08-28 15:00", "close": 1}]},
+        960,
+    )
+    out = api_common.serve_light_kline("sh000300", "1", 240)
+    assert calls == []
+    assert out["bars"][0]["close"] == 1
+
+
 def test_catalog_minute_refetches_when_open(monkeypatch):
     calls: list[str] = []
     monkeypatch.setattr(

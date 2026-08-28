@@ -107,7 +107,7 @@ export function LegCard({
   }
   const q = quotes[pick.cashCode];
   const cash = q?.price != null ? q.price * pick.cashMult : null;
-  const basis = cash != null ? (near?.px ?? 0) - cash : null;
+  const basis = cash != null ? cash - (near?.px ?? 0) : null;
   return (
     <div className="flex h-full min-h-0 flex-col gap-1 overflow-y-auto p-1">
       <LegBlock title="期货近月" leg={near ?? null} />

@@ -914,6 +914,21 @@ def _em_us_minute(symbol: str, n: int) -> dict:
     return _em_kline_minute(symbol, secid, name, n, f"eastmoney {secid}")
 
 
+def _em_cn_index_minute(symbol: str, n: int) -> dict:
+    """A-share index 1-minute K when Tencent minute/query is empty (501)."""
+    s = (symbol or "").lower()
+    if len(s) != 8 or not s[2:].isdigit():
+        return {}
+    prefix, digits = s[:2], s[2:]
+    if prefix == "sh" and digits.startswith("000"):
+        secid = f"1.{digits}"
+    elif prefix == "sz" and digits.startswith("399"):
+        secid = f"0.{digits}"
+    else:
+        return {}
+    return _em_kline_minute(symbol, secid, digits, n, f"eastmoney {secid}")
+
+
 def _baostock_eligible(symbol: str) -> bool:
     """Daily A-share stocks only. Skip indices (sh000 / sz399) and HK/US/FX."""
     s = (symbol or "").lower()
@@ -1017,6 +1032,10 @@ def light_kline(code: str, resolution: str = "1D", num: int = 365) -> dict:
         bars = []
     if not bars and res == "1" and symbol in _US_EM_MINUTE:
         em = _em_us_minute(symbol, n)
+        if em:
+            return em
+    if not bars and res == "1":
+        em = _em_cn_index_minute(symbol, n)
         if em:
             return em
 

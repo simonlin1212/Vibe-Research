@@ -50,6 +50,11 @@ export function spreadOHLC(L: Pt, R: Pt, m = 1): Ohlc {
   };
 }
 
+/** Flip L-R into R-L so high/low stay the range extrema. */
+export function flipOHLC(s: Ohlc): Ohlc {
+  return { open: -s.open, close: -s.close, high: -s.low, low: -s.high };
+}
+
 function candlePts(bars: Array<Ohlc | null>): Array<CandlestickData | WhitespaceData> {
   return bars.map((b, i) => (b ? { time: lcTime(i), ...b } : { time: lcTime(i) }));
 }
@@ -87,6 +92,7 @@ export function joinSpreadMinute(
   right: Pt[],
   und: string,
   mult = 1,
+  invert = false,
 ): { cats: string[]; candles: Array<Ohlc | null> } {
   const td = lastOverlapDay(left, right);
   if (!td) return { cats: [], candles: [] };
@@ -102,7 +108,8 @@ export function joinSpreadMinute(
     const a = byL.get(hm);
     const r = byR.get(hm);
     if (!a || !r) return null;
-    return spreadOHLC(a, r, mult);
+    const s = spreadOHLC(a, r, mult);
+    return invert ? flipOHLC(s) : s;
   });
   return { cats, candles };
 }
@@ -218,11 +225,12 @@ export function SpreadChart({ pick }: { pick: ArbPick | null }) {
         if (!day) continue;
         const r = byR.get(day);
         cats.push(day);
-        candles.push(r ? spreadOHLC(p, r, mult) : null);
+        const s = r ? spreadOHLC(p, r, mult) : null;
+        candles.push(s && pick.kind === "idx" ? flipOHLC(s) : s);
       }
       return { cats, candles };
     }
-    return joinSpreadMinute(d.left, d.right, pick.leftUnd, mult);
+    return joinSpreadMinute(d.left, d.right, pick.leftUnd, mult, pick.kind === "idx");
   }, [poll.data, pick, mode]);
 
   const closes = useMemo(
@@ -301,7 +309,7 @@ export function SpreadChart({ pick }: { pick: ArbPick | null }) {
           {pick ? pick.label : "点上排一对"}
           {pick ? (
             <span className="ml-1.5 text-[10px] text-slate-500">
-              {pick.left} − {pick.kind === "idx" ? pick.cashCode : pick.right}
+              {pick.kind === "idx" ? `${pick.cashCode} − ${pick.left}` : `${pick.left} − ${pick.right}`}
             </span>
           ) : null}
         </div>
@@ -310,7 +318,7 @@ export function SpreadChart({ pick }: { pick: ArbPick | null }) {
           <LcSeg
             value={mode}
             options={pick?.kind === "idx"
-              ? [{ v: "minute" as const, label: "分时" }, { v: "daily" as const, label: "升贴水" }]
+              ? [{ v: "minute" as const, label: "分时" }, { v: "daily" as const, label: "基差" }]
               : [{ v: "minute" as const, label: "分时" }, { v: "daily" as const, label: "日K" }]}
             onChange={setMode}
           />

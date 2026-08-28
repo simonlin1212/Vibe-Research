@@ -94,16 +94,39 @@ def _read(endpoint: str, code: str, ttl: float, fetch, valid=is_nonempty, defaul
     return _dc(endpoint, code, ttl, fetch, valid, default=default)
 
 
+def minute_covers_close(data: Any) -> bool:
+    """True if the last 1-min bar reached the afternoon close (~15:00)."""
+    bars = data.get("bars") if isinstance(data, dict) else None
+    if not bars:
+        return False
+    dt = str((bars[-1] or {}).get("datetime") or "")
+    m = re.search(r"(\d{1,2}):(\d{2})", dt)
+    if not m:
+        return False
+    return int(m.group(1)) * 100 + int(m.group(2)) >= 1457
+
+
 def serve_light_kline(sym: str, res: str, num: int):
-    """Catalog 1-min 240: last-good when closed. Open session expire-refetches."""
+    """Catalog 1-min 240: last-good when closed. Open session expire-refetches.
+
+    Closed last-good that stops before 14:57 is treated as incomplete (Tencent
+    501 mid-session) and expired so the next read can refill.
+    """
     ep = f"ashare_light:{res}:{num}"
     catalog_min = res == "1" and int(num) == 240 and is_catalog_symbol(sym)
+    kind = _session_kind()
+    last = catalog_min and kind != "open"
+    if last and kind == "closed":
+        hit = _serve(ep, sym)
+        if isinstance(hit, dict) and hit.get("bars") and not minute_covers_close(hit):
+            _DC_CACHE.expire((ep, sym))
+            last = False
     return _dc(
         ep,
         sym,
         light_kline_ttl(sym, res),
         lambda: astock.light_kline(sym, res, num=num),
-        last=catalog_min and _session_kind() != "open",
+        last=last,
     )
 
 

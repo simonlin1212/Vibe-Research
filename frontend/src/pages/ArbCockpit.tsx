@@ -44,7 +44,7 @@ function packArbContext(d: ReturnType<typeof useArbData>, pick: ArbPick | null):
     for (const r of d.index) {
       const q = quotes[r.cashCode];
       const cash = q?.price != null ? q.price * r.cashMult : null;
-      const basis = cash != null ? r.near.px - cash : null;
+      const basis = cash != null ? cash - r.near.px : null;
       lines.push(`- ${r.label}: 期货 ${r.near.px} 现货 ${cash ?? "未取到"} 基差 ${signed(basis)}`);
     }
   }
@@ -146,8 +146,8 @@ export function ArbCockpit() {
       panels: [
         {
           id: "arb-chart",
-          title: pick?.kind === "idx" ? "日度升贴水" : "价差图",
-          hint: pick?.kind === "idx" ? "期货−现货 · 零轴=平水" : "两腿相减 · 零轴=平水",
+          title: pick?.kind === "idx" ? "日度基差" : "价差图",
+          hint: pick?.kind === "idx" ? "现货−期货 · 零轴=平水" : "两腿相减 · 零轴=平水",
           icon: <CandlestickChart size={14} />,
           accent: "#ffcc00",
           defaultW: 0.78,
@@ -192,7 +192,7 @@ export function ArbCockpit() {
         scopeKey="arb"
         suggestions={[
           "今天跨期价差较昨变动最大的是哪些品种?",
-          "股指日度升贴水最近怎么走?",
+          "股指日度基差最近怎么走?",
           "黑色系跨品种价差较昨怎么变?",
         ]}
       />

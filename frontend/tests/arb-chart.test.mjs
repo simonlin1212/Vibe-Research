@@ -98,9 +98,13 @@ test("股指/跨品种默认日K, 跨期才默认分时", () => {
   assert.match(src, /kind === "cal" \? "minute" : "daily"/);
   assert.match(src, /MINUTE_LOOKBACK = 5 \* 86400/);
   assert.match(src, /export function joinSpreadMinute/);
-  assert.match(src, /label: "升贴水"/);
-  assert.match(cockpit, /日度升贴水/);
-  assert.match(basis, /升贴水/);
+  assert.match(src, /label: "基差"/);
+  assert.match(src, /pick\.kind === "idx" \? flipOHLC/);
+  assert.match(cockpit, /日度基差/);
+  assert.match(cockpit, /现货−期货/);
+  assert.match(basis, /基差率/);
+  assert.match(basis, /cash - r\.near\.px/);
+  assert.doesNotMatch(basis, /r\.near\.px - cash/);
   assert.doesNotMatch(src, /api\.spotTable/);
   assert.doesNotMatch(src, /now - 2 \* 86400/);
 });
@@ -194,4 +198,21 @@ test("价差K由两腿OHLC合成, 高低夹住开收", () => {
   assert.equal(tight.close, -1);
   assert.equal(tight.high, 2);
   assert.equal(tight.low, -2);
+});
+
+function flipOHLC(s) {
+  return { open: -s.open, close: -s.close, high: -s.low, low: -s.high };
+}
+
+test("股指期现图取负, 指数减期货, 高低对调", () => {
+  assert.match(src, /export function flipOHLC/);
+  const futMinusCash = spreadOHLC(
+    { t: "d", o: 100, h: 110, l: 90, c: 105 },
+    { t: "d", o: 50, h: 55, l: 45, c: 52 },
+  );
+  const cashMinusFut = flipOHLC(futMinusCash);
+  assert.equal(cashMinusFut.open, -50);
+  assert.equal(cashMinusFut.close, -53);
+  assert.equal(cashMinusFut.high, -35);
+  assert.equal(cashMinusFut.low, -65);
 });

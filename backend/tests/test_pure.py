@@ -131,6 +131,29 @@ def test_light_kline_us_minute(monkeypatch):
     assert [b["close"] for b in out["bars"]] == [100.0, 101.0]
 
 
+def test_light_kline_cn_index_falls_back_to_eastmoney(monkeypatch):
+    class _Resp:
+        def json(self):
+            return {
+                "data": {
+                    "preKPrice": 4000.0,
+                    "klines": [
+                        "2026-08-28 13:00,4000,4001,4002,3999,0",
+                        "2026-08-28 15:00,4010,4011,4012,4009,0",
+                    ],
+                }
+            }
+
+    monkeypatch.setattr(astock, "_tencent_json", lambda url: {"data": {}})
+    monkeypatch.setattr(astock, "em_get", lambda *_a, **_k: _Resp())
+    astock._em_kline_host[0] = 0
+    out = astock.light_kline("sh000300", "1", num=240)
+    assert out["symbol"] == "sh000300"
+    assert out["source"] == "eastmoney 1.000300"
+    assert out["bars"][-1]["datetime"] == "2026-08-28 15:00"
+    assert [b["close"] for b in out["bars"]] == [4001.0, 4011.0]
+
+
 def test_light_kline_us_falls_back_to_eastmoney(monkeypatch):
     class _Resp:
         def json(self):
