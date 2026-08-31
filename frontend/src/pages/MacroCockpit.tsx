@@ -1,11 +1,16 @@
 import { useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { RefreshCw, Ship } from "lucide-react";
+import { Activity, Landmark, Percent, RefreshCw, Ship, Wallet } from "lucide-react";
 import { AskAiButton } from "@/components/ui/AskAiButton";
 import { CockpitLayout, type CockpitRow } from "@/components/cockpit/CockpitLayout";
 import { FreshTag } from "@/components/deriv/derivShared";
+import { BondPanel } from "@/components/macro/BondPanel";
+import { FxPanel } from "@/components/macro/FxPanel";
+import { LprPanel } from "@/components/macro/LprPanel";
+import { MoneyPanel } from "@/components/macro/MoneyPanel";
+import { MonthPanel } from "@/components/macro/MonthPanel";
 import { usePolling } from "@/hooks/usePolling";
-import { api, type CtfiQuote } from "@/lib/api";
+import { api, type CnBondYield, type CtfiQuote, type LprData, type MacroBoard } from "@/lib/api";
 import { pctColor } from "@/components/review/format";
 import { cn } from "@/lib/utils";
 
@@ -16,8 +21,61 @@ const ROUTES: { key: string; name: string }[] = [
   { key: "CT2", name: "西非马隆格/杰诺 — 宁波" },
 ];
 
-function packMacroContext(q: CtfiQuote | null): string {
-  const lines = ["# 宏观页快照", "", "## CTFI 进口原油运价"];
+function packBond(title: string, bond: CnBondYield | null): string[] {
+  const lines = ["", `## ${title}`];
+  if (bond?.terms && Object.keys(bond.terms).length) {
+    const pick = (["1Y", "2Y", "5Y", "10Y", "30Y"] as const)
+      .map((k) => (bond.terms[k] != null ? `${k} ${bond.terms[k]}%` : ""))
+      .filter(Boolean);
+    const spr = [
+      bond.spread_10_2 != null ? `10Y-2Y ${bond.spread_10_2}` : "",
+      bond.spread_30_10 != null ? `30Y-10Y ${bond.spread_30_10}` : "",
+    ].filter(Boolean);
+    lines.push(`${bond.date || "—"} ${pick.join(" ")}${spr.length ? ` ${spr.join(" ")}` : ""}`.trim());
+  } else {
+    lines.push("未取到");
+  }
+  return lines;
+}
+
+function packItems(title: string, items: { name: string; value: number | null; period?: string; date?: string; unit?: string; label?: string }[] | undefined): string[] {
+  const lines = ["", `## ${title}`];
+  const rows = (items || []).filter((it) => it.value != null);
+  if (!rows.length) {
+    lines.push("未取到");
+    return lines;
+  }
+  for (const it of rows) {
+    const unit = it.unit === "亿" ? "亿" : it.unit === "%" ? "%" : "";
+    const when = it.period || it.date || "";
+    const extra = it.label ? ` ${it.label}` : "";
+    lines.push(`${when} ${it.name} ${it.value}${unit}${extra}`.trim());
+  }
+  return lines;
+}
+
+function packMacroContext(
+  q: CtfiQuote | null,
+  lpr: LprData | null,
+  bond: CnBondYield | null,
+  policy: CnBondYield | null,
+  board: MacroBoard | null,
+): string {
+  const lines = ["# 宏观页快照"];
+  lines.push("", "## LPR");
+  if (lpr?.latest) {
+    lines.push(`${lpr.latest.date} 1Y ${lpr.latest.one_year}% 5Y ${lpr.latest.five_year}%`);
+  } else {
+    lines.push("未取到");
+  }
+  lines.push(...packBond("中债国债收益率", bond));
+  lines.push(...packBond("政策性金融债收益率", policy));
+  lines.push(...packItems("银行间利率", board?.money?.items));
+  lines.push(...packItems("月度宏观", board?.month?.items));
+  lines.push(...packItems("美债与美元指数", board?.us?.items));
+  lines.push("", "## 美元/人民币");
+  lines.push("实时价走报价中心 whUSDCNY, 见行情格子");
+  lines.push("", "## CTFI 进口原油运价");
   if (!q?.price) {
     lines.push("未取到");
     return lines.join("\n");
@@ -59,7 +117,7 @@ function CtfiChart({ tick }: { tick: number }) {
       alt="CTFI 走势"
       width={880}
       height={278}
-      className="block h-auto w-full bg-white object-contain"
+      className="block h-auto max-h-[180px] w-auto max-w-[560px] bg-white object-contain"
       style={{ aspectRatio: "880 / 278" }}
     />
   );
@@ -75,11 +133,11 @@ function CtfiPanel({ q, err, tick }: { q: CtfiQuote | null; err: string | null; 
   const pct = q.pct ?? 0;
   const chg = q.chg;
   return (
-    <div className="flex h-full min-h-0 w-full flex-col gap-4 overflow-auto p-4">
-      <div className="w-full shrink-0 overflow-hidden rounded border border-slate-700/50 bg-white">
+    <div className="flex h-full min-h-0 w-full flex-col gap-4 overflow-auto p-4 lg:flex-row lg:items-start lg:gap-6">
+      <div className="w-fit max-w-full shrink-0 overflow-hidden rounded border border-slate-700/50 bg-white">
         <CtfiChart tick={tick} />
       </div>
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <div className="text-[11px] text-slate-500">{q.date || "—"} · 综合指数 · 点</div>
         <div className="mt-1 flex flex-wrap items-baseline gap-3">
           <span className={cn("font-mono text-4xl font-bold tabular-nums", pctColor(pct))}>
@@ -129,6 +187,10 @@ export function MacroCockpit() {
   const [headerSlot, setHeaderSlot] = useState<HTMLElement | null>(null);
   const [tick, setTick] = useState(0);
   const poll = usePolling(() => api.ctfi(), 300_000, [tick]);
+  const lpr = usePolling(() => api.lpr(730), 300_000, [tick]);
+  const bond = usePolling(() => api.cnBondYield("treasury"), 300_000, [tick]);
+  const policy = usePolling(() => api.cnBondYield("policy"), 300_000, [tick]);
+  const board = usePolling(() => api.macroBoard(), 300_000, [tick]);
 
   useLayoutEffect(() => {
     setHeaderSlot(document.getElementById("cockpit-header-actions"));
@@ -136,7 +198,94 @@ export function MacroCockpit() {
 
   const rows: CockpitRow[] = useMemo(() => [
     {
-      defaultH: 1,
+      defaultH: 0.24,
+      panels: [
+        {
+          id: "lpr",
+          title: "LPR",
+          hint: "中国货币网 · 月更",
+          icon: <Activity size={14} />,
+          accent: "#ffcc00",
+          defaultW: 0.22,
+          mobileH: "h-[32vh]",
+          right: <FreshTag updated={lpr.updated} />,
+          bodyClassName: "overflow-hidden",
+          body: <LprPanel data={lpr.data} err={lpr.error} />,
+        },
+        {
+          id: "money",
+          title: "银行间利率",
+          hint: "DR007 / SHIBOR · 日更",
+          icon: <Percent size={14} />,
+          accent: "#f59e0b",
+          defaultW: 0.38,
+          mobileH: "h-[36vh]",
+          right: <FreshTag updated={board.updated} />,
+          bodyClassName: "overflow-hidden",
+          body: <MoneyPanel data={board.data} err={board.error} />,
+        },
+        {
+          id: "fx",
+          title: "汇率 / 美债",
+          hint: "美元人民币 · 美债10Y · 美元指数",
+          icon: <Wallet size={14} />,
+          accent: "#38bdf8",
+          defaultW: 0.4,
+          mobileH: "h-[36vh]",
+          right: <FreshTag updated={board.updated} />,
+          bodyClassName: "overflow-hidden",
+          body: <FxPanel data={board.data} err={board.error} />,
+        },
+      ],
+    },
+    {
+      defaultH: 0.28,
+      panels: [
+        {
+          id: "bond",
+          title: "国债收益率",
+          hint: "中债登 · 日更",
+          icon: <Landmark size={14} />,
+          accent: "#00d26a",
+          defaultW: 0.5,
+          mobileH: "h-[42vh]",
+          right: <FreshTag updated={bond.updated} />,
+          bodyClassName: "overflow-hidden",
+          body: <BondPanel data={bond.data} err={bond.error} />,
+        },
+        {
+          id: "policy-bond",
+          title: "政策性金融债",
+          hint: "中债登 · 日更",
+          icon: <Landmark size={14} />,
+          accent: "#a78bfa",
+          defaultW: 0.5,
+          mobileH: "h-[42vh]",
+          right: <FreshTag updated={policy.updated} />,
+          bodyClassName: "overflow-hidden",
+          body: <BondPanel data={policy.data} err={policy.error} />,
+        },
+      ],
+    },
+    {
+      defaultH: 0.18,
+      panels: [
+        {
+          id: "month",
+          title: "月度宏观",
+          hint: "CPI / PPI / PMI / 社融 / M2",
+          icon: <Percent size={14} />,
+          accent: "#fb7185",
+          defaultW: 1,
+          mobileH: "h-[36vh]",
+          right: <FreshTag updated={board.updated} />,
+          bodyClassName: "overflow-hidden",
+          body: <MonthPanel data={board.data} err={board.error} />,
+        },
+      ],
+    },
+    {
+      defaultH: 0.3,
       panels: [
         {
           id: "ctfi",
@@ -145,14 +294,21 @@ export function MacroCockpit() {
           icon: <Ship size={14} />,
           accent: "#38bdf8",
           defaultW: 1,
-          mobileH: "h-[70vh]",
+          mobileH: "h-[56vh]",
           right: <FreshTag updated={poll.updated} />,
           bodyClassName: "overflow-hidden",
           body: <CtfiPanel q={poll.data} err={poll.error} tick={tick} />,
         },
       ],
     },
-  ], [poll.data, poll.error, poll.updated, tick]);
+  ], [
+    poll.data, poll.error, poll.updated,
+    lpr.data, lpr.error, lpr.updated,
+    bond.data, bond.error, bond.updated,
+    policy.data, policy.error, policy.updated,
+    board.data, board.error, board.updated,
+    tick,
+  ]);
 
   const headerActions = (
     <>
@@ -163,19 +319,21 @@ export function MacroCockpit() {
         className={cn(
           "inline-flex h-6 items-center gap-1 rounded border border-slate-700/60 px-2 text-[11px] text-slate-400 transition-colors hover:border-primary/50 hover:text-primary",
         )}
-        title="重拉 CTFI"
+        title="重拉宏观格子"
       >
         <RefreshCw className="h-3 w-3" />
         刷新
       </button>
       <AskAiButton
         context=""
-        getContext={() => packMacroContext(poll.data)}
+        getContext={() => packMacroContext(poll.data, lpr.data, bond.data, policy.data, board.data)}
         label="问 AI"
         scopeKey="macro"
         suggestions={[
+          "今天 LPR、DR007、SHIBOR 怎么读?",
+          "国债和政策性金融债曲线差在哪?",
+          "月度 CPI/PPI/PMI/社融/M2 和美债10Y、美元指数怎么放在一起看?",
           "今天 CTFI 综合和中东/西非航线怎么读?",
-          "运价涨跌对进口原油成本意味着什么?",
         ]}
       />
     </>

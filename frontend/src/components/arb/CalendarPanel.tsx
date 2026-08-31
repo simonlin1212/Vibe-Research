@@ -37,12 +37,12 @@ export function CalendarPanel({
 
   return (
     <div>
-      <div className="sticky top-0 z-10 flex items-center gap-1.5 bg-card/95 px-2 pb-0.5 pt-1 text-[10px] text-slate-300">
-        <SortableHd k="label" label="品种" sort={sort} onSort={(k) => setSort((s) => nextSort(s, k))} className="min-w-0 flex-1 justify-start" />
-        <span className="w-[4.2rem] shrink-0 text-right">近/次</span>
-        <SortableHd k="spread" label="价差" sort={sort} onSort={(k) => setSort((s) => nextSort(s, k))} className="w-[3.4rem] justify-end" title="近月 - 次月" />
-        <SortableHd k="spreadChg" label="较昨" sort={sort} onSort={(k) => setSort((s) => nextSort(s, k))} className="w-[3.2rem] justify-end" />
-        <SortableHd k="oi" label="近仓" sort={sort} onSort={(k) => setSort((s) => nextSort(s, k))} className="w-[2.8rem] justify-end" />
+      <div className="sticky top-0 z-10 flex items-center gap-2 bg-card/95 px-1.5 pb-0.5 pt-1 text-[11px] text-slate-300">
+        <SortableHd k="label" label="品种" sort={sort} onSort={(k) => setSort((s) => nextSort(s, k))} className="w-[4.75rem] justify-start" />
+        <span className="w-[4.25rem] shrink-0 text-right">近/次</span>
+        <SortableHd k="spread" label="价差" sort={sort} onSort={(k) => setSort((s) => nextSort(s, k))} className="w-12 justify-end" title="近月 - 次月" />
+        <SortableHd k="spreadChg" label="较昨" sort={sort} onSort={(k) => setSort((s) => nextSort(s, k))} className="w-12 justify-end" />
+        <SortableHd k="oi" label="近仓" sort={sort} onSort={(k) => setSort((s) => nextSort(s, k))} className="w-10 justify-end" />
       </div>
       {list.map((r) => {
         const key = `cal:${r.und}`;
@@ -61,21 +61,21 @@ export function CalendarPanel({
               rightUnd: r.und,
             })}
             className={cn(
-              "flex w-full items-center gap-1.5 px-2 py-0.5 text-left text-[11px] hover:bg-white/[0.04]",
+              "flex w-full items-center gap-2 px-1.5 py-0.5 text-left text-[12px] hover:bg-white/[0.04]",
               active && "bg-primary/10",
             )}
           >
-            <span className="min-w-0 flex-1 truncate text-slate-200">{r.label}</span>
-            <span className="w-[4.2rem] shrink-0 truncate text-right font-mono text-[10px] text-slate-500">
+            <span className="w-[4.75rem] shrink-0 truncate text-slate-200">{r.label}</span>
+            <span className="w-[4.25rem] shrink-0 truncate text-right font-mono text-[11px] text-slate-500">
               {r.near.code.slice(-4)}/{r.next.code.slice(-4)}
             </span>
-            <span className={cn("w-[3.4rem] shrink-0 text-right font-mono tabular-nums", chgClass(r.spread))}>
+            <span className={cn("w-12 shrink-0 text-right font-mono tabular-nums", chgClass(r.spread))}>
               {signed(r.spread)}
             </span>
-            <span className={cn("w-[3.2rem] shrink-0 text-right font-mono tabular-nums", chgClass(r.spreadChg))}>
+            <span className={cn("w-12 shrink-0 text-right font-mono tabular-nums", chgClass(r.spreadChg))}>
               {signed(r.spreadChg)}
             </span>
-            <span className="w-[2.8rem] shrink-0 text-right font-mono text-[10px] text-slate-500">
+            <span className="w-10 shrink-0 text-right font-mono text-[11px] text-slate-500">
               {fmtOi(r.near.oi)}
             </span>
           </button>

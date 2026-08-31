@@ -64,13 +64,13 @@ export function EventCalPanel({
   }, [hasToday, days.length]);
 
   if (loading && !data) {
-    return <p className="px-2 py-6 text-center text-[11px] text-slate-500">拉日历…</p>;
+    return <p className="px-2 py-6 text-center text-[13px] text-slate-500">拉日历…</p>;
   }
   if (error && !data) {
-    return <p className="px-2 py-6 text-center text-[11px] text-destructive">{error}</p>;
+    return <p className="px-2 py-6 text-center text-[13px] text-destructive">{error}</p>;
   }
   if (!days.length) {
-    return <p className="px-2 py-6 text-center text-[11px] text-slate-500">暂无日程</p>;
+    return <p className="px-2 py-6 text-center text-[13px] text-slate-500">暂无日程</p>;
   }
 
   return (
@@ -84,18 +84,18 @@ export function EventCalPanel({
               "mb-px grid grid-cols-[1fr_auto_1fr] items-baseline border-l-2 px-1.5 py-1",
               isToday ? "border-primary bg-primary/12" : lab.weekend ? "border-[#ff2d2d] bg-[#ff2d2d]/8" : "border-[#2a2a2a] bg-[#141414]",
             )}>
-              <span className={cn("text-[13px] font-semibold", isToday ? "text-primary" : "text-slate-100")}>
+              <span className={cn("text-[15px] font-semibold", isToday ? "text-primary" : "text-slate-100")}>
                 {lab.rel}
               </span>
               <span className="flex items-baseline justify-center gap-1.5" style={{ color: lab.tone }}>
-                <span className="text-[12px] font-medium">{lab.wd}</span>
-                <span className="font-mono text-[12px] tabular-nums">{lab.md}</span>
+                <span className="text-[14px] font-medium">{lab.wd}</span>
+                <span className="font-mono text-[14px] tabular-nums">{lab.md}</span>
               </span>
-              <span className="text-right text-[10px] text-slate-500">{g.items.length}</span>
+              <span className="text-right text-[12px] text-slate-500">{g.items.length}</span>
             </div>
             <ul className="border border-[#2a2a2a]">
               {g.items.map((t) => (
-                <li key={t} className="border-t border-[#2a2a2a] px-1.5 py-1 text-[11px] leading-snug text-slate-200 first:border-t-0">
+                <li key={t} className="border-t border-[#2a2a2a] px-2 py-1.5 text-[13px] leading-snug text-slate-200 first:border-t-0">
                   {t}
                 </li>
               ))}

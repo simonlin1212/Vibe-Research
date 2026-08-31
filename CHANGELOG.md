@@ -5,6 +5,14 @@
 
 ## Unreleased
 
+### 改进：事件页正文字号大一档
+
+财经日历条目和实时新闻标题/摘要从 11–12px 提到 13–14px, 只动 `/event` 内容格, 不改其它驾驶舱。
+
+### 移除：事件页去掉 Polymarket
+
+`/event` 只留实时新闻和财经日历。Gamma 接口、本机监控名单、`VR_POLYMARKET_PROXY` 一并去掉。
+
 ### 修复：IV微笑/期限叠两条紫线
 
 `useLcPriceChart` 先挂图再 `rev` 0→1。原先在 0 画一次、1 又把 bag 清空重挂，今线叠两根。等 boot 完再挂，不因 rev 重加系列。

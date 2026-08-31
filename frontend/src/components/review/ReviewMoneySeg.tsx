@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import * as echarts from "echarts";
 import { KlineLink } from "@/components/cockpit/QuoteLine";
 import { Activity, ShieldAlert, TrendingUp } from "lucide-react";
 import { SectionHeader, ChipGroup, Chip } from "@/components/ui/SectionHeader";
 import { PctChip } from "@/components/review/PctChip";
 import { fmt, pctColor } from "@/components/review/format";
 import { reviewPending } from "@/components/review/reviewPending";
-import { ETF_SHARE_WATCH, type CnBondYield, type EtfFlow, type EtfShares, type LprData, type ShareholderChanges } from "@/lib/api";
+import { ETF_SHARE_WATCH, type EtfFlow, type EtfShares, type ShareholderChanges } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { LcHoverTag, LcWell } from "@/components/ui/LcFrame";
 import {
@@ -22,8 +21,6 @@ interface Props {
   etfFlow: EtfFlow | null;
   etfSort: "net_inflow" | "change_pct";
   onEtfSort: (v: "net_inflow" | "change_pct") => void;
-  lpr: LprData | null;
-  bondY: CnBondYield | null;
   shChg: ShareholderChanges | null;
   shType: "all" | "增持" | "减持";
   onShType: (v: "all" | "增持" | "减持") => void;
@@ -36,89 +33,11 @@ export function ReviewMoneySeg({
   etfFlow,
   etfSort,
   onEtfSort,
-  lpr,
-  bondY,
   shChg,
   shType,
   onShType,
   moneyDone,
 }: Props) {
-  const bondChartRef = useRef<HTMLDivElement>(null);
-  const bondEchartRef = useRef<echarts.ECharts | null>(null);
-
-  useEffect(() => {
-    const el = bondChartRef.current;
-    const pts = bondY?.curve_points ?? [];
-    if (!el || pts.length < 2) {
-      bondEchartRef.current?.dispose();
-      bondEchartRef.current = null;
-      return;
-    }
-
-    let chart = bondEchartRef.current;
-    if (!chart || chart.getDom() !== el) {
-      chart?.dispose();
-      chart = echarts.init(el, undefined, { renderer: "canvas" });
-      bondEchartRef.current = chart;
-    }
-    const cssHsl = (name: string, fallback: string) => {
-      const raw = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-      return raw ? `hsl(${raw})` : fallback;
-    };
-    const cText = cssHsl("--chart-text", "#94a3b8");
-    const cAxis = cssHsl("--chart-axis", "#475569");
-    const cGrid = cssHsl("--chart-grid", "#334155");
-    const cPrimary = cssHsl("--primary", "#ffcc00");
-    const step = Math.max(1, Math.floor(pts.length / 40));
-    const sampled = pts.filter((_, i) => i % step === 0 || i === pts.length - 1);
-    chart.setOption({
-      animation: false,
-      grid: { left: 36, right: 8, top: 12, bottom: 22 },
-      tooltip: {
-        trigger: "axis",
-        formatter: (params: unknown) => {
-          const arr = Array.isArray(params) ? params : [params];
-          const p = arr[0] as { data?: [number, number] } | undefined;
-          const d = p?.data;
-          if (!d) return "";
-          return `${d[0]}Y: ${Number(d[1]).toFixed(2)}%`;
-        },
-      },
-      xAxis: {
-        type: "value",
-        name: "年",
-        nameTextStyle: { color: cText, fontSize: 10 },
-        axisLabel: { color: cText, fontSize: 9, formatter: (v: number) => `${v}` },
-        axisLine: { lineStyle: { color: cAxis } },
-        splitLine: { show: false },
-        min: 0,
-        max: 30,
-      },
-      yAxis: {
-        type: "value",
-        scale: true,
-        axisLabel: { color: cText, fontSize: 9, formatter: (v: number) => `${v}%` },
-        splitLine: { lineStyle: { color: cGrid, opacity: 0.25 } },
-      },
-      series: [{
-        type: "line",
-        data: sampled,
-        showSymbol: false,
-        smooth: 0.25,
-        lineStyle: { color: cPrimary, width: 2 },
-        areaStyle: { color: "rgba(255,204,0,0.10)" },
-      }],
-    }, { notMerge: true });
-    requestAnimationFrame(() => chart?.resize());
-    const ro = new ResizeObserver(() => chart?.resize());
-    ro.observe(el);
-    return () => {
-      ro.disconnect();
-      chart?.dispose();
-      if (bondEchartRef.current === chart) bondEchartRef.current = null;
-    };
-  }, [bondY]);
-
   return (
     <div className="space-y-3 p-1">
       <EtfShareBlock items={etfSharesList} fallback={etfShares} />
@@ -175,88 +94,6 @@ export function ReviewMoneySeg({
           )}
         </div>
         <p className="mt-1 text-[10px] text-slate-500">客观公开榜单，只呈现事实，不构成买卖建议。</p>
-      </div>
-
-      <div>
-        <SectionHeader
-          icon={<Activity className="h-3.5 w-3.5 text-primary" />}
-          title="利率 · LPR / 国债"
-          hint="中国货币网 · 中债登"
-          meta={
-            lpr?.latest?.date || bondY?.date
-              ? `LPR ${lpr?.latest?.date ?? "—"} · 曲线 ${bondY?.date || "—"}`
-              : (moneyDone ? "暂无" : "加载中…")
-          }
-        />
-        <div className="grid gap-2 md:grid-cols-2">
-          <div className={cn(box, "p-3")}>
-            <h4 className="mb-2 text-xs font-semibold">LPR 报价</h4>
-            {!lpr?.latest ? (
-              reviewPending(moneyDone)
-            ) : (
-              <>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="rounded border border-slate-700/40 bg-slate-900/40 p-2 text-center">
-                    <p className="text-[10px] text-slate-500">1 年期</p>
-                    <p className="mt-0.5 font-mono text-lg font-bold">{lpr.latest.one_year.toFixed(2)}%</p>
-                  </div>
-                  <div className="rounded border border-slate-700/40 bg-slate-900/40 p-2 text-center">
-                    <p className="text-[10px] text-slate-500">5 年期以上</p>
-                    <p className="mt-0.5 font-mono text-lg font-bold">{lpr.latest.five_year.toFixed(2)}%</p>
-                  </div>
-                </div>
-                {lpr.rows.length > 1 && (
-                  <div className="mt-2 max-h-36 space-y-1 overflow-y-auto border-t border-slate-700/40 pt-2">
-                    {lpr.rows.slice(0, 8).map((r) => (
-                      <div key={r.date} className="flex items-center gap-2 font-mono text-[11px] text-slate-500">
-                        <span className="w-24 shrink-0">{r.date}</span>
-                        <span className="flex-1">1Y {r.one_year.toFixed(2)}%</span>
-                        <span>5Y {r.five_year.toFixed(2)}%</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-          <div className={cn(box, "p-3")}>
-            <h4 className="mb-2 text-xs font-semibold">中债国债收益率</h4>
-            {!bondY?.terms || Object.keys(bondY.terms).length === 0 ? (
-              reviewPending(moneyDone)
-            ) : (
-              <>
-                <div className="flex flex-wrap gap-1.5">
-                  {(["1Y", "2Y", "5Y", "10Y", "30Y"] as const).map((k) => (
-                    <div key={k} className="min-w-[4rem] rounded border border-slate-700/40 bg-slate-900/40 px-2 py-1.5 text-center">
-                      <p className="text-[10px] text-slate-500">{k}</p>
-                      <p className="font-mono text-sm font-semibold">
-                        {bondY.terms[k] != null ? `${bondY.terms[k].toFixed(2)}%` : "—"}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-                {(bondY.curve_points?.length ?? 0) >= 2 && (
-                  <div ref={bondChartRef} className="mt-2 h-[140px] w-full min-w-0" />
-                )}
-                <div className="mt-2 flex flex-wrap gap-3 border-t border-slate-700/40 pt-2 text-[11px] text-slate-500">
-                  <span>
-                    10Y-2Y{" "}
-                    <span className="font-mono text-slate-200">
-                      {bondY.spread_10_2 == null ? "—" : `${bondY.spread_10_2 > 0 ? "+" : ""}${bondY.spread_10_2.toFixed(2)}`}
-                    </span>
-                  </span>
-                  <span>
-                    30Y-10Y{" "}
-                    <span className="font-mono text-slate-200">
-                      {bondY.spread_30_10 == null ? "—" : `${bondY.spread_30_10 > 0 ? "+" : ""}${bondY.spread_30_10.toFixed(2)}`}
-                    </span>
-                  </span>
-                  {bondY.date && <span className="ml-auto">{bondY.date}</span>}
-                </div>
-              </>
-            )}
-          </div>
-        </div>
       </div>
 
       <div>

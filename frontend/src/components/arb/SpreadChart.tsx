@@ -13,11 +13,11 @@ import {
   type CandlestickData, type IPriceLine, type ISeriesApi, type ITextWatermarkPluginApi,
   type Time, type WhitespaceData,
 } from "@/lib/lcChart";
-import { LcHoverTag, LcLegend, LcSeg, LcWell, lcTone } from "@/components/ui/LcFrame";
+import { LcHoverTag, LcLegend, LcWell, lcTone } from "@/components/ui/LcFrame";
 import { chgClass, fmtPx, signed, type ArbPick } from "./arbShared";
 import { cn } from "@/lib/utils";
 
-type Mode = "minute" | "daily";
+export type SpreadMode = "minute" | "daily";
 
 type Pt = { t: string; o: number; h: number; l: number; c: number };
 type Ohlc = { open: number; high: number; low: number; close: number };
@@ -61,10 +61,6 @@ function candlePts(bars: Array<Ohlc | null>): Array<CandlestickData | Whitespace
 
 /** OpenVlab 近 2 日窗口周一早盘不含周五, 也不回周日夜盘. 5 日才能对齐上一交易日. */
 const MINUTE_LOOKBACK = 5 * 86400;
-
-function defaultMode(kind: ArbPick["kind"] | undefined): Mode {
-  return kind === "cal" ? "minute" : "daily";
-}
 
 /** Latest bar per HH:MM so Sunday night wins over the previous Friday night. */
 function clockLast(pts: Pt[]): Map<string, Pt> {
@@ -167,7 +163,7 @@ function parseLight(
   return out;
 }
 
-async function loadFut(code: string, mode: Mode): Promise<Pt[]> {
+async function loadFut(code: string, mode: SpreadMode): Promise<Pt[]> {
   const now = Math.floor(Date.now() / 1000);
   if (mode === "daily") {
     const kl = await api.ovlabKlineHistory(code, "1D", now - 180 * 86400, now);
@@ -177,22 +173,20 @@ async function loadFut(code: string, mode: Mode): Promise<Pt[]> {
   return parseHist(klineBars(kl?.data ?? kl), false);
 }
 
-async function loadCash(code: string, mode: Mode): Promise<Pt[]> {
+async function loadCash(code: string, mode: SpreadMode): Promise<Pt[]> {
   const kl = await loadLightKline(code, mode === "daily" ? "1D" : "1", mode === "daily" ? 120 : 240);
   return parseLight(kl?.bars, mode === "daily");
 }
 
-export function SpreadChart({ pick }: { pick: ArbPick | null }) {
-  const [mode, setMode] = useState<Mode>(defaultMode(pick?.kind));
-  useEffect(() => {
-    setMode(defaultMode(pick?.kind));
-  }, [pick?.kind, pick?.key]);
+export function SpreadChart({ pick, mode }: { pick: ArbPick | null; mode: SpreadMode }) {
   const { ref, chartRef, labelsRef, onHoverRef } = useLcChart();
   const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const refLine = useRef<IPriceLine | null>(null);
   const wmRef = useRef<ITextWatermarkPluginApi<Time> | null>(null);
   const [hover, setHover] = useState<number | null>(null);
-  onHoverRef.current = setHover;
+  onHoverRef.current = (idx) => {
+    setHover((p) => (p === idx ? p : idx));
+  };
 
   const poll = usePolling(
     async () => {
@@ -303,7 +297,7 @@ export function SpreadChart({ pick }: { pick: ArbPick | null }) {
   );
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="flex h-full min-h-0 min-w-0 flex-col">
       <div className="flex shrink-0 items-center justify-between gap-2 px-2 py-1">
         <div className="min-w-0 truncate font-mono text-[11px] text-slate-300">
           {pick ? pick.label : "点上排一对"}
@@ -313,16 +307,7 @@ export function SpreadChart({ pick }: { pick: ArbPick | null }) {
             </span>
           ) : null}
         </div>
-        <div className="flex items-center gap-2">
-          <span className={cn("font-mono text-[13px] tabular-nums", chgClass(last))}>{signed(last)}</span>
-          <LcSeg
-            value={mode}
-            options={pick?.kind === "idx"
-              ? [{ v: "minute" as const, label: "分时" }, { v: "daily" as const, label: "基差" }]
-              : [{ v: "minute" as const, label: "分时" }, { v: "daily" as const, label: "日K" }]}
-            onChange={setMode}
-          />
-        </div>
+        <span className={cn("font-mono text-[13px] tabular-nums", chgClass(last))}>{signed(last)}</span>
       </div>
       <LcWell className="min-h-0 flex-1 rounded-none">
         {!pick ? (

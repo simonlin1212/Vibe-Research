@@ -96,8 +96,6 @@ export function DailyReview() {
     etfFlow: d.etfFlow,
     etfSort: d.etfSort,
     onEtfSort: d.setEtfSort,
-    lpr: d.lpr,
-    bondY: d.bondY,
     shChg: d.shChg,
     shType: d.shType,
     onShType: d.setShType,
@@ -111,7 +109,7 @@ export function DailyReview() {
         {
           id: "market-watch",
           title: "行情观察",
-          hint: "全球关键指数 + 宏观观察",
+          hint: "全球关键指数 + 商品",
           icon: <Globe size={14} />,
           accent: "#ffcc00",
           defaultW: 1,

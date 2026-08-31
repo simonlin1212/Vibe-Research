@@ -9,23 +9,94 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 test("macro page hangs CTFI, not quote hub", () => {
   const header = readFileSync(join(root, "src/components/cockpit/CockpitHeader.tsx"), "utf8");
   const nav = header.slice(header.indexOf("export const PAGE_NAV"), header.indexOf("export function parseAShareTab"));
-  const usIdx = nav.indexOf('to: "/us-market"');
+  const eventIdx = nav.indexOf('to: "/event"');
   const macroIdx = nav.indexOf('to: "/macro"');
-  const researchIdx = nav.indexOf('to: "/research"');
-  assert.ok(usIdx >= 0 && macroIdx > usIdx && researchIdx > macroIdx, "宏观在美股后、研究前");
+  const dxxIdx = nav.indexOf('to: "/dxx"');
+  assert.ok(eventIdx >= 0 && macroIdx > eventIdx && dxxIdx > macroIdx, "宏观在事件后、短线侠前");
   const page = readFileSync(join(root, "src/pages/MacroCockpit.tsx"), "utf8");
   const goods = readFileSync(join(root, "src/components/cockpit/CommodityPanel.tsx"), "utf8");
   const api = readFileSync(join(root, "src/lib/api.ts"), "utf8");
+  const fx = readFileSync(join(root, "src/components/macro/FxPanel.tsx"), "utf8");
+  const catalog = readFileSync(join(root, "src/config/cockpit.ts"), "utf8");
   assert.match(page, /api\.ctfi/);
   assert.match(page, /api\.ctfiImg/);
   assert.match(page, /880 \/ 278/);
   assert.match(page, /object-contain/);
+  assert.match(page, /max-h-\[180px\]/);
+  assert.match(page, /max-w-\[560px\]/);
+  assert.doesNotMatch(page, /className="block h-auto w-full/);
   assert.match(page, /packMacroContext/);
   assert.match(page, /进口原油运价 CTFI/);
+  assert.match(page, /api\.lpr\(730\)/);
+  assert.match(page, /api\.cnBondYield\("treasury"\)/);
+  assert.match(page, /api\.cnBondYield\("policy"\)/);
+  assert.match(page, /api\.macroBoard/);
+  assert.match(page, /id: "lpr"/);
+  assert.match(page, /id: "bond"/);
+  assert.match(page, /id: "policy-bond"/);
+  assert.match(page, /id: "money"/);
+  assert.match(page, /id: "month"/);
+  assert.match(page, /id: "fx"/);
   assert.match(api, /\/market\/ctfi/);
   assert.match(api, /\/market\/ctfi-img/);
+  assert.match(api, /\/market\/macro-board/);
   assert.doesNotMatch(page, /useQuotes/);
   assert.doesNotMatch(page, /quoteHub/);
+  assert.match(fx, /useQuotes\(\[FX_CODE\]\)/);
+  assert.match(fx, /whUSDCNY/);
+  assert.doesNotMatch(fx, /usTNX|hf_DINIW|WORLD_INDEX/);
+  assert.match(catalog, /whUSDCNY/);
+  assert.doesNotMatch(catalog, /usTNX|DINIW|US10Y/);
   assert.doesNotMatch(page, /ovlabMarket/);
   assert.doesNotMatch(goods, /api\.ctfi/);
+});
+
+test("LPR 月度折线走 LC, 不另开 ECharts", () => {
+  const lpr = readFileSync(join(root, "src/components/macro/LprPanel.tsx"), "utf8");
+  assert.match(lpr, /export function lprChartPoints/);
+  assert.match(lpr, /useLcChart\("glance"\)/);
+  assert.match(lpr, /LineSeries/);
+  assert.match(lpr, /LcWell/);
+  assert.match(lpr, /LcHoverTag/);
+  assert.match(lpr, /useLcHoverTag/);
+  assert.match(lpr, /setPaneWatermark/);
+  assert.match(lpr, /function LprChart/);
+  assert.match(lpr, /function LprTip/);
+  assert.match(lpr, /one_year/);
+  assert.match(lpr, /five_year/);
+  assert.doesNotMatch(lpr, /echarts\.init/);
+  assert.doesNotMatch(lpr, /from "echarts"/);
+});
+
+function lprChartPoints(rows) {
+  const chrono = [...rows].filter((r) => r.date).sort((a, b) => a.date.localeCompare(b.date));
+  const keys = ["one_year", "five_year"];
+  return {
+    dates: chrono.map((r) => r.date),
+    series: keys.map((key) => ({
+      values: chrono.map((r) => {
+        const v = r[key];
+        return v != null && Number.isFinite(v) ? v : null;
+      }),
+    })),
+  };
+}
+
+test("lprChartPoints 升序对齐 1Y/5Y, 缺口留空", () => {
+  const got = lprChartPoints([
+    { date: "2026-02-20", one_year: 3.1, five_year: 3.6 },
+    { date: "2026-01-20", one_year: 3.0, five_year: null },
+  ]);
+  assert.deepEqual(got.dates, ["2026-01-20", "2026-02-20"]);
+  assert.deepEqual(got.series[0].values, [3.0, 3.1]);
+  assert.deepEqual(got.series[1].values, [null, 3.6]);
+});
+
+test("A股资金页不再画 LPR/国债", () => {
+  const hook = readFileSync(join(root, "src/hooks/useReviewData.ts"), "utf8");
+  const money = readFileSync(join(root, "src/components/review/ReviewMoneySeg.tsx"), "utf8");
+  assert.doesNotMatch(hook, /api\.lpr/);
+  assert.doesNotMatch(hook, /api\.cnBondYield/);
+  assert.doesNotMatch(money, /LPR/);
+  assert.doesNotMatch(money, /国债/);
 });

@@ -560,6 +560,18 @@ def market_ctfi_img():
         raise HTTPException(502, f"CTFI 图异常：{e}") from e
 
 
+@router.get("/api/market/macro-board")
+def market_macro_board():
+    """银行间利率 + 月度宏观 + 美债10Y/美元指数. 钥匙 macro_board, 不进报价中心."""
+    import macro_board
+
+    try:
+        data = _cached("macro_board", "board", macro_board.TTL, macro_board.board, valid=macro_board.board_ok)
+        return {"data": data}
+    except Exception as e:
+        raise HTTPException(502, f"宏观看板异常：{e}") from e
+
+
 @router.get("/api/market/spot-table")
 def market_spot_table():
     """生意社现货/期货基差对照表. 缓存 8 小时."""

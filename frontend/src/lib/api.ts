@@ -362,48 +362,6 @@ export interface CtfiQuote {
   source?: string;
   url?: string;
 }
-export interface PmOutcome {
-  label: string;
-  pct: number | null;
-}
-export interface PmMarket {
-  id: string;
-  title: string;
-  question: string;
-  yes: number | null;
-  outcomes: PmOutcome[];
-  volume: number | null;
-  end?: string | null;
-  closed?: boolean;
-  chg?: number | null;
-}
-export interface PmFeatured {
-  label: string;
-  pct: number | null;
-}
-export interface PmEvent {
-  id: string;
-  slug: string;
-  title: string;
-  description?: string | null;
-  volume: number | null;
-  volume24hr: number | null;
-  liquidity: number | null;
-  end?: string | null;
-  image?: string | null;
-  tags: string[];
-  featured?: PmFeatured | null;
-  markets: PmMarket[];
-  n_markets: number;
-}
-export interface PmBoard {
-  events: PmEvent[];
-  updated?: string;
-}
-export interface PmSearch {
-  q: string;
-  events: PmEvent[];
-}
 export interface EventCalDay {
   date: string;
   items: string[];
@@ -1021,6 +979,18 @@ export interface CnBondYield {
   spread_10_2?: number | null; spread_30_10?: number | null;
   curve_points?: number[][];
   error?: string; warning?: string;
+}
+export interface MacroBoardItem {
+  key: string; name: string; value: number | null;
+  date?: string; period?: string; unit?: string; label?: string;
+  kind?: string; pct?: number | null; prev?: number | null; change?: number | null;
+  stock?: number | null; loan?: number | null; source?: string;
+}
+export interface MacroBoardBucket { date?: string; source?: string; items: MacroBoardItem[] }
+export interface MacroBoard {
+  money?: MacroBoardBucket;
+  month?: MacroBoardBucket;
+  us?: MacroBoardBucket;
 }
 export interface DividendRow { date: string; bonus_rmb: number; transfer_ratio: number; bonus_ratio: number | null; plan: string }
 export interface FundFlowRow { date: string; main_net: number; small_net: number; mid_net: number; large_net: number; super_net: number }
@@ -1729,13 +1699,6 @@ export const api = {
     }
     return resp.blob();
   },
-  polymarketBoard: (limit = 30) => get<PmBoard>(`/polymarket/board?limit=${limit}`),
-  polymarketEvent: (slug: string) =>
-    get<PmEvent>(`/polymarket/event?slug=${encodeURIComponent(slug)}`),
-  polymarketSearch: (q: string) =>
-    get<PmSearch>(`/polymarket/search?q=${encodeURIComponent(q)}`),
-  polymarketWatch: (slugs: string[]) =>
-    get<PmBoard>(`/polymarket/watch?slugs=${encodeURIComponent(slugs.slice(0, 20).join(","))}`),
   eventCalendar: () => get<EventCalBoard>("/event/calendar"),
   dxxBoard: () => get<DxxBoard>("/dxx/board"),
   commodityMinutes: (codes: string) =>
@@ -1786,6 +1749,7 @@ export const api = {
   lpr: (days = 365) => get<LprData>(`/market/lpr?days=${days}`),
   cnBondYield: (curveType: "treasury" | "policy" = "treasury") =>
     get<CnBondYield>(`/market/bond-yield?curve_type=${curveType}`),
+  macroBoard: () => get<MacroBoard>("/market/macro-board"),
   stockBasic: (code: string) => get<StockBasicInfo>(`/stock-basic?code=${code}`),
   globalStock: (symbol: string, opts?: { withMetrics?: boolean }) => {
     const p = new URLSearchParams({ symbol });

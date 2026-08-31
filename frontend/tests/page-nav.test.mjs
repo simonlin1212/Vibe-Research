@@ -33,8 +33,9 @@ test("/derivatives sits right after /a-share and is primary", () => {
   assert.match(ovlLine, /primary: true/);
   const arbIdx = nav.indexOf('to: "/arb"');
   const eventIdx = nav.indexOf('to: "/event"');
+  const macroIdx = nav.indexOf('to: "/macro"');
   const dxxIdx = nav.indexOf('to: "/dxx"');
-  assert.ok(arbIdx > oIdx && arbIdx < eventIdx && eventIdx < dxxIdx && dxxIdx < fIdx);
+  assert.ok(arbIdx > oIdx && arbIdx < eventIdx && eventIdx < macroIdx && macroIdx < dxxIdx && dxxIdx < fIdx);
   const arbLine = nav.split("\n").find((l) => l.includes('to: "/arb"'));
   assert.match(arbLine, /primary: true/);
   const eventLine = nav.split("\n").find((l) => l.includes('to: "/event"'));

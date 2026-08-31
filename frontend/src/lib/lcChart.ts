@@ -101,6 +101,20 @@ export function formatLabel(lab: string, mode: TimeLabelMode): string {
   return lab;
 }
 
+/** Resize/fitContent fires a move with no point. That is not mouse leave. */
+export function skipResizeCrosshair(raw: unknown): boolean {
+  const p = raw as { currTrigger?: string; point?: unknown };
+  if (!p) return true;
+  if (p.currTrigger === "leave") return false;
+  return "point" in p && p.point == null;
+}
+
+/** Keep last hover when LC emits a resize blank; leave still clears. */
+export function nextHoverIdx(prev: number | null, raw: unknown, n: number): number | null {
+  if (skipResizeCrosshair(raw)) return prev;
+  return hoverIdxFromParam(raw, n);
+}
+
 /** Crosshair / leftover echarts axis-pointer -> category index. */
 export function hoverIdxFromParam(raw: unknown, n: number): number | null {
   const p = raw as MouseEventParams & {
@@ -441,16 +455,16 @@ export function useLcHoverTag(
   const [y, setY] = useState<number | null>(null);
   useLayoutEffect(() => {
     const series = getSeries();
-    if (!series || price == null || !Number.isFinite(price)) {
-      setY(null);
-      return;
+    let next: number | null = null;
+    if (series && price != null && Number.isFinite(price)) {
+      try {
+        const cy = series.priceToCoordinate(price);
+        next = cy == null || !Number.isFinite(cy) ? null : cy;
+      } catch {
+        next = null;
+      }
     }
-    try {
-      const cy = series.priceToCoordinate(price);
-      setY(cy == null || !Number.isFinite(cy) ? null : cy);
-    } catch {
-      setY(null);
-    }
+    setY((prev) => (prev === next ? prev : next));
   }, [price, paintKey]);
   return { tag, y };
 }
@@ -1207,6 +1221,7 @@ export function useLcPriceChart() {
     if (!el) return;
     let chart: ReturnType<typeof createLcPriceChart> | null = null;
     const onMove = (param: MouseEventParams<number>) => {
+      if (skipResizeCrosshair(param)) return;
       if (param.time == null || !param.point) {
         onHoverRef.current(null);
         return;
@@ -1235,10 +1250,13 @@ export function useLcPriceChart() {
       setRev((n) => n + 1);
     };
     boot();
+    const onLeave = () => onHoverRef.current(null);
+    el.addEventListener("mouseleave", onLeave);
     const ro = new ResizeObserver(boot);
     ro.observe(el);
     return () => {
       ro.disconnect();
+      el.removeEventListener("mouseleave", onLeave);
       if (chart) chart.unsubscribeCrosshairMove(onMove);
       chart?.remove();
       chartRef.current = null;
@@ -1270,15 +1288,19 @@ export function useLcChart(preset: LcPreset = "desk") {
     const chart = createLcChart(el, preset);
     chartRef.current = chart;
     const onMove = (param: MouseEventParams) => {
+      if (skipResizeCrosshair(param)) return;
       onHoverRef.current(hoverIdxFromParam(param, labelsRef.current.length));
     };
     chart.subscribeCrosshairMove(onMove);
+    const onLeave = () => onHoverRef.current(null);
+    el.addEventListener("mouseleave", onLeave);
     const fit = () => resizeLc(chart, el);
     fit();
     const ro = new ResizeObserver(fit);
     ro.observe(el);
     return () => {
       ro.disconnect();
+      el.removeEventListener("mouseleave", onLeave);
       chart.unsubscribeCrosshairMove(onMove);
       chart.remove();
       chartRef.current = null;

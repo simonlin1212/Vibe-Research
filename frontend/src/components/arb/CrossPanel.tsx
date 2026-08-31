@@ -34,11 +34,11 @@ export function CrossPanel({
 
   return (
     <div>
-      <div className="sticky top-0 z-10 flex items-center gap-1.5 bg-card/95 px-2 pb-0.5 pt-1 text-[10px] text-slate-300">
-        <SortableHd k="label" label="配对" sort={sort} onSort={(k) => setSort((s) => nextSort(s, k))} className="min-w-0 flex-1 justify-start" />
-        <span className="w-[2.4rem] shrink-0 text-slate-500">板块</span>
-        <SortableHd k="spread" label="价差" sort={sort} onSort={(k) => setSort((s) => nextSort(s, k))} className="w-[3.6rem] justify-end" title="A近月 - B近月" />
-        <SortableHd k="spreadChg" label="较昨" sort={sort} onSort={(k) => setSort((s) => nextSort(s, k))} className="w-[3.2rem] justify-end" />
+      <div className="sticky top-0 z-10 flex items-center gap-2 bg-card/95 px-1.5 pb-0.5 pt-1 text-[11px] text-slate-300">
+        <SortableHd k="label" label="配对" sort={sort} onSort={(k) => setSort((s) => nextSort(s, k))} className="w-[5.25rem] justify-start" />
+        <span className="w-8 shrink-0 text-slate-500">板块</span>
+        <SortableHd k="spread" label="价差" sort={sort} onSort={(k) => setSort((s) => nextSort(s, k))} className="w-12 justify-end" title="A近月 - B近月" />
+        <SortableHd k="spreadChg" label="较昨" sort={sort} onSort={(k) => setSort((s) => nextSort(s, k))} className="w-12 justify-end" />
       </div>
       {list.map((r) => {
         const key = `cross:${r.id}`;
@@ -57,16 +57,16 @@ export function CrossPanel({
               rightUnd: r.bUnd,
             })}
             className={cn(
-              "flex w-full items-center gap-1.5 px-2 py-0.5 text-left text-[11px] hover:bg-white/[0.04]",
+              "flex w-full items-center gap-2 px-1.5 py-0.5 text-left text-[12px] hover:bg-white/[0.04]",
               active && "bg-primary/10",
             )}
           >
-            <span className="min-w-0 flex-1 truncate text-slate-200">{r.label}</span>
-            <span className="w-[2.4rem] shrink-0 truncate text-[10px] text-slate-500">{r.sector}</span>
-            <span className={cn("w-[3.6rem] shrink-0 text-right font-mono tabular-nums", chgClass(r.spread))}>
+            <span className="w-[5.25rem] shrink-0 truncate text-slate-200">{r.label}</span>
+            <span className="w-8 shrink-0 truncate text-[11px] text-slate-500">{r.sector}</span>
+            <span className={cn("w-12 shrink-0 text-right font-mono tabular-nums", chgClass(r.spread))}>
               {signed(r.spread)}
             </span>
-            <span className={cn("w-[3.2rem] shrink-0 text-right font-mono tabular-nums", chgClass(r.spreadChg))}>
+            <span className={cn("w-12 shrink-0 text-right font-mono tabular-nums", chgClass(r.spreadChg))}>
               {signed(r.spreadChg)}
             </span>
           </button>

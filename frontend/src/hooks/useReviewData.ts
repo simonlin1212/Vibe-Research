@@ -3,7 +3,7 @@ import {
   api, type MarketOverview, type ShortTermEmotion,
   type DailyDragonTiger, type IndustryData,
   type EtfFlow, type EtfShares, ETF_SHARE_WATCH, type ShareholderChanges,
-  type LprData, type CnBondYield, type ReviewSnapshot, type HsgtLive,
+  type ReviewSnapshot, type HsgtLive,
   type MarketBreadth,
 } from "@/lib/api";
 import { usePolling } from "@/hooks/usePolling";
@@ -29,8 +29,6 @@ export function useReviewData() {
   const [etfSort, setEtfSort] = useState<"net_inflow" | "change_pct">("net_inflow");
   const [shChg, setShChg] = useState<ShareholderChanges | null>(null);
   const [shType, setShType] = useState<"all" | "增持" | "减持">("all");
-  const [lpr, setLpr] = useState<LprData | null>(null);
-  const [bondY, setBondY] = useState<CnBondYield | null>(null);
   const [hsgt, setHsgt] = useState<HsgtLive | null>(null);
   const [moneyDone, setMoneyDone] = useState(false);
   const watchCodes = useWatchCodes();
@@ -175,14 +173,10 @@ export function useReviewData() {
     Promise.all([
       api.etfFlow(etfSort, 40).catch(() => null),
       api.shareholderChanges({ changeType: shType, limit: 40 }).catch(() => null),
-      api.lpr(730).catch(() => null),
-      api.cnBondYield("treasury").catch(() => null),
-    ]).then(([ef, sc, lp, by]) => {
+    ]).then(([ef, sc]) => {
       if (cancelled) return;
       setEtfFlow(ef);
       setShChg(sc);
-      setLpr(lp);
-      setBondY(by);
     }).finally(() => {
       if (!cancelled) setMoneyDone(true);
     });
@@ -217,8 +211,6 @@ export function useReviewData() {
     shChg,
     shType,
     setShType,
-    lpr,
-    bondY,
     hsgt,
     moneyDone,
     watchCodes,

@@ -65,12 +65,12 @@ function IndexBasisTable({
 
   return (
     <div>
-      <div className="sticky top-0 z-10 flex items-center gap-1.5 bg-card/95 px-2 pb-0.5 pt-1 text-[10px] text-slate-300">
-        <span className="min-w-0 flex-1">配对</span>
-        <span className="w-[3.4rem] text-right">期货</span>
-        <span className="w-[3.4rem] text-right">现货</span>
-        <span className="w-[3.4rem] text-right">基差</span>
-        <span className="w-[3.2rem] text-right">基差率</span>
+      <div className="sticky top-0 z-10 flex items-center gap-2 bg-card/95 px-1.5 pb-0.5 pt-1 text-[11px] text-slate-300">
+        <span className="w-[7.25rem] shrink-0">配对</span>
+        <span className="w-12 text-right">期货</span>
+        <span className="w-12 text-right">现货</span>
+        <span className="w-12 text-right">基差</span>
+        <span className="w-[3.25rem] text-right">基差率</span>
       </div>
       {list.map((r) => {
         const q = quotes[r.cashCode];
@@ -94,21 +94,21 @@ function IndexBasisTable({
               cashMult: r.cashMult,
             })}
             className={cn(
-              "flex w-full items-center gap-1.5 px-2 py-0.5 text-left text-[11px] hover:bg-white/[0.04]",
+              "flex w-full items-center gap-2 px-1.5 py-0.5 text-left text-[12px] hover:bg-white/[0.04]",
               active && "bg-primary/10",
             )}
           >
-            <span className="min-w-0 flex-1 truncate text-slate-200">{r.label}</span>
-            <span className="w-[3.4rem] shrink-0 text-right font-mono tabular-nums text-slate-200">
+            <span className="w-[7.25rem] shrink-0 truncate text-slate-200">{r.label}</span>
+            <span className="w-12 shrink-0 text-right font-mono tabular-nums text-slate-200">
               {fmtPx(r.near.px)}
             </span>
-            <span className="w-[3.4rem] shrink-0 text-right font-mono tabular-nums text-slate-300">
+            <span className="w-12 shrink-0 text-right font-mono tabular-nums text-slate-300">
               {fmtPx(cash)}
             </span>
-            <span className={cn("w-[3.4rem] shrink-0 text-right font-mono tabular-nums", chgClass(basis))}>
+            <span className={cn("w-12 shrink-0 text-right font-mono tabular-nums", chgClass(basis))}>
               {signed(basis)}
             </span>
-            <span className={cn("w-[3.2rem] shrink-0 text-right font-mono tabular-nums", chgClass(rate))}>
+            <span className={cn("w-[3.25rem] shrink-0 text-right font-mono tabular-nums", chgClass(rate))}>
               {rate == null ? "-" : `${rate > 0 ? "+" : ""}${rate.toFixed(2)}%`}
             </span>
           </button>
@@ -144,7 +144,7 @@ function SpotTableView({
       <p className="px-1 pb-1 text-[9px] text-slate-600">
         生意社 {data.date} · 现货/期货/基差 · 只客观呈现
       </p>
-      <div className="grid grid-cols-[1fr_52px_52px_48px] gap-1 px-1 text-[9px] text-slate-600">
+      <div className="grid grid-cols-[5.5rem_3.25rem_3.25rem_3rem] gap-x-2 px-1.5 text-[11px] text-slate-600">
         <span>品种</span>
         <span className="text-right">现货</span>
         <span className="text-right">期货</span>
@@ -153,7 +153,7 @@ function SpotTableView({
       {data.rows.map((r) => (
         <div
           key={`${r.exchange}-${r.name}-${r.contract}`}
-          className="grid grid-cols-[1fr_52px_52px_48px] gap-1 px-1 py-0.5 text-[11px]"
+          className="grid grid-cols-[5.5rem_3.25rem_3.25rem_3rem] gap-x-2 px-1.5 py-0.5 text-[12px]"
         >
           <span className="truncate text-slate-200" title={r.exchange}>{r.name}</span>
           <span className="text-right font-mono tabular-nums text-slate-300">{fmtPx(r.spot)}</span>

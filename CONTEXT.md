@@ -51,17 +51,17 @@ _Avoid_: 第二条 /api/ovlab/market 轮询, 同一屏两条分时源（新浪 c
 _Avoid_: 第二把 qihuo_fee 钥匙, iframe 九期网, 手写 fut_spec.SPEC, 期货公司加收当交易所%
 
 **套利驾驶舱**:
-`/arb` 顶栏紧挨期权期货的独立驾驶舱（不是期权页签）。格子：跨期价差（近月-次月）| 跨品种价差（近月对近月 1:1）| 期现（股指走报价中心；现期 tab 生意社现期表 + 化工现货，A 股宏观观察不再画）| 点对出价差图（股指默认日度基差=现货−期货；跨品种默认日K；跨期默认分时；均可切换）+ 两腿仓单。名单 `backend/arb_catalog.py`，前端 `frontend/src/config/arb.ts` 必须同序同码。跨期/跨品种/股指近月走 `GET /api/ovlab/arb-board`（钥匙 `ovlab_arb_board` 60s 随时段冻结），内部复用 `ovlab_future_ts::{und}`，不打 `/api/ovlab/market`，不用 `future-ts-all`。股指期现：IF/IH/IM 近月对指数/ETF，现货腿走报价中心（上证50 `sh000016` 只订报价、不进指数目录；ETF 价×1000 与期货同量纲）；基差=现货−期货。商品期现读 `spot_table`。价差图：期货腿 ovlab `history`，指数/ETF 腿 `loadLightKline`，前端用两腿 OHLC 合成价差 K（开=Lo-Ro·m、收=Lc-Rc·m、高=Lh-Rl·m、低=Ll-Rh·m，再夹住开收；股指期现再取负成现货−期货），分时和日K都走 `lightweight-charts` 蜡烛（封装 `frontend/src/lib/lcChart.ts`，空心阳/实心阴，不画零轴红绿区, 价差不一定贴 0；主图 HUD 读 O/H/L/C, 右侧价签同 `LcHoverTag` 相对上一根收）；仓单复用 `ovlab_wh_history`。MQTT dataview 叠两腿最新（同口网页直连，不带 pin），不写 REST 钥匙。不进复盘清单/预热。CTP 不进这一页。只客观呈现价差，不评分、不标可做。
+`/arb` 顶栏紧挨期权期货的独立驾驶舱（不是期权页签）。格子：跨期价差（近月-次月）| 跨品种价差（近月对近月 1:1）| 期现（股指走报价中心；现期 tab 生意社现期表 + 化工现货，A 股宏观观察不再画）| 上排两腿仓单 | 下排左分时右日K（股指日线标日度基差=现货−期货；不再切换）。名单 `backend/arb_catalog.py`，前端 `frontend/src/config/arb.ts` 必须同序同码。跨期/跨品种/股指近月走 `GET /api/ovlab/arb-board`（钥匙 `ovlab_arb_board` 60s 随时段冻结），内部复用 `ovlab_future_ts::{und}`，不打 `/api/ovlab/market`，不用 `future-ts-all`。股指期现：IF/IH/IM 近月对指数/ETF，现货腿走报价中心（上证50 `sh000016` 只订报价、不进指数目录；ETF 价×1000 与期货同量纲）；基差=现货−期货。商品期现读 `spot_table`。价差图：期货腿 ovlab `history`，指数/ETF 腿 `loadLightKline`，前端用两腿 OHLC 合成价差 K（开=Lo-Ro·m、收=Lc-Rc·m、高=Lh-Rl·m、低=Ll-Rh·m，再夹住开收；股指期现再取负成现货−期货），分时和日K都走 `lightweight-charts` 蜡烛（封装 `frontend/src/lib/lcChart.ts`，空心阳/实心阴，不画零轴红绿区, 价差不一定贴 0；主图 HUD 读 O/H/L/C, 右侧价签同 `LcHoverTag` 相对上一根收）；仓单复用 `ovlab_wh_history`。MQTT dataview 叠两腿最新（同口网页直连，不带 pin），不写 REST 钥匙。不进复盘清单/预热。CTP 不进这一页。只客观呈现价差，不评分、不标可做。
 入口: `frontend/src/pages/ArbCockpit.tsx` + `frontend/src/hooks/useArbData.ts` + `frontend/src/components/arb/`。
 _Avoid_: 第二条 /api/ovlab/market 轮询, future-ts-all, 第二份配对 JSON, 把套利塞进 /derivatives, 上证50 塞进指数目录, 新浪 commodity-minutes, CTP, 持有成本/套利评分
 
 **事件驾驶舱**:
-`/event` 顶栏紧挨套利。格子：实时新闻 | 财经日历 | Polymarket。快讯走同一份电报中心（财联社 / 新浪见闻 / 金十），不另开轮询。**财经日历** ← `GET /api/event/calendar`（钥匙 `event_cal` / `timeline`，300s 上一笔），上游短线侠 `getHotNewsByType type=timeline`，和 [jiuyan.033533.online](https://jiuyan.033533.online/) 同一口，不 iframe、不进复盘预热/报价中心。默认 **监控**：本机 `event.pm.watch` 存 slug（最多 20），粘贴事件链接加入，可一次多条；热门仍是 24h 成交额榜。概率走 Gamma，钥匙 `polymarket`（board 60s / event 30s / search 60s；监控复用 `event::{slug}`），不进复盘清单/预热、不进报价中心。监控卡展开各档 Yes。Gamma 在海外：先 `VR_POLYMARKET_PROXY` / `HTTPS_PROXY`，空了读 Windows 系统代理（Clash/v2rayN 常只写注册表、不写环境变量）。不套东财直连优先。上游挂了回落上一笔。只呈现隐含概率，不评分、不标可做。
-入口: `frontend/src/pages/EventCockpit.tsx` + `frontend/src/lib/pmWatch.ts` + `frontend/src/components/event/`；后端 `backend/polymarket.py` + `backend/event_cal.py`；HTTP `GET /api/polymarket/board` · `/event` · `/search` · `/watch` · `GET /api/event/calendar`。
-_Avoid_: 第二条快讯轮询, 第二把 polymarket 钥匙, 把日历塞进 telegraphHub, 仓库里写死监控名单, 塞进复盘预热, 报价中心, CTP, 东财直连套到 Gamma
+`/event` 顶栏紧挨套利。格子：财经日历 | 实时新闻。快讯走同一份电报中心（财联社 / 新浪见闻 / 金十），不另开轮询。**财经日历** ← `GET /api/event/calendar`（钥匙 `event_cal` / `timeline`，300s 上一笔），上游短线侠 `getHotNewsByType type=timeline`，和 [jiuyan.033533.online](https://jiuyan.033533.online/) 同一口，不 iframe、不进复盘预热/报价中心。
+入口: `frontend/src/pages/EventCockpit.tsx` + `frontend/src/components/event/`；后端 `backend/event_cal.py`；HTTP `GET /api/event/calendar`。
+_Avoid_: 第二条快讯轮询, 把日历塞进 telegraphHub, 塞进复盘预热, 报价中心, CTP
 
 **短线侠驾驶舱**:
-`/dxx` 顶栏紧挨事件。格子：竞价封单 | 竞价/打板 | 涨停直播 | 情绪 | 板块强度 | 复盘/挖掘。只接免登录公开口：`getFengdanLast` / `getDabanData` / `getZtliveData` / `getChartByQingxu` / `getLastQxlive` / `getLiveByStrong` / `getFupanByYidong` / `getWajueMatch`。日历仍走事件页 `event_cal`，不在这页再拉 timeline。一把钥匙 `dxx`（live 60s / 历史 300s，上一笔），不进复盘清单/预热、不进报价中心。QX 等是上游字段，页面标「不是本站评分」。挖掘只列匹配次数。点代码出 A 股分时日K（`?code=`），不另开轮询。
+`/dxx` 顶栏紧挨宏观。格子：竞价封单 | 竞价/打板 | 涨停直播 | 情绪 | 板块强度 | 复盘/挖掘。只接免登录公开口：`getFengdanLast` / `getDabanData` / `getZtliveData` / `getChartByQingxu` / `getLastQxlive` / `getLiveByStrong` / `getFupanByYidong` / `getWajueMatch`。日历仍走事件页 `event_cal`，不在这页再拉 timeline。一把钥匙 `dxx`（live 60s / 历史 300s，上一笔），不进复盘清单/预热、不进报价中心。QX 等是上游字段，页面标「不是本站评分」。挖掘只列匹配次数。点代码出 A 股分时日K（`?code=`），不另开轮询。
 入口: `frontend/src/pages/DxxCockpit.tsx` + `frontend/src/components/dxx/`；后端 `backend/dxx.py`；HTTP `GET /api/dxx/board`。
 _Avoid_: 第二条报价轮询, 第二把 dxx 钥匙, 塞进复盘预热, 日历再拉一份 timeline, 登录/加密接口, 把 QX 当本站评分
 
@@ -71,9 +71,9 @@ _Avoid_: 第二条报价轮询, 第二把 dxx 钥匙, 塞进复盘预热, 日历
 _Avoid_: 第二份情绪名单, 第二条报价轮询, 把大盘股 52 周位置塞进来
 
 **宏观驾驶舱**:
-`/macro` 顶栏紧挨美股。格子：上海航运交易所 [CTFI](https://www.sse.net.cn/index/singleIndex?indexType=ctfi) 综合 + CT1/CT2（基期 2012-11-28=1000，涨跌按点数换算百分比）+ 官方走势图（`indexImg?name=ctfi`）。日更，钥匙 `ctfi`（`latest` / `img`）4h 上一笔。不进指数目录、不进报价中心、不进预热钟、不进行情观察。
-入口: `frontend/src/pages/MacroCockpit.tsx` + `backend/ctfi.py`；HTTP `GET /api/market/ctfi` · `/api/market/ctfi-img`。
-_Avoid_: 塞进指数目录, 第二条报价轮询, 复盘预热钟, 挂回 A 股行情观察
+`/macro` 顶栏紧挨事件。格子：LPR（中国货币网 1Y/5Y 折线，走 `lcChart`）| 银行间（DR007 取银银间 7 天定盘 FDR007 + FR007 + SHIBOR ON/1W/3M）| 汇率/美债（美元人民币订报价中心 `whUSDCNY`；美债 10Y FRED DGS10、美元指数东财 `100.UDI`）| 中债国债 + 政策性金融债曲线 | 月度 CPI/PPI/PMI/社融/M2 | 上海航运交易所 [CTFI](https://www.sse.net.cn/index/singleIndex?indexType=ctfi) 综合 + CT1/CT2（基期 2012-11-28=1000，涨跌按点数换算百分比）+ 官方走势图（`indexImg?name=ctfi`）。LPR/国债/政金债走已有 `GET /api/market/lpr` · `/bond-yield`（钥匙仍是 `lpr` / `cn_bond_yield`，复盘预热继续填国债，A 股资金页不再画）。银行间 + 月度 + 美债/美指一把钥匙 `macro_board`（`board` 600s），不进预热钟。美元人民币不进第二份名单。CTFI 日更，钥匙 `ctfi`（`latest` / `img`）4h 上一笔。不进指数目录、不进行情观察。
+入口: `frontend/src/pages/MacroCockpit.tsx` + `frontend/src/components/macro/` + `backend/ctfi.py` + `backend/macro_board.py`；HTTP `GET /api/market/lpr` · `/bond-yield` · `/macro-board` · `/ctfi` · `/ctfi-img`。
+_Avoid_: 塞进指数目录, 第二条报价轮询, 第二把 lpr/cn_bond_yield 钥匙, 资金页再画一份, 挂回 A 股行情观察, 美债/美指进指数目录
 
 **同花顺行情**:
 fuyao 网关（`quota-h.10jqka.com.cn`）的快照 / 日 K / 分钟线：股票（沪 17 深 33）、指数（沪 16 深 32）、同花顺指数（64，含商品 850xxx）、板块（48）。免鉴权，Referer 必须带 stockpage 代码路径，裸域名 403。字段是数字 ID；涨跌幅不取上游 199112（语义随市场漂移），由 最新/昨收 现算。不进报价中心、不进复盘清单，是独立数据源。
@@ -143,7 +143,7 @@ _Avoid_: 第二条日历, 第二条报价轮询, 重叠持有期×252/horizon �
 
 大文件就地改：`backend/astock.py`、`frontend/src/pages/StockData.tsx`、`frontend/src/pages/CtpPortfolio.tsx`、`frontend/src/lib/api.ts`。
 
-K/分时（A 股轻量图、美股日K、期权日K/分时、套利价差）和复盘资金页 ETF 份额日线走 `lightweight-charts`，入口 `frontend/src/lib/lcChart.ts`。十字右侧价签一律 `LcHoverTag`（白底黑字, 涨跌幅相对昨收/昨结红绿, 不标距今）。ECharts 只留给非时间序列（期限结构、国债曲线、相关热力图、回测）。T 表 IV 微笑/期限走 `createOptionsChart`，浮窗用 React 叠在 LC 上（深色能看清即可）。格子小走势仍是手写 SVG。
+K/分时（A 股轻量图、美股日K、期权日K/分时、套利价差）和复盘资金页 ETF 份额日线、宏观 LPR 折线走 `lightweight-charts`，入口 `frontend/src/lib/lcChart.ts`。十字右侧价签一律 `LcHoverTag`（白底黑字, 涨跌幅相对昨收/昨结红绿, 不标距今）。ECharts 只留给非时间序列（期限结构、国债曲线、相关热力图、回测）。T 表 IV 微笑/期限走 `createOptionsChart`，浮窗用 React 叠在 LC 上（深色能看清即可）。格子小走势仍是手写 SVG。
 
 报价中心、分时、快讯三个 hub 各自保留。`CockpitLayout` / `QuoteStockRow` 继续用。快讯新条全站右上角弹 3 分钟（Layout 订 `telegraphHub`，首屏不弹，最多 4 条叠，悬停先不撤，不另开轮询）。
 
@@ -158,13 +158,13 @@ K/分时（A 股轻量图、美股日K、期权日K/分时、套利价差）和�
 - 指数目录：`backend/tests/test_index_catalog.py` + `frontend/tests/review-context.test.mjs`
 - 衍生目录 / 期权驾驶舱导航：`backend/tests/test_deriv_catalog.py` + `frontend/tests/page-nav.test.mjs`（`/derivatives` 紧挨 `/a-share`，前后端同序同码）+ `frontend/tests/option-chart.test.mjs`
 - 套利目录 / 套利驾驶舱：`backend/tests/test_arb_catalog.py`（前后端同序同码；`sh000016` 不进指数目录）+ `test_ovlab.py` arb-board（复用 future-ts，不打 market）+ `frontend/tests/page-nav.test.mjs`（`/arb` 紧挨 `/derivatives`，无 CTP）+ `frontend/tests/arb-chart.test.mjs` + `frontend/tests/lc-chart.test.mjs`
-- 事件 / Polymarket：`backend/tests/test_polymarket.py`（一把 `polymarket` 钥匙、watch 复用 `event::`、不进预热钟）+ `backend/tests/test_event_cal.py`（一把 `event_cal` 钥匙、不进预热钟）+ `frontend/tests/page-nav.test.mjs`（`/event` 紧挨 `/arb`）+ `frontend/tests/event-page.test.mjs`（快讯走 telegraphHub，监控只存本机 slug，日历走 `api.eventCalendar`）
-- 短线侠：`backend/tests/test_dxx.py`（一把 `dxx` 钥匙、不进预热钟）+ `frontend/tests/page-nav.test.mjs`（`/dxx` 紧挨 `/event`）+ `frontend/tests/dxx-page.test.mjs`（一板 `api.dxxBoard`，不进报价中心）
+- 事件：`backend/tests/test_event_cal.py`（一把 `event_cal` 钥匙、不进预热钟）+ `frontend/tests/page-nav.test.mjs`（`/event` 紧挨 `/arb`）+ `frontend/tests/event-page.test.mjs`（快讯走 telegraphHub，日历走 `api.eventCalendar`）
+- 短线侠：`backend/tests/test_dxx.py`（一把 `dxx` 钥匙、不进预热钟）+ `frontend/tests/page-nav.test.mjs`（`/dxx` 紧挨 `/macro`，`/macro` 紧挨 `/event`）+ `frontend/tests/dxx-page.test.mjs`（一板 `api.dxxBoard`，不进报价中心）
 - OpenVlab MQTT：`backend/tests/test_ovlab_mqtt.py`（sidecar 三条 topic / 解析 / 不写 `ovlab_flow_alert`；SSE `/mqtt/stream` 兜底）+ `frontend/tests/ovlab-mqtt.test.mjs`（网页 `mqtt.connect` / `wss://emqx.openvlab.cn/mqtt`）+ `frontend/tests/alert-panel.test.mjs`；live 连 broker 在 `test_live.py`
 - 同花顺行情：`backend/tests/test_ths_quote.py`（市场码归位、pct 现算、缓存上一笔）+ `frontend/tests/ths-cmd-index.test.mjs`（驾驶舱指数 tab 走 `/api/ths`，不进指数目录/报价中心）
 - 品种沉淀资金：`backend/tests/test_fut_spec.py`（公式、按月保证金、复用 `future-ts`、无手写 `SPEC`、不打 `future-ts-all`、不进预热钟）+ `backend/tests/test_qihuo_fee.py`（九期网表一把 `qihuo_fee` 钥匙、乘数反推、CZCE 三位码、不进预热钟）+ `frontend/tests/ths-cmd-index.test.mjs`（股指·商品列：期货走 `/api/ovlab/parked`，ETF 走已有 `etfSharesBatch` 份额×现价）
 - 全球情绪：`backend/tests/test_fear_greed.py`（一份名单、模拟分丢掉、HTTP/问 AI 同一把 `fear_greed` 钥匙、不进预热钟）+ `frontend/tests/spark-axis.test.mjs`（涨跌分布格下部 / 美股页走 `api.fearGreed`，不进报价中心）
-- 宏观 / CTFI：`backend/tests/test_ctfi.py`（官方页解析综合/CT1/CT2、一把 `ctfi` 钥匙、不进预热钟）+ `frontend/tests/macro-page.test.mjs`（`/macro` 走 `api.ctfi`，不进报价中心/行情观察）+ `frontend/tests/page-nav.test.mjs`
+- 宏观 / CTFI：`backend/tests/test_ctfi.py`（官方页解析综合/CT1/CT2、一把 `ctfi` 钥匙、不进预热钟）+ `backend/tests/test_macro_board.py`（银行间/月度/美债解析、一把 `macro_board` 钥匙、不进预热钟/报价中心）+ `frontend/tests/macro-page.test.mjs`（`/macro` 走 `api.lpr` / `api.cnBondYield` treasury+policy / `api.macroBoard` / `api.ctfi`，LPR 折线走 lcChart；美元人民币只订 `whUSDCNY`；A 股资金页不再画利率）+ `frontend/tests/page-nav.test.mjs`
 - 报价中心：`frontend/tests/quote-hub.test.mjs`（K 线页 / 自选公告走 `useQuotes`；分时日K最后一根叠报价、分时静默续拉）+ `backend/tests/test_clock_serve.py`（指数目录报价过期补腾讯）+ `backend/tests/test_light_kline_batch.py`（盘中指数分时 TTL 4s 过期重取）
 - 缓存键：预热填过 `world_indices` 后，`get_global_indices` 不再打上游；热槽过期仍读上一笔（`backend/tests/test_clock_serve.py`、`backend/tests/test_cache.py`）
 - 标的池 / 横截面：`backend/tests/test_cross_section.py`（只有 `a-share-codes.json`；快照不写报价 5 秒缓存）

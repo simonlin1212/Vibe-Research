@@ -23,7 +23,7 @@ function TagPills({
         return (
           <span
             key={label}
-            className="rounded-sm px-1 py-px text-[9px] leading-none"
+            className="rounded-sm px-1 py-px text-[10px] leading-none"
             style={{ background: `${color}22`, color }}
           >
             {label}
@@ -31,7 +31,7 @@ function TagPills({
         );
       })}
       {isNew && (
-        <span className="bg-primary/20 px-1 py-px text-[9px] leading-none text-primary">NEW</span>
+        <span className="bg-primary/20 px-1 py-px text-[10px] leading-none text-primary">NEW</span>
       )}
     </span>
   );
@@ -43,18 +43,18 @@ function NewsRow({ it, isNew }: { it: ClsTelegraphItem; isNew: boolean }) {
   return (
     <article
       className={cn(
-        "border-l-2 px-2 py-1",
+        "border-l-2 px-2 py-1.5",
         isNew ? "border-primary bg-primary/5" : "border-[#2a2a2a]",
       )}
     >
       <div className="flex items-center gap-1.5">
-        <span className="font-mono text-[10px] tabular-nums text-slate-500">
+        <span className="font-mono text-[12px] tabular-nums text-slate-500">
           {(it.time || "").slice(11, 16) || (it.time || "").slice(-8, -3) || "—"}
         </span>
         <TagPills title={it.title} extra={extra} isNew={isNew} cats={it.tags} />
       </div>
-      <p className="mt-0.5 text-[12px] font-semibold leading-5 text-slate-200">{it.title}</p>
-      {body && <p className="mt-0.5 line-clamp-2 text-[11px] leading-[1.55] text-slate-400">{body}</p>}
+      <p className="mt-0.5 text-[14px] font-semibold leading-6 text-slate-200">{it.title}</p>
+      {body && <p className="mt-0.5 line-clamp-2 text-[13px] leading-[1.55] text-slate-400">{body}</p>}
     </article>
   );
 }
@@ -73,7 +73,7 @@ export function NewsFeedBar({
   const snap = useTelegraph();
   const count = feedOf(snap, source)?.count;
   return (
-    <div className="flex items-center gap-1 text-[10px]">
+    <div className="flex items-center gap-1 text-[12px]">
       {([
         ["cls", "财联社"],
         ["lives", "新浪/见闻"],
@@ -130,9 +130,9 @@ export function NewsCockpitPanel({ source, auto }: { source: FeedSource; auto: b
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div ref={boxRef} className="min-h-0 flex-1 space-y-1 overflow-y-auto scroll-smooth p-1.5">
-        {err && <p className="px-1 py-4 text-center text-[11px] text-rose-400/80">{err}</p>}
-        {loading && !data && <p className="py-6 text-center text-[11px] text-slate-600">加载中…</p>}
-        {data && !(data.items?.length) && <p className="py-6 text-center text-[11px] text-slate-600">暂无数据</p>}
+        {err && <p className="px-1 py-4 text-center text-[13px] text-rose-400/80">{err}</p>}
+        {loading && !data && <p className="py-6 text-center text-[13px] text-slate-600">加载中…</p>}
+        {data && !(data.items?.length) && <p className="py-6 text-center text-[13px] text-slate-600">暂无数据</p>}
         {(data?.items ?? []).map((it, i) => (
           <NewsRow key={itemKey(it, i)} it={it} isNew={fresh.has(itemKey(it, i))} />
         ))}

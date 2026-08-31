@@ -81,6 +81,18 @@ test("ovlab 日K trade_date=YYYYMMDD, 不能用 length>=10 丢掉", () => {
   assert.equal(dayKey("2026-08-19 15:00:00"), "2026-08-19");
 });
 
+test("三张表列左贴, 名称不 flex-1 拉空档", () => {
+  const cal = readFileSync(join(root, "src/components/arb/CalendarPanel.tsx"), "utf8");
+  const cross = readFileSync(join(root, "src/components/arb/CrossPanel.tsx"), "utf8");
+  const basis = readFileSync(join(root, "src/components/arb/BasisPanel.tsx"), "utf8");
+  assert.doesNotMatch(cal, /flex-1 truncate text-slate-200/);
+  assert.doesNotMatch(cross, /flex-1 truncate text-slate-200/);
+  assert.doesNotMatch(basis, /flex-1 truncate text-slate-200/);
+  assert.match(cal, /text-\[12px\]/);
+  assert.match(cross, /text-\[12px\]/);
+  assert.match(basis, /text-\[12px\]/);
+});
+
 test("现期只挂套利期现卡, A股宏观观察不再画", () => {
   const basis = readFileSync(join(root, "src/components/arb/BasisPanel.tsx"), "utf8");
   const goods = readFileSync(join(root, "src/components/cockpit/CommodityPanel.tsx"), "utf8");
@@ -92,14 +104,21 @@ test("现期只挂套利期现卡, A股宏观观察不再画", () => {
   assert.doesNotMatch(goods, /\["spot", "现期"\]/);
 });
 
-test("股指/跨品种默认日K, 跨期才默认分时", () => {
+test("下排左分时右日K, 不再切换", () => {
   const cockpit = readFileSync(join(root, "src/pages/ArbCockpit.tsx"), "utf8");
+  const layout = readFileSync(join(root, "src/components/cockpit/CockpitLayout.tsx"), "utf8");
   const basis = readFileSync(join(root, "src/components/arb/BasisPanel.tsx"), "utf8");
-  assert.match(src, /kind === "cal" \? "minute" : "daily"/);
+  assert.match(layout, /min-w-0 w-full shrink-0/);
+  assert.match(src, /p === idx \? p : idx/);
   assert.match(src, /MINUTE_LOOKBACK = 5 \* 86400/);
   assert.match(src, /export function joinSpreadMinute/);
-  assert.match(src, /label: "基差"/);
   assert.match(src, /pick\.kind === "idx" \? flipOHLC/);
+  assert.match(src, /mode: SpreadMode/);
+  assert.doesNotMatch(src, /LcSeg/);
+  assert.match(cockpit, /mode="minute"/);
+  assert.match(cockpit, /mode="daily"/);
+  assert.ok(cockpit.indexOf("id: \"arb-minute\"") < cockpit.indexOf("id: \"arb-daily\""), "左分时右日K");
+  assert.ok(cockpit.indexOf("id: \"arb-legs\"") < cockpit.indexOf("id: \"arb-minute\""), "两腿在上排");
   assert.match(cockpit, /日度基差/);
   assert.match(cockpit, /现货−期货/);
   assert.match(basis, /基差率/);

@@ -28,8 +28,9 @@ test("reviewContext is a thin client of the backend packer", () => {
   assert.match(apiSrc, /\/market\/review-context/);
 });
 
-test("ETF 份额日线走 LC, 国债曲线仍 ECharts", async () => {
+test("ETF 份额日线走 LC, 国债曲线挂宏观页 ECharts", async () => {
   const money = await readFile(new URL("../src/components/review/ReviewMoneySeg.tsx", import.meta.url), "utf8");
+  const bond = await readFile(new URL("../src/components/macro/BondPanel.tsx", import.meta.url), "utf8");
   assert.match(money, /function EtfShareChart/);
   assert.match(money, /useLcChart\("glance"\)/);
   assert.match(money, /LineSeries/);
@@ -42,8 +43,10 @@ test("ETF 份额日线走 LC, 国债曲线仍 ECharts", async () => {
   assert.match(money, /<EtfShareChart /);
   const etfBlock = money.slice(money.indexOf("function EtfShareChart"));
   assert.doesNotMatch(etfBlock, /echarts\.init/);
-  assert.match(money, /bondEchartRef/);
-  assert.match(money.slice(0, money.indexOf("function EtfShareChart")), /echarts\.init/);
+  assert.doesNotMatch(money, /bondEchartRef/);
+  assert.doesNotMatch(money, /api\.lpr/);
+  assert.doesNotMatch(money, /利率 · LPR/);
+  assert.match(bond, /echarts\.init/);
 });
 
 function alignEtfShareDays(dates, daily) {

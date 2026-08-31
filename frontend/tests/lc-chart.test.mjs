@@ -20,6 +20,10 @@ test("lcChart 是 K/分时共用封装, 不画 TradingView logo", () => {
   assert.match(src, /export function useLcChart/);
   assert.match(src, /export function useLcHoverTag/);
   assert.match(src, /export function hoverPxFromParam/);
+  assert.match(src, /export function skipResizeCrosshair/);
+  assert.match(src, /export function nextHoverIdx/);
+  assert.match(src, /if \(skipResizeCrosshair\(param\)\) return;/);
+  assert.match(src, /addEventListener\("mouseleave"/);
   assert.match(src, /horzLine:[\s\S]*labelVisible: false/);
   assert.match(src, /export function wipeLc/);
   assert.match(src, /export function guardLc/);
@@ -223,6 +227,18 @@ function hoverIdxFromParam(raw, n) {
   return null;
 }
 
+function skipResizeCrosshair(raw) {
+  const p = raw;
+  if (!p) return true;
+  if (p.currTrigger === "leave") return false;
+  return "point" in p && p.point == null;
+}
+
+function nextHoverIdx(prev, raw, n) {
+  if (skipResizeCrosshair(raw)) return prev;
+  return hoverIdxFromParam(raw, n);
+}
+
 function pxPrec(codeOrUnd, sample) {
   const s = (codeOrUnd ?? "").toUpperCase();
   if (s === "AG" || s.startsWith("AG_") || /^AG\d/.test(s)) return { precision: 1, minMove: 0.1 };
@@ -297,6 +313,24 @@ test("lcTime 逻辑时间可反推下标, 真时间轴不会把午休拉开", ()
   assert.equal(hoverIdxFromParam({ logical: 12, point: { x: 1, y: 1 } }, 100), 12);
   assert.equal(hoverIdxFromParam({ time: LC_ORIGIN + 5, point: { x: 1, y: 1 } }, 10), 5);
   assert.equal(hoverIdxFromParam({ point: null, logical: 3 }, 10), null);
+});
+
+test("resize 空点不清 hover, 避免两图互挤把 React 打穿", () => {
+  let h = 5;
+  let writes = 0;
+  for (let i = 0; i < 30; i++) {
+    const a = nextHoverIdx(h, { point: null, logical: 3 }, 10);
+    if (a !== h) writes += 1;
+    h = a;
+    const b = nextHoverIdx(h, { logical: 5, point: { x: 1, y: 1 } }, 10);
+    if (b !== h) writes += 1;
+    h = b;
+  }
+  assert.equal(h, 5);
+  assert.equal(writes, 0);
+  const left = nextHoverIdx(h, { currTrigger: "leave" }, 10);
+  assert.equal(left, null);
+  assert.match(src, /addEventListener\("mouseleave"/);
 });
 
 function volUp(close, open, prev) {
