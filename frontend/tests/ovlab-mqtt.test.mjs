@@ -15,6 +15,7 @@ test("网页 MQTT 直连 OpenVlab EMQX, 不另开 market", async () => {
   assert.ok(src.includes("keepalive: 30"));
   assert.ok(src.includes("reconnectPeriod: 3000"));
   assert.ok(src.includes("ingestMqttText"));
+  assert.ok(src.includes("document.hidden"));
   assert.doesNotMatch(src, /ovlab_flow_alert|ovlab_market/);
 });
 

@@ -337,6 +337,7 @@ function emitStatus(connected: boolean, error: string | null = null): void {
 }
 
 function emitPatch(patch: MqttPatch): void {
+  if (typeof document !== "undefined" && document.hidden) return;
   for (const fn of patches) fn(patch);
 }
 

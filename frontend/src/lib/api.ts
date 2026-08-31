@@ -85,6 +85,13 @@ async function request<T>(path: string, method: "GET" | "POST" | "PUT" | "DELETE
 
 const get = <T>(path: string) => request<T>(path, "GET");
 
+/** Backend /market/stock-flows: max 40 codes, query string max 400. */
+export function chunkCodes(codes: string[], size = 40): string[][] {
+  const out: string[][] = [];
+  for (let i = 0; i < codes.length; i += size) out.push(codes.slice(i, i + size));
+  return out;
+}
+
 /** Same as marketingdashboard: merge row stockFlow calls in a 60ms window. */
 const quoteFlowLoader = (() => {
   let queue: { code: string; resolve: (v: QuoteFlow | null) => void }[] = [];
@@ -99,8 +106,13 @@ const quoteFlowLoader = (() => {
         timer = null;
         const codes = [...new Set(batch.map((b) => b.code))];
         try {
-          const rows = await get<QuoteFlow[]>(`/market/stock-flows?codes=${encodeURIComponent(codes.join(","))}`);
-          const map = new Map((rows || []).map((r) => [r.code, r]));
+          const map = new Map<string, QuoteFlow>();
+          for (const part of chunkCodes(codes, 40)) {
+            const rows = await get<QuoteFlow[]>(
+              `/market/stock-flows?codes=${encodeURIComponent(part.join(","))}`,
+            );
+            for (const r of rows || []) map.set(r.code, r);
+          }
           for (const b of batch) {
             const digits = b.code.replace(/^(sh|sz|bj)/i, "");
             b.resolve(map.get(b.code) ?? map.get(digits) ?? null);
@@ -264,12 +276,6 @@ export interface StockFlowRow {
 }
 export interface StockFlow {
   board?: string | null; total: number; note?: string; rows: StockFlowRow[];
-}
-export interface StockFlowCell {
-  main_net: number | null;
-  main_pct: number | null;
-  netIn?: number | null;
-  netRatio?: number | null;
 }
 
 /** One quote-row fund-flow (marketingdashboard /api/stock-flows). */
@@ -489,13 +495,6 @@ export interface FinCompanyBundle {
 export interface ThsProfile {
   code: string; name?: string; industry?: string;
   industries?: string[]; concepts?: string[]; source?: string;
-}
-export interface ThsRotation {
-  kind: string; source?: string; n?: number;
-  rows: Array<{
-    name: string; count: number; avg_pct: number; up: number; down: number;
-    leads?: Array<{ code: string; name: string; pct: number }>;
-  }>;
 }
 /** 同花顺 fuyao 快照. pct 已由最新/昨收现算, 单位是百分点. */
 export interface ThsSnapRow {
@@ -1225,8 +1224,6 @@ export interface OvlabMarketRow {
   last_time?: string; has_night_trading?: boolean | number; is_overseas?: boolean | number;
   [k: string]: unknown;
 }
-export type OvlabDetail = Record<string, unknown>;
-export type OvlabVolatilityTs = Record<string, unknown>;
 export interface OvlabFutureTsMonth {
   maturity?: number;
   bid?: number;
@@ -1238,7 +1235,6 @@ export interface OvlabFutureTsMonth {
   days_to_expiry?: number;
 }
 export type OvlabFutureTs = Record<string, OvlabFutureTsMonth>;
-export type OvlabFutureTsAll = Record<string, unknown>;
 export interface ArbLeg {
   code: string;
   exp: string;
@@ -1321,11 +1317,6 @@ export interface OvlabDataviewTick {
   /** unix seconds when the sidecar ingested this print */
   at?: number | null;
 }
-export interface OvlabWarehouseHistory {
-  last_update_time?: string; value?: unknown; category?: string;
-  ratioData?: unknown;
-  [k: string]: unknown;
-}
 /** 仓单瘦身 (warehouse/history): 最新 + 日变 + 近90日. */
 export interface OvlabWarehouseReceipt {
   product: string;
@@ -1334,23 +1325,6 @@ export interface OvlabWarehouseReceipt {
   chg?: number | null;
   updated?: string;
   spark?: Array<[string, number]>;
-}
-// 异动资金流 (flow-data)
-export interface OvlabFlowDataRow {
-  product_alias?: string; full_name?: string; product_und?: string;
-  sector?: string; exchange?: string; instrument?: string;
-  last_trade_price?: number; ctnPct?: number; underlying_price?: number;
-  otmPct?: number; volume?: number; volume_value?: number;
-  oi?: number; prevOi?: number; oiChange?: number; oiChangePct?: number; oiChangeVal?: number;
-  strikePrice?: number; optType?: string; dte?: number;
-  trade_at_ask?: number; trade_at_bid?: number; trade_at_mid?: number;
-  ask_percentage?: number; bid_percentage?: number; mid_percentage?: number;
-  contract_code?: string;
-  [k: string]: unknown;
-}
-export interface OvlabFlowData {
-  data: OvlabFlowDataRow[];
-  totalCount?: number; page?: number; pageSize?: number; totalPages?: number;
 }
 export interface OvlabProductExpExpiry { exp?: number; expDate?: string; limit_up?: number; limit_down?: number; [k: string]: unknown }
 export interface OvlabProductExp {
@@ -1361,9 +1335,6 @@ export interface OvlabProductExp {
   exps?: OvlabProductExpExpiry[];
   [k: string]: unknown;
 }
-export interface OvlabExchangeInfo { code?: string; name?: string; [k: string]: unknown }
-export interface OvlabSectorInfo { code?: string; name?: string; [k: string]: unknown }
-
 /** T 型报价: 单侧 (Call/Put) 每档. price 为 Black-76 理论价 (theoIv + forward 反推).
  *  pct 为相对昨理论价涨幅 (今-昨)/昨, 昨=forward_yd+theovol_yday 反推. */
 export interface OvlabTQuoteSide {
@@ -1482,105 +1453,11 @@ export interface OvlabLastBar {
   oi?: number; vol?: number; pre_close?: number; pre_close_1w?: number;
   trade_date?: string; [k: string]: unknown;
 }
-export interface OvlabSymbolInfo {
-  ticker?: string; name?: string; exchange?: string; description?: string;
-  sector?: string; type?: string; pricescale?: number; minmov?: number;
-  session?: string; expiration_date?: string; [k: string]: unknown;
-}
 export interface OvlabSearchItem {
   ticker?: string; name?: string; exchange?: string; description?: string;
   sector?: string; type?: string; pricescale?: number; minmov?: number;
   session?: string; expiration_date?: string; [k: string]: unknown;
 }
-export type OvlabVolSurface = Record<string, Record<string, unknown>>;
-export type OvlabSkewmap = Record<string, Record<string, unknown>>;
-export type OvlabSurfacemap = Record<string, Record<string, unknown>>;
-
-// 持仓排名 (flow/option-flow)
-export interface OvlabPositionProduct {
-  product: string;
-  product_alias: string;
-  exchange_name: string;
-  codes: string[];
-}
-export interface OvlabPositionProducts {
-  last_trading_day: string;
-  products: OvlabPositionProduct[];
-}
-export interface OvlabRankRow {
-  id?: number | null;
-  code?: string;
-  day?: string;
-  underlyingCode?: string;
-  rankTypeId?: number;
-  rank?: number;
-  memberName?: string;
-  indicator?: number;
-  indicatorIncrease?: number;
-  [k: string]: unknown;
-}
-export interface OvlabRankChart {
-  style?: Record<string, unknown>;
-  brokers?: unknown[];
-  current?: unknown[];
-  change?: unknown[];
-  increase?: unknown[];
-  decrease?: unknown[];
-  [k: string]: unknown;
-}
-export interface OvlabFuturePositionDetails {
-  codes?: string[];
-  futureName?: string;
-  instrument?: string;
-  tradingDay?: string;
-  days?: string[];
-  short_rank_table?: OvlabRankRow[];
-  long_rank_table?: OvlabRankRow[];
-  net_short_rank_table?: OvlabRankRow[];
-  net_long_rank_table?: OvlabRankRow[];
-  short_rank_chart?: OvlabRankChart;
-  long_rank_chart?: OvlabRankChart;
-  net_short_rank_chart?: OvlabRankChart;
-  net_long_rank_chart?: OvlabRankChart;
-  maxNetShort?: { memberName?: string; netIndicator?: number };
-  maxNetLong?: { memberName?: string; netIndicator?: number };
-  status?: number;
-  [k: string]: unknown;
-}
-export type OvlabOptionPositionDetails = Record<string, unknown>;
-
-// —— Fino 机构观点 ——
-export interface FinoOverviewRow {
-  product_name?: string;
-  product_code?: string;
-  date?: string;
-  report_type?: string;
-  bull_count?: number;
-  neutral_count?: number;
-  bear_count?: number;
-  bull_percentage?: number;
-  neutral_percentage?: number;
-  bear_percentage?: number;
-  bull_views?: string;
-  neutral_views?: string;
-  bear_views?: string;
-  consensus_views?: string;
-  disagreement_views?: string;
-  [k: string]: unknown;
-}
-/** rating: "+1" bull / "0" neutral / "-1" bear */
-export interface FinoDetailRow {
-  date?: string;
-  viewpoint?: string;
-  rating?: string | number;
-  detail?: string;
-  product_code?: string;
-  product_name?: string;
-  uni_id?: string;
-  source?: string;
-  [k: string]: unknown;
-}
-
 export interface ReviewWarmupStatus {
   trading_day?: boolean;
   session_now?: string;
@@ -1619,7 +1496,6 @@ export interface ReviewContextPacked {
 }
 
 export const api = {
-  health: () => get<{ ok: boolean }>("/health"),
   reviewWarmup: () => get<ReviewWarmupStatus>("/market/review-warmup"),
   reviewMailStatus: () => get<ReviewMailStatus>("/market/review-mail"),
   reviewMailSave: (body: { enabled?: boolean; at?: string; to?: string }) =>
@@ -1638,12 +1514,6 @@ export const api = {
     get<StockFlow>(`/market/stock-flow?top=${top}${board ? `&board=${encodeURIComponent(board)}` : ""}`),
   /** Quote-row 主力净额/净占比. 60ms 合并, 对齐参考看板 api.stockFlow(code). */
   quoteFlow: (code: string) => quoteFlowLoader(code),
-  stockFlows: (codes: string[]) =>
-    get<QuoteFlow[]>(`/market/stock-flows?codes=${encodeURIComponent(codes.slice(0, 40).join(","))}`),
-  stockFlowBatch: (codes: string[]) =>
-    get<Record<string, StockFlowCell>>(
-      `/market/stock-flow-batch?codes=${encodeURIComponent(codes.slice(0, 40).join(","))}`,
-    ),
   marketQuotes: (codes: string[]) =>
     withFallback(
       () => get<Record<string, MarketQuote>>(
@@ -1715,8 +1585,6 @@ export const api = {
   marketBreadth: () => get<MarketBreadth>("/market/breadth"),
   thsProfile: (code: string) =>
     get<ThsProfile>(`/market/ths-profile?code=${encodeURIComponent(code)}`),
-  thsRotation: (kind: "concept" | "industry" = "concept", top = 15) =>
-    get<ThsRotation>(`/market/ths-rotation?kind=${kind}&top=${top}`),
   /** 同花顺 fuyao 快照/K线. 独立源, 不进报价中心. */
   thsSnapshot: (codes: string[]) =>
     get<ThsSnapRow[]>(`/ths/snapshot?codes=${encodeURIComponent(codes.slice(0, 50).join(","))}`),
@@ -1732,8 +1600,6 @@ export const api = {
     get<Array<{ code: string; name: string }>>(`/fin/suggest?q=${encodeURIComponent(q)}&n=${n}`),
   etfFlow: (sortBy: "net_inflow" | "change_pct" = "net_inflow", limit = 40) =>
     get<EtfFlow>(`/market/etf-flow?sort_by=${sortBy}&limit=${limit}`),
-  etfShares: (code = "510300", n = 80) =>
-    get<EtfShares>(`/market/etf-shares?code=${encodeURIComponent(code)}&n=${n}`),
   etfSharesBatch: (codes: string[] = [...ETF_SHARE_WATCH.map((x) => x.code)], n = 80) =>
     get<{ items: EtfShares[] }>(
       `/market/etf-shares?codes=${encodeURIComponent(codes.join(","))}&n=${n}`,
@@ -1866,10 +1732,6 @@ export const api = {
   investorQa: (code: string) => get<QaRow[]>(`/investor-qa?code=${code}`),
   // OpenVlab 期权 / 期货波动率
   ovlabMarket: () => get<OvlabMarketRow[]>("/ovlab/market"),
-  ovlabDetail: (prodUnd: string, exps?: string) =>
-    get<OvlabDetail>(`/ovlab/detail?prod_und=${encodeURIComponent(prodUnd)}${exps ? `&exps=${encodeURIComponent(exps)}` : ""}`),
-  ovlabVolatilityTs: () => get<OvlabVolatilityTs>("/ovlab/volatility-ts"),
-  ovlabFutureTsAll: () => get<OvlabFutureTsAll>("/ovlab/future-ts-all"),
   ovlabFutureTs: (prodUnd: string) => get<OvlabFutureTs>(`/ovlab/future-ts?prod_und=${encodeURIComponent(prodUnd)}`),
   ovlabParked: () => get<OvlabParked>("/ovlab/parked"),
   ovlabArbBoard: () => get<ArbBoard>("/ovlab/arb-board"),
@@ -1885,18 +1747,10 @@ export const api = {
     const s = q.length ? `?pin=${encodeURIComponent(q.join(","))}` : "";
     return `/ovlab/mqtt/stream${s}`;
   },
-  ovlabFlowData: (product?: string, page = 1, pageSize = 50) =>
-    request<OvlabFlowData>("/ovlab/flow-data", "POST", { product: product?.trim() || null, page, page_size: pageSize }),
-  ovlabWarehouseHistory: (product: string) =>
-    request<OvlabWarehouseHistory>("/ovlab/warehouse-history", "POST", { product }),
   ovlabWarehouseReceipt: (product: string) =>
     get<OvlabWarehouseReceipt>(`/ovlab/warehouse-receipt?product=${encodeURIComponent(product)}`),
   ovlabProductExps: (prodUnd?: string) =>
     get<OvlabProductExp[]>(`/ovlab/product-exps${prodUnd ? `?prod_und=${encodeURIComponent(prodUnd)}` : ""}`),
-  ovlabExchangeInfo: () => get<OvlabExchangeInfo[]>("/ovlab/exchange-info"),
-  ovlabSectorInfo: () => get<OvlabSectorInfo[]>("/ovlab/sector-info"),
-  ovlabNextTradingDay: () => get<string>("/ovlab/next-trading-day"),
-  ovlabHolidays: (exchange: string) => get<unknown>(`/ovlab/holidays?exchange=${encodeURIComponent(exchange)}`),
   // 轻量行情图表 (分时/5日实时变化, 加 _t 避免中间层缓存串周期)
   ovlabKlineHistory: (symbol: string, resolution = "1D", fromTs?: number, toTs?: number) => {
     const p = new URLSearchParams({ symbol, resolution });
@@ -1922,9 +1776,6 @@ export const api = {
     }),
   ovlabSearchSymbols: (keyword: string) =>
     get<OvlabSearchItem[]>(`/ovlab/search-symbols?keyword=${encodeURIComponent(keyword)}`),
-  ovlabSymbolInfo: (code: string) => get<OvlabSymbolInfo>(`/ovlab/symbol-info?code=${encodeURIComponent(code)}`),
-  ovlabVolatilitySurface: (product: string) =>
-    get<OvlabVolSurface>(`/ovlab/volatility-surface?product=${encodeURIComponent(product)}`),
   /** T 型报价: 行权价链 (IV/Delta/持仓) + Black-76 理论价. 服务端缓存 2min, 休市冻结. */
   ovlabTQuote: (product: string) =>
     get<OvlabTQuote>(`/ovlab/tquote?product=${encodeURIComponent(product)}`),
@@ -1934,29 +1785,6 @@ export const api = {
   /** 期限结构: 多品种远期曲线 (surface forward 今/昨). 服务端缓存 60s, 休市冻结. */
   ovlabTermStructure: (products: string[]) =>
     get<OvlabTermStructure>(`/ovlab/term-structure?products=${encodeURIComponent(products.join(","))}`),
-  ovlabSkewmap: (selectedExpiries?: Record<string, unknown>) =>
-    request<OvlabSkewmap>("/ovlab/skewmap", "POST", { selectedExpiries: selectedExpiries ?? {} }),
-  ovlabSurfacemap: (product?: string) =>
-    get<OvlabSurfacemap>(`/ovlab/surfacemap${product ? `?product=${encodeURIComponent(product)}` : ""}`),
-  // 持仓排名
-  ovlabOptionPositionProducts: () => get<OvlabPositionProducts>(`/ovlab/option-position-products`),
-  ovlabOptionPositionDetails: (product: string, code: string, direction: "C" | "P", day: string) => {
-    const p = new URLSearchParams({ product, code, direction, day });
-    return get<OvlabOptionPositionDetails>(`/ovlab/option-position-details?${p}`);
-  },
-  ovlabFuturePositionProducts: () => get<OvlabPositionProducts>(`/ovlab/future-position-products`),
-  ovlabFuturePositionDetails: (product: string, code: string, day: string) => {
-    const p = new URLSearchParams({ product, code, direction: "0", day });
-    return get<OvlabFuturePositionDetails>(`/ovlab/future-position-details?${p}`);
-  },
-  finoOverview: (report_type = "daily", start_date = "", end_date = "", codes = "") => {
-    const p = new URLSearchParams({ report_type, start_date, end_date, codes });
-    return get<FinoOverviewRow[]>(`/fino/overview?${p}`);
-  },
-  finoDetail: (report_type = "daily", start_date = "", end_date = "", codes = "") => {
-    const p = new URLSearchParams({ report_type, start_date, end_date, codes });
-    return get<FinoDetailRow[]>(`/fino/detail?${p}`);
-  },
   researchSources: () => get<ResearchSources>("/research/sources"),
   researchKline: (symbol: string, source = "auto", num = 180, interval = "1D") => {
     const p = new URLSearchParams({ symbol, source, num: String(num), interval });

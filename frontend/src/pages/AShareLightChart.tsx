@@ -1,7 +1,6 @@
-import { Fragment, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { Fragment, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ComponentProps, type MouseEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import { FileText, Newspaper, Plus, Search, X } from "lucide-react";
-import { AShareLcPane } from "@/components/ashare/AShareLcPane";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Chip, ChipGroup } from "@/components/ui/SectionHeader";
 import { PageFallback } from "@/components/ui/PageFallback";
@@ -23,6 +22,17 @@ import { cn } from "@/lib/utils";
 const StockData = lazy(() =>
   import("@/pages/StockData").then((m) => ({ default: m.StockData })),
 );
+const AShareLcPaneLazy = lazy(() =>
+  import("@/components/ashare/AShareLcPane").then((m) => ({ default: m.AShareLcPane })),
+);
+
+function AShareLcPane(props: ComponentProps<typeof AShareLcPaneLazy>) {
+  return (
+    <Suspense fallback={<PageFallback />}>
+      <AShareLcPaneLazy {...props} />
+    </Suspense>
+  );
+}
 
 export type AShareChartSeg = "kline" | "detail" | "feed";
 const CHART_SEGS: AShareChartSeg[] = ["kline", "detail", "feed"];
@@ -265,10 +275,18 @@ export function AShareLightChart({
   };
 
   useEffect(() => {
-    const tick = () => setSession(getAShareSession());
+    const tick = () => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      setSession(getAShareSession());
+    };
     tick();
     const t = window.setInterval(tick, 60_000);
-    return () => window.clearInterval(t);
+    const onVis = () => { if (!document.hidden) setSession(getAShareSession()); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      window.clearInterval(t);
+      document.removeEventListener("visibilitychange", onVis);
+    };
   }, []);
 
   const persist = (next: string[]) => {

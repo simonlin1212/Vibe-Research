@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback, useRef } from "react";
-import * as echarts from "echarts";
+import { lazy, Suspense, useState, useEffect, useCallback, useRef } from "react";
 import {
   RefreshCw, Loader2, AlertCircle, LogIn, LogOut, ChevronDown, ChevronLeft, ChevronRight, Terminal, ShieldCheck,
 } from "lucide-react";
+import { PageFallback } from "@/components/ui/PageFallback";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { CollapsibleSection } from "@/components/ui/CollapsibleSection";
@@ -20,6 +20,10 @@ import {
   foldLiveSummary, liveSettlePreview, ctpTh, td,
   type CalMetric, type SettleChartKey,
 } from "@/components/portfolio/ctpUtils";
+
+const CtpSettleChart = lazy(() =>
+  import("@/components/portfolio/CtpSettleChart").then((m) => ({ default: m.CtpSettleChart })),
+);
 
 const SETTLE_RANGE_START_KEY = "ctp.settle.rangeStart.v2";
 const SETTLE_RANGE_END_KEY = "ctp.settle.rangeEnd.v2";
@@ -64,8 +68,6 @@ export function CtpPortfolio() {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
   });
-  const equityChartRef = useRef<HTMLDivElement>(null);
-  const equityChartInst = useRef<echarts.ECharts | null>(null);
   const sinceRef = useRef(0);
   const logBoxRef = useRef<HTMLDivElement>(null);
   const loggedIn = !!(status?.logged_in);
@@ -131,12 +133,21 @@ export function CtpPortfolio() {
     return () => { cancelled = true; };
   }, []);
 
-  // Poll logs while on this tab; faster during login/query
+  // Poll logs while on this tab; faster during login/query. Hidden tab pauses.
   useEffect(() => {
-    pullLogs();
+    const beat = () => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      void pullLogs();
+    };
+    beat();
     const ms = loggingIn || querying ? 400 : 1500;
-    const t = setInterval(pullLogs, ms);
-    return () => clearInterval(t);
+    const t = window.setInterval(beat, ms);
+    const onVis = () => { if (!document.hidden) void pullLogs(); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      window.clearInterval(t);
+      document.removeEventListener("visibilitychange", onVis);
+    };
   }, [pullLogs, loggingIn, querying]);
 
   useEffect(() => {
@@ -290,12 +301,13 @@ export function CtpPortfolio() {
     }
   };
 
-  // Load cached settlement when account panel is available (no CTP)
+  // Settlement section is closed by default. Do not pull the range until opened.
   useEffect(() => {
+    if (!settleOpen) return;
     if (!(loggedIn || data) || rangeData || rangeLoading) return;
     void loadSettlementRange(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loggedIn, data]);
+  }, [loggedIn, data, settleOpen]);
 
   // Jump calendar to latest month with data when range loads
   useEffect(() => {
@@ -305,289 +317,6 @@ export function CtpPortfolio() {
     setCalYm(days[days.length - 1].date.slice(0, 7));
   }, [rangeData, data?.account?.market_equity, data?.account?.client_equity, data?.account?.balance, data?.trading_day]);
 
-  // Settlement performance charts
-  useEffect(() => {
-    if (!settleOpen || settleTab !== "settle") {
-      if (!settleOpen && equityChartInst.current) {
-        equityChartInst.current.dispose();
-        equityChartInst.current = null;
-      }
-      return;
-    }
-    const el = equityChartRef.current;
-    if (!el) return;
-    const meta = SETTLE_CHARTS.find((c) => c.key === settleChart)!;
-    let raw = (rangeData?.analytics?.charts?.[settleChart]
-      || (settleChart === "equity"
-        ? (rangeData?.chart || []).map((p) => ({ date: p.date, value: p.equity }))
-        : [])
-    ).map((p) => ({ date: p.date, value: p.value, live: false as boolean }));
-
-    // Append today's live point when settlement bill for trading day is missing
-    let liveAppended = false;
-    {
-      const live = previewLive(data, rangeData);
-      if (live) {
-        const liveValue =
-          settleChart === "equity" ? live.equity
-          : settleChart === "nav" ? live.nav
-          : settleChart === "cum_return" ? (live.nav - 1) * 100
-          : settleChart === "cum_pnl_wan" ? live.cumIncome / 10000
-          : null;
-        if (liveValue != null && Number.isFinite(liveValue)) {
-          raw = [...raw, { date: live.date, value: liveValue, live: true }];
-          liveAppended = true;
-        }
-      } else if (settleChart === "equity") {
-        const liveEq = data?.account?.market_equity ?? data?.account?.client_equity ?? data?.account?.balance;
-        const td = (data?.trading_day || "").replace(/-/g, "");
-        const liveDate = /^\d{8}$/.test(td)
-          ? `${td.slice(0, 4)}-${td.slice(4, 6)}-${td.slice(6, 8)}`
-          : ymdInput(new Date());
-        const hasLive = liveEq != null && Number.isFinite(Number(liveEq));
-        const hasSettleDay = raw.some((p) => p.date === liveDate);
-        if (hasLive && !hasSettleDay && !(rangeData?.analytics?.perf || []).length) {
-          raw = [{ date: liveDate, value: Number(liveEq), live: true }];
-          liveAppended = true;
-        }
-      }
-    }
-
-    if (!equityChartInst.current) {
-      equityChartInst.current = echarts.init(el);
-    }
-    const inst = equityChartInst.current;
-    const css = (name: string, fallback: string) =>
-      getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
-    const cText = `hsl(${css("--muted-foreground", "215 16% 57%")})`;
-    const cAxis = `hsl(${css("--border", "217 20% 22%")})`;
-    const cGrid = `hsl(${css("--border", "217 20% 22%")})`;
-    const cLine = "#ffcc00";
-    if (!raw.length) {
-      inst.clear();
-      inst.setOption({
-        title: {
-          text: "暂无足够结算数据",
-          left: "center",
-          top: "center",
-          textStyle: { color: cText, fontSize: 13, fontWeight: 400 },
-        },
-      });
-      return;
-    }
-    const dates = raw.map((p) => p.date);
-    const vals = raw.map((p) => p.value);
-    const axisFmt = (v: number) => {
-      if (settleChart === "equity") return `${Math.round(v / 10000)}万`;
-      if (settleChart === "cum_pnl_wan") return `${Math.round(v)}万`;
-      if (settleChart === "cum_return") return `${Math.round(v)}%`;
-      if (settleChart === "nav") return Number(v).toFixed(4);
-      return String(v);
-    };
-    const tipFmt = (v: number) => {
-      if (settleChart === "equity") {
-        return `${v.toLocaleString("zh-CN", { maximumFractionDigits: 2 })}元`;
-      }
-      if (settleChart === "cum_pnl_wan") {
-        const yuan = v * 10000;
-        return `${yuan.toLocaleString("zh-CN", { maximumFractionDigits: 2 })}元`;
-      }
-      if (settleChart === "cum_return") return `${v.toFixed(2)}%`;
-      if (settleChart === "nav") return Number(v).toFixed(4);
-      return String(v);
-    };
-    const cornerText = (idx: number) => {
-      const i = Math.max(0, Math.min(idx, raw.length - 1));
-      const p = raw[i];
-      const tag = p.live ? " · 实时" : "";
-      return `${p.date}${tag}\n${meta.label} ${tipFmt(p.value)}`;
-    };
-    const lastIdx = raw.length - 1;
-    const seriesData = vals.map((v, i) => {
-      if (liveAppended && i === lastIdx) {
-        return {
-          value: v,
-          symbol: "circle",
-          symbolSize: 8,
-          itemStyle: { color: cLine, borderColor: "#fff", borderWidth: 1 },
-        };
-      }
-      return v;
-    });
-
-    inst.setOption({
-      animation: false,
-      title: {
-        show: true,
-        left: 56,
-        top: 6,
-        text: cornerText(lastIdx),
-        textStyle: {
-          color: cText,
-          fontSize: 12,
-          fontWeight: 400,
-          lineHeight: 18,
-          fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-        },
-      },
-      // Keep axis pointer, hide floating popup — values shown in title (top-left)
-      tooltip: {
-        trigger: "axis",
-        showContent: false,
-        axisPointer: { type: "line", lineStyle: { color: cAxis, type: "dashed" } },
-      },
-      grid: { left: 52, right: 20, top: 44, bottom: 40, containLabel: false },
-      xAxis: {
-        type: "category",
-        data: dates,
-        boundaryGap: false,
-        axisLine: { lineStyle: { color: cAxis } },
-        axisLabel: { color: cText, fontSize: 10 },
-      },
-      yAxis: {
-        type: "value",
-        scale: true,
-        name: meta.unit,
-        nameTextStyle: { color: cText, fontSize: 10 },
-        splitLine: { lineStyle: { color: cGrid, opacity: 0.35 } },
-        axisLabel: { color: cText, fontSize: 10, formatter: (v: number) => axisFmt(v) },
-      },
-      series: [
-        {
-          name: meta.label,
-          type: "line",
-          data: seriesData,
-          showSymbol: false,
-          symbol: "circle",
-          symbolSize: 6,
-          connectNulls: true,
-          lineStyle: { width: 2, color: cLine },
-          itemStyle: { color: cLine },
-          emphasis: { focus: "none", scale: true, lineStyle: { width: 2.5, color: cLine }, itemStyle: { color: cLine } },
-          blur: { lineStyle: { opacity: 1, color: cLine }, itemStyle: { opacity: 1 } },
-        },
-      ],
-    }, { notMerge: true });
-
-    // Layout may still be shifting (left account cards mount after funds query).
-    // Resize after paint so the canvas matches the final grid width.
-    const bumpResize = () => {
-      try {
-        inst.resize({ width: "auto", height: "auto" });
-      } catch {
-        inst.resize();
-      }
-    };
-    requestAnimationFrame(() => {
-      bumpResize();
-      requestAnimationFrame(bumpResize);
-    });
-    const resizeTimers = [50, 200, 400].map((ms) => window.setTimeout(bumpResize, ms));
-
-    const setCorner = (idx: number) => {
-      inst.setOption({ title: { text: cornerText(idx) } }, { lazyUpdate: true });
-    };
-
-    const resolveIdx = (ev: unknown): number | null => {
-      const e = ev as {
-        currTrigger?: string;
-        axesInfo?: Array<{
-          axisDim?: string;
-          value?: number | string;
-          seriesDataIndices?: Array<{ dataIndex?: number }>;
-        }>;
-      };
-      if (e?.currTrigger === "leave") return null;
-      const xAxis = (e.axesInfo ?? []).find((a) => a.axisDim === "x") ?? e.axesInfo?.[0];
-      const fromSeries = xAxis?.seriesDataIndices?.find((s) => Number.isInteger(s?.dataIndex));
-      if (fromSeries && Number.isInteger(fromSeries.dataIndex)) {
-        return fromSeries.dataIndex as number;
-      }
-      const val = xAxis?.value;
-      // Category axis often reports index as number, not date label
-      if (typeof val === "number" && Number.isFinite(val)) {
-        const i = Math.round(val);
-        if (i >= 0 && i < dates.length) return i;
-      }
-      if (val != null) {
-        const i = dates.indexOf(String(val));
-        if (i >= 0) return i;
-      }
-      return null;
-    };
-
-    const onPointer = (ev: unknown) => {
-      const idx = resolveIdx(ev);
-      if (idx == null) {
-        setCorner(lastIdx);
-        return;
-      }
-      setCorner(idx);
-    };
-
-    // Fallback: pixel -> category index (when axesInfo is empty)
-    const zr = inst.getZr();
-    const onMove = (e: { offsetX: number; offsetY: number }) => {
-      const point: [number, number] = [e.offsetX, e.offsetY];
-      try {
-        if (!inst.containPixel({ gridIndex: 0 }, point)) return;
-        const data = inst.convertFromPixel({ xAxisIndex: 0 }, point);
-        const xVal = Array.isArray(data) ? data[0] : data;
-        const di = Math.round(Number(xVal));
-        if (Number.isFinite(di) && di >= 0 && di < dates.length) setCorner(di);
-      } catch {
-        /* ignore during dispose */
-      }
-    };
-    const onGlobalOut = () => setCorner(lastIdx);
-
-    inst.off("updateAxisPointer");
-    inst.on("updateAxisPointer", onPointer);
-    zr.off("mousemove", onMove);
-    zr.off("globalout", onGlobalOut);
-    zr.on("mousemove", onMove);
-    zr.on("globalout", onGlobalOut);
-
-    const onWinResize = () => bumpResize();
-    window.addEventListener("resize", onWinResize);
-    return () => {
-      resizeTimers.forEach((t) => window.clearTimeout(t));
-      window.removeEventListener("resize", onWinResize);
-      inst.off("updateAxisPointer", onPointer);
-      zr.off("mousemove", onMove);
-      zr.off("globalout", onGlobalOut);
-    };
-  }, [rangeData, settleChart, settleTab, settleOpen, data?.account?.market_equity, data?.account?.client_equity, data?.account?.balance, data?.account?.deposit, data?.account?.withdraw, data?.account?.commission, data?.trading_day]);
-
-  // Keep chart sized when container width changes (account cards / tab switch / async ME)
-  useEffect(() => {
-    if (!settleOpen) return;
-    const el = equityChartRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(() => {
-      if (settleTab !== "settle") return;
-      const inst = equityChartInst.current;
-      if (!inst) return;
-      // Defer one frame: ResizeObserver can fire mid-layout
-      requestAnimationFrame(() => {
-        try {
-          inst.resize({ width: "auto", height: "auto" });
-        } catch {
-          inst.resize();
-        }
-      });
-    });
-    ro.observe(el);
-    // Also watch parent card — width often changes when left column appears
-    const parent = el.parentElement;
-    if (parent) ro.observe(parent);
-    return () => ro.disconnect();
-  }, [settleTab, settleOpen, !!data?.account, rangeData?.analytics?.summary?.days]);
-
-  useEffect(() => () => {
-    equityChartInst.current?.dispose();
-    equityChartInst.current = null;
-  }, []);
 
   const acc = data?.account;
   const positions = data?.positions || [];
@@ -1025,7 +754,14 @@ export function CtpPortfolio() {
                   </button>
                 ))}
               </div>
-              <div ref={equityChartRef} className="h-56 w-full min-w-0 overflow-hidden rounded-lg border border-border/40 bg-muted/10" />
+              <Suspense fallback={<PageFallback />}>
+                <CtpSettleChart
+                  visible={settleTab === "settle"}
+                  rangeData={rangeData}
+                  data={data}
+                  settleChart={settleChart}
+                />
+              </Suspense>
               </div>
 
               <div className={cn(

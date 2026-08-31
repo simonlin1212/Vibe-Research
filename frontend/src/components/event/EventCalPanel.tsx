@@ -94,8 +94,8 @@ export function EventCalPanel({
               <span className="text-right text-[12px] text-slate-500">{g.items.length}</span>
             </div>
             <ul className="border border-[#2a2a2a]">
-              {g.items.map((t) => (
-                <li key={t} className="border-t border-[#2a2a2a] px-2 py-1.5 text-[13px] leading-snug text-slate-200 first:border-t-0">
+              {g.items.map((t, i) => (
+                <li key={`${g.date}-${i}`} className="border-t border-[#2a2a2a] px-2 py-1.5 text-[13px] leading-snug text-slate-200 first:border-t-0">
                   {t}
                 </li>
               ))}

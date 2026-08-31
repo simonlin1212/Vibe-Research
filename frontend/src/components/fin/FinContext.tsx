@@ -153,13 +153,14 @@ export function FinProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const boardPoll = usePolling(() => api.finBoard(period), 1800_000, [period]);
+  const firstReady = !!(boardPoll.data || boardPoll.error);
   const prevP = prevPeriod(period);
-  const prevBoardPoll = usePolling(() => api.finBoard(prevP), 1800_000, [prevP]);
+  const prevBoardPoll = usePolling(() => api.finBoard(prevP), 1800_000, [prevP], firstReady);
   const companyPoll = usePolling(
     () => api.finCompany(company.code),
     1800_000,
     [company.code],
-    Boolean(company.code),
+    firstReady && Boolean(company.code),
   );
   const bundle = companyPoll.data;
   const bundleOk = !bundle?.main?.code || bundle.main.code === company.code;

@@ -30,16 +30,19 @@ export function Data() {
   const [syncing, setSyncing] = useState(false);
   const [pitBusy, setPitBusy] = useState("");
 
-  async function load() {
-    setLoading(true);
-    setError("");
+  async function load(opts?: { quiet?: boolean }) {
+    if (!opts?.quiet) {
+      setLoading(true);
+      setError("");
+    }
     try {
       setStore(await api.backtestStore());
+      if (opts?.quiet) setError("");
     } catch (e) {
-      setStore(null);
+      if (!opts?.quiet) setStore(null);
       setError(e instanceof ApiError ? e.message : "本机库存没读到");
     } finally {
-      setLoading(false);
+      if (!opts?.quiet) setLoading(false);
     }
   }
 
@@ -51,8 +54,17 @@ export function Data() {
   const syncState = uni?.sync?.state;
   useEffect(() => {
     if (syncState !== "running") return;
-    const t = window.setInterval(() => { void load(); }, 3000);
-    return () => window.clearInterval(t);
+    const tick = () => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      void load({ quiet: true });
+    };
+    const t = window.setInterval(tick, 3000);
+    const onVis = () => { if (!document.hidden) tick(); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      window.clearInterval(t);
+      document.removeEventListener("visibilitychange", onVis);
+    };
   }, [syncState]);
 
   async function fillUniverse() {

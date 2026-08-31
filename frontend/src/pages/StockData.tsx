@@ -146,17 +146,6 @@ export function StockData({
     // 6 位纯数字 = A 股；否则（字母 / 港股短代码）走美股 / 港股（global-stock-data）
     if (!/^\d{6}$/.test(c)) {
       const gOk = <T,>(set: (v: T) => void) => (v: T) => { if (rid === runIdRef.current) set(v); };
-      // 港股现金流独立回填（美股返回 404 → 静默留空，卡片不渲染）
-      api.hkCashflow(c).then(gOk(setCashflow)).catch(() => { if (rid === runIdRef.current) setCashflow(null); });
-      api.globalFundamentals(c).then(gOk(setGFund)).catch(() => { if (rid === runIdRef.current) setGFund(null); });
-      api.globalStatements(c, "income").then(gOk(setGStmt)).catch(() => { if (rid === runIdRef.current) setGStmt(null); });
-      api.globalOptions(c).then(gOk(setGOpt)).catch(() => { if (rid === runIdRef.current) setGOpt(null); });
-      api.globalStockNews(c, 12).then(gOk(setGNews)).catch(() => { if (rid === runIdRef.current) setGNews(null); });
-      api.globalSecFilings(c).then(gOk(setGSec)).catch((e) => {
-        if (rid !== runIdRef.current) return;
-        setGSec(null);
-        if (e instanceof ApiError && (e.status === 503 || e.status === 502)) setGSecNote(e.message);
-      });
       try {
         const g = await api.globalStock(c);
         if (rid === runIdRef.current) setGStock(g);
@@ -169,27 +158,23 @@ export function StockData({
       } finally {
         if (rid === runIdRef.current) setLoading(false);
       }
+      if (rid !== runIdRef.current) return;
+      // 港股现金流独立回填（美股返回 404 → 静默留空，卡片不渲染）
+      api.hkCashflow(c).then(gOk(setCashflow)).catch(() => { if (rid === runIdRef.current) setCashflow(null); });
+      api.globalFundamentals(c).then(gOk(setGFund)).catch(() => { if (rid === runIdRef.current) setGFund(null); });
+      api.globalStatements(c, "income").then(gOk(setGStmt)).catch(() => { if (rid === runIdRef.current) setGStmt(null); });
+      api.globalOptions(c).then(gOk(setGOpt)).catch(() => { if (rid === runIdRef.current) setGOpt(null); });
+      api.globalStockNews(c, 12).then(gOk(setGNews)).catch(() => { if (rid === runIdRef.current) setGNews(null); });
+      api.globalSecFilings(c).then(gOk(setGSec)).catch((e) => {
+        if (rid !== runIdRef.current) return;
+        setGSec(null);
+        if (e instanceof ApiError && (e.status === 503 || e.status === 502)) setGSecNote(e.message);
+      });
       return;
     }
 
-    // A 股：竞态守卫（快速换代码时只让最新一次回填）+ 资金面/筹码独立回填、不阻塞主数据
+    // A 股：先估值/财务/公告, 资金面筹码不跟首包抢带宽
     const ok = <T,>(set: (v: T) => void) => (v: T) => { if (rid === runIdRef.current) set(v); };
-    api.margin(c).then(ok(setMargin)).catch(() => {});
-    api.blockTrade(c).then(ok(setBlockT)).catch(() => {});
-    api.holders(c).then(ok(setHolders)).catch(() => {});
-    api.shareholderChanges({ code: c, limit: 20 }).then((d) => ok(setShChanges)(d.rows || [])).catch(() => {
-      if (rid === runIdRef.current) setShChanges([]);
-    });
-    api.dividend(c).then(ok(setDividend)).catch(() => {});
-    api.fundFlow(c).then(ok(setFundFlow)).catch(() => {});
-    api.fundFlowMinute(c).then(ok(setFundMin)).catch(() => { if (rid === runIdRef.current) setFundMin(null); });
-    api.dragonTiger(c).then(ok(setDt)).catch(() => {});
-    api.lockup(c).then(ok(setLockup)).catch(() => {});
-    api.blocks(c).then(ok(setBlocks)).catch(() => {});
-    api.hotConcepts(c).then(ok(setHotCon)).catch(() => {});
-    api.investorQa(c).then(ok(setQa)).catch(() => { if (rid === runIdRef.current) setQa([]); });
-    api.stockBasic(c).then(ok(setBasic)).catch(() => { if (rid === runIdRef.current) setBasic(null); });
-    api.thsProfile(c).then(ok(setThs)).catch(() => { if (rid === runIdRef.current) setThs(null); });
     try {
       // 行情+估值+研报+历史分位+财务+公告（新闻单独降级）
       const [v, r, p, f, a] = await Promise.all([
@@ -217,6 +202,23 @@ export function StockData({
     } finally {
       if (rid === runIdRef.current) setLoading(false);
     }
+    if (rid !== runIdRef.current) return;
+    api.margin(c).then(ok(setMargin)).catch(() => {});
+    api.blockTrade(c).then(ok(setBlockT)).catch(() => {});
+    api.holders(c).then(ok(setHolders)).catch(() => {});
+    api.shareholderChanges({ code: c, limit: 20 }).then((d) => ok(setShChanges)(d.rows || [])).catch(() => {
+      if (rid === runIdRef.current) setShChanges([]);
+    });
+    api.dividend(c).then(ok(setDividend)).catch(() => {});
+    api.fundFlow(c).then(ok(setFundFlow)).catch(() => {});
+    api.fundFlowMinute(c).then(ok(setFundMin)).catch(() => { if (rid === runIdRef.current) setFundMin(null); });
+    api.dragonTiger(c).then(ok(setDt)).catch(() => {});
+    api.lockup(c).then(ok(setLockup)).catch(() => {});
+    api.blocks(c).then(ok(setBlocks)).catch(() => {});
+    api.hotConcepts(c).then(ok(setHotCon)).catch(() => {});
+    api.investorQa(c).then(ok(setQa)).catch(() => { if (rid === runIdRef.current) setQa([]); });
+    api.stockBasic(c).then(ok(setBasic)).catch(() => { if (rid === runIdRef.current) setBasic(null); });
+    api.thsProfile(c).then(ok(setThs)).catch(() => { if (rid === runIdRef.current) setThs(null); });
   };
 
   // Parent-driven code (light chart) takes priority over URL deep-link

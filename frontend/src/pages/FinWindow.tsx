@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { BarChart3, Building2, CalendarDays, FileText, GitCompare, TrendingUp, Zap } from "lucide-react";
 import { CockpitLayout, type CockpitRow } from "@/components/cockpit/CockpitLayout";
 import { FinProvider, useFin } from "@/components/fin/FinContext";
@@ -5,11 +6,22 @@ import { FinCalendarPanel } from "@/components/fin/FinCalendarPanel";
 import { FinForecastPanel } from "@/components/fin/FinForecastPanel";
 import { FinIndustryPanel } from "@/components/fin/FinIndustryPanel";
 import { FinStockRankPanel } from "@/components/fin/FinStockRankPanel";
-import { FinCompanyPanel } from "@/components/fin/FinCompanyPanel";
-import { FinTrendPanel } from "@/components/fin/FinTrendPanel";
-import { FinPeerPanel } from "@/components/fin/FinPeerPanel";
 import { PeriodTabs } from "@/components/fin/PeriodTabs";
 import { IndustryModeTabs, PeerModeTabs, StockRankTabs, TrendTabs } from "@/components/fin/FinTabs";
+
+const FinCompanyPanel = lazy(() =>
+  import("@/components/fin/FinCompanyPanel").then((m) => ({ default: m.FinCompanyPanel })),
+);
+const FinTrendPanel = lazy(() =>
+  import("@/components/fin/FinTrendPanel").then((m) => ({ default: m.FinTrendPanel })),
+);
+const FinPeerPanel = lazy(() =>
+  import("@/components/fin/FinPeerPanel").then((m) => ({ default: m.FinPeerPanel })),
+);
+
+function CellWait() {
+  return <p className="px-3 py-8 text-center text-[12px] text-slate-600">加载中…</p>;
+}
 
 function FinBody() {
   const { company, board } = useFin();
@@ -87,7 +99,11 @@ function FinBody() {
           defaultW: 0.28,
           mobileH: "h-[380px]",
           right: <span className="max-w-[110px] truncate text-[10px] text-primary">{company.name}</span>,
-          body: <FinCompanyPanel />,
+          body: (
+            <Suspense fallback={<CellWait />}>
+              <FinCompanyPanel />
+            </Suspense>
+          ),
         },
         {
           id: "tr",
@@ -97,7 +113,11 @@ function FinBody() {
           defaultW: 0.40,
           mobileH: "h-[360px]",
           right: <TrendTabs />,
-          body: <FinTrendPanel />,
+          body: (
+            <Suspense fallback={<CellWait />}>
+              <FinTrendPanel />
+            </Suspense>
+          ),
         },
         {
           id: "pr",
@@ -107,7 +127,11 @@ function FinBody() {
           defaultW: 0.32,
           mobileH: "h-[360px]",
           right: <PeerModeTabs />,
-          body: <FinPeerPanel />,
+          body: (
+            <Suspense fallback={<CellWait />}>
+              <FinPeerPanel />
+            </Suspense>
+          ),
         },
       ],
     },

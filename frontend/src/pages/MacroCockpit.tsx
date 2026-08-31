@@ -1,14 +1,17 @@
-import { useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { Activity, Landmark, Percent, RefreshCw, Ship, Wallet } from "lucide-react";
 import { AskAiButton } from "@/components/ui/AskAiButton";
 import { CockpitLayout, type CockpitRow } from "@/components/cockpit/CockpitLayout";
-import { FreshTag } from "@/components/deriv/derivShared";
-import { BondPanel } from "@/components/macro/BondPanel";
+import { CellEmpty, FreshTag } from "@/components/deriv/derivShared";
 import { FxPanel } from "@/components/macro/FxPanel";
 import { LprPanel } from "@/components/macro/LprPanel";
 import { MoneyPanel } from "@/components/macro/MoneyPanel";
 import { MonthPanel } from "@/components/macro/MonthPanel";
+
+const BondPanel = lazy(() =>
+  import("@/components/macro/BondPanel").then((m) => ({ default: m.BondPanel })),
+);
 import { usePolling } from "@/hooks/usePolling";
 import { api, type CnBondYield, type CtfiQuote, type LprData, type MacroBoard } from "@/lib/api";
 import { pctColor } from "@/components/review/format";
@@ -91,9 +94,10 @@ function packMacroContext(
   return lines.join("\n");
 }
 
-function CtfiChart({ tick }: { tick: number }) {
+function CtfiChart({ tick, ready }: { tick: number; ready: boolean }) {
   const [src, setSrc] = useState<string | null>(null);
   useEffect(() => {
+    if (!ready) return;
     let dead = false;
     let url = "";
     api.ctfiImg()
@@ -109,7 +113,7 @@ function CtfiChart({ tick }: { tick: number }) {
       dead = true;
       if (url) URL.revokeObjectURL(url);
     };
-  }, [tick]);
+  }, [tick, ready]);
   if (!src) return null;
   return (
     <img
@@ -123,7 +127,7 @@ function CtfiChart({ tick }: { tick: number }) {
   );
 }
 
-function CtfiPanel({ q, err, tick }: { q: CtfiQuote | null; err: string | null; tick: number }) {
+function CtfiPanel({ q, err, tick, ready }: { q: CtfiQuote | null; err: string | null; tick: number; ready: boolean }) {
   if (err && !q) {
     return <p className="px-3 py-8 text-center text-[12px] text-slate-500">{err}</p>;
   }
@@ -135,7 +139,7 @@ function CtfiPanel({ q, err, tick }: { q: CtfiQuote | null; err: string | null; 
   return (
     <div className="flex h-full min-h-0 w-full flex-col gap-4 overflow-auto p-4 lg:flex-row lg:items-start lg:gap-6">
       <div className="w-fit max-w-full shrink-0 overflow-hidden rounded border border-slate-700/50 bg-white">
-        <CtfiChart tick={tick} />
+        <CtfiChart tick={tick} ready={ready} />
       </div>
       <div className="min-w-0 flex-1">
         <div className="text-[11px] text-slate-500">{q.date || "—"} · 综合指数 · 点</div>
@@ -186,11 +190,12 @@ function CtfiPanel({ q, err, tick }: { q: CtfiQuote | null; err: string | null; 
 export function MacroCockpit() {
   const [headerSlot, setHeaderSlot] = useState<HTMLElement | null>(null);
   const [tick, setTick] = useState(0);
-  const poll = usePolling(() => api.ctfi(), 300_000, [tick]);
   const lpr = usePolling(() => api.lpr(730), 300_000, [tick]);
-  const bond = usePolling(() => api.cnBondYield("treasury"), 300_000, [tick]);
-  const policy = usePolling(() => api.cnBondYield("policy"), 300_000, [tick]);
   const board = usePolling(() => api.macroBoard(), 300_000, [tick]);
+  const firstReady = !!(lpr.data || lpr.error || board.data || board.error);
+  const bond = usePolling(() => api.cnBondYield("treasury"), 300_000, [tick], firstReady);
+  const policy = usePolling(() => api.cnBondYield("policy"), 300_000, [tick], firstReady);
+  const poll = usePolling(() => api.ctfi(), 300_000, [tick], firstReady);
 
   useLayoutEffect(() => {
     setHeaderSlot(document.getElementById("cockpit-header-actions"));
@@ -251,7 +256,11 @@ export function MacroCockpit() {
           mobileH: "h-[42vh]",
           right: <FreshTag updated={bond.updated} />,
           bodyClassName: "overflow-hidden",
-          body: <BondPanel data={bond.data} err={bond.error} />,
+          body: (
+            <Suspense fallback={<CellEmpty text="更新中…" />}>
+              <BondPanel data={bond.data} err={bond.error} />
+            </Suspense>
+          ),
         },
         {
           id: "policy-bond",
@@ -263,7 +272,11 @@ export function MacroCockpit() {
           mobileH: "h-[42vh]",
           right: <FreshTag updated={policy.updated} />,
           bodyClassName: "overflow-hidden",
-          body: <BondPanel data={policy.data} err={policy.error} />,
+          body: (
+            <Suspense fallback={<CellEmpty text="更新中…" />}>
+              <BondPanel data={policy.data} err={policy.error} />
+            </Suspense>
+          ),
         },
       ],
     },
@@ -297,7 +310,7 @@ export function MacroCockpit() {
           mobileH: "h-[56vh]",
           right: <FreshTag updated={poll.updated} />,
           bodyClassName: "overflow-hidden",
-          body: <CtfiPanel q={poll.data} err={poll.error} tick={tick} />,
+          body: <CtfiPanel q={poll.data} err={poll.error} tick={tick} ready={firstReady} />,
         },
       ],
     },
@@ -307,7 +320,7 @@ export function MacroCockpit() {
     bond.data, bond.error, bond.updated,
     policy.data, policy.error, policy.updated,
     board.data, board.error, board.updated,
-    tick,
+    firstReady, tick,
   ]);
 
   const headerActions = (

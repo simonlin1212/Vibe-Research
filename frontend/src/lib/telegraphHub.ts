@@ -140,17 +140,28 @@ export function markClsSeen() {
   emit();
 }
 
+function beat() {
+  if (typeof document !== "undefined" && document.hidden) return;
+  void pull(lastSrc, true);
+}
+
+function onVis() {
+  if (!document.hidden) void pull(lastSrc, true);
+}
+
 function subscribe(fn: () => void) {
   listeners.add(fn);
   if (timer == null) {
     void pull("cls", false);
-    timer = window.setInterval(() => void pull(lastSrc, true), REFRESH_MS);
+    timer = window.setInterval(beat, REFRESH_MS);
+    document.addEventListener("visibilitychange", onVis);
   }
   return () => {
     listeners.delete(fn);
     if (listeners.size === 0 && timer != null) {
       window.clearInterval(timer);
       timer = null;
+      document.removeEventListener("visibilitychange", onVis);
     }
   };
 }

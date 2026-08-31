@@ -149,8 +149,17 @@ export function alertOptionName(a: { instrument?: string; contract_code?: string
 export function FreshTag({ updated, extra }: { updated: number; extra?: string }) {
   const [, tick] = useState(0);
   useEffect(() => {
-    const id = window.setInterval(() => tick((n) => n + 1), 15_000);
-    return () => window.clearInterval(id);
+    const beat = () => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      tick((n) => n + 1);
+    };
+    const id = window.setInterval(beat, 15_000);
+    const onVis = () => { if (!document.hidden) tick((n) => n + 1); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", onVis);
+    };
   }, []);
   const age = updated ? formatAge(updated) : null;
   return (
@@ -236,8 +245,17 @@ export function derivSession(now = new Date()): DerivSession {
 export function SessionBadge() {
   const [, tick] = useState(0);
   useEffect(() => {
-    const id = window.setInterval(() => tick((n) => n + 1), 30_000);
-    return () => window.clearInterval(id);
+    const beat = () => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      tick((n) => n + 1);
+    };
+    const id = window.setInterval(beat, 30_000);
+    const onVis = () => { if (!document.hidden) tick((n) => n + 1); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", onVis);
+    };
   }, []);
   const s = derivSession();
   return (

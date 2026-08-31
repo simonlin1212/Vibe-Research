@@ -102,9 +102,9 @@ export function useReviewData() {
 
   useEffect(() => {
     let cancelled = false;
-    setOvDone(false); setEmoDone(false); setLhbDone(false);
+    setOvDone(false); setEmoDone(false);
     void (async () => {
-      const snap = (scope: "paint" | "top" | "full") =>
+      const snap = (scope: "paint" | "top") =>
         api.reviewSnapshot({ scope });
       const paintP = snap("paint").then((s) => {
         if (!cancelled) {
@@ -116,20 +116,11 @@ export function useReviewData() {
       });
       await paintP;
       if (cancelled) return;
-      const topP = snap("top").then((s) => {
-        if (!cancelled) applyTop(s);
-      }).catch(() => {
-        if (!cancelled) setEmoDone(true);
-      });
-      await topP;
-      if (cancelled) return;
       try {
-        const full = await snap("full");
-        if (!cancelled) applyFull(full);
+        const top = await snap("top");
+        if (!cancelled) applyTop(top);
       } catch {
-        if (!cancelled) {
-          setLhbDone(true);
-        }
+        if (!cancelled) setEmoDone(true);
       } finally {
         if (!cancelled) setTopUpdatedAt(new Date());
       }
@@ -138,6 +129,22 @@ export function useReviewData() {
     // bootstrap once
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (seg !== "boards" || !emoDone || lhbDone) return;
+    let cancelled = false;
+    void api.reviewSnapshot({ scope: "full" })
+      .then((s) => {
+        if (!cancelled) applyFull(s);
+      })
+      .catch(() => {
+        if (!cancelled) setLhbDone(true);
+      })
+      .finally(() => {
+        if (!cancelled) setTopUpdatedAt(new Date());
+      });
+    return () => { cancelled = true; };
+  }, [seg, emoDone, lhbDone, applyFull]);
 
   useEffect(() => {
     void primeTradingDay();
@@ -168,6 +175,7 @@ export function useReviewData() {
   }, [emoDone, applyTop]);
 
   useEffect(() => {
+    if (seg !== "money") return;
     let cancelled = false;
     setMoneyDone(false);
     Promise.all([
@@ -181,9 +189,10 @@ export function useReviewData() {
       if (!cancelled) setMoneyDone(true);
     });
     return () => { cancelled = true; };
-  }, [etfSort, shType]);
+  }, [etfSort, shType, seg]);
 
   useEffect(() => {
+    if (seg !== "money") return;
     let cancelled = false;
     api.etfSharesBatch(ETF_SHARE_WATCH.map((x) => x.code), 80).then((d) => {
       if (cancelled) return;
@@ -196,7 +205,7 @@ export function useReviewData() {
       setEtfShares(null);
     });
     return () => { cancelled = true; };
-  }, []);
+  }, [seg]);
 
   return {
     emotion,

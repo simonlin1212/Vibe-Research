@@ -79,6 +79,12 @@ test("the stock page actually passes a per-symbol scope", async () => {
   assert.match(page, /<AskAiButton[\s\S]*?scopeKey=/);
   // 必须用已解析结果的代码，不能用一边打字一边变的输入框 state
   assert.match(page, /scopeKey=\{gstock \? `g:\$\{gstock\.code\}` : val\?\.code\}/);
+  const valAt = page.indexOf("api.valuation(c)");
+  const marginAt = page.indexOf("api.margin(c)");
+  const gStockAt = page.indexOf("api.globalStock(c)");
+  const hkAt = page.indexOf("api.hkCashflow(c)");
+  assert.ok(valAt > 0 && marginAt > valAt, "A 股资金面在估值之后");
+  assert.ok(gStockAt > 0 && hkAt > gStockAt, "美股明细在报价之后");
 });
 
 test("aborted-request cleanup is gated by request identity", () => {

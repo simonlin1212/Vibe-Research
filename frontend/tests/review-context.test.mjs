@@ -85,6 +85,19 @@ test("limit-up card polls review snapshot top while A-share is open", () => {
   assert.match(reviewSrc, /盘中 90s/);
 });
 
+test("money tab fetches ETF flow only after it is opened", () => {
+  assert.match(hookSrc, /if \(seg !== "money"\) return/);
+  assert.match(reviewSrc, /lazy\(\(\) =>/);
+  assert.match(reviewSrc, /ReviewMoneySeg/);
+  assert.match(reviewSrc, /ChainPanel/);
+});
+
+test("dragon-tiger snapshot waits for the boards tab", () => {
+  assert.match(hookSrc, /if \(seg !== "boards"/);
+  assert.match(hookSrc, /scope: "full"/);
+  assert.doesNotMatch(hookSrc, /await snap\("full"\)/);
+});
+
 test("breadth panel clock is last fetch, not legu session close", () => {
   assert.match(reviewSrc, /breadthLabel/);
   assert.match(reviewSrc, /家数 \{d\.breadth\.n\}/);

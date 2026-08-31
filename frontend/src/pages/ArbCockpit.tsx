@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArrowLeftRight, CandlestickChart, GitCompare, RefreshCw, Table2 } from "lucide-react";
 import { AskAiButton } from "@/components/ui/AskAiButton";
@@ -7,10 +7,13 @@ import { useArbData } from "@/hooks/useArbData";
 import { CalendarPanel } from "@/components/arb/CalendarPanel";
 import { CrossPanel } from "@/components/arb/CrossPanel";
 import { BasisPanel } from "@/components/arb/BasisPanel";
-import { SpreadChart } from "@/components/arb/SpreadChart";
 import { LegCard } from "@/components/arb/LegCard";
 import { signed, type ArbPick } from "@/components/arb/arbShared";
-import { FreshTag, SessionBadge } from "@/components/deriv/derivShared";
+import { CellEmpty, FreshTag, SessionBadge } from "@/components/deriv/derivShared";
+
+const SpreadChart = lazy(() =>
+  import("@/components/arb/SpreadChart").then((m) => ({ default: m.SpreadChart })),
+);
 import { peekQuotes } from "@/lib/quoteHub";
 import { INDEX_CASH_CODES } from "@/config/arb";
 import { formatClock } from "@/lib/freshness";
@@ -163,7 +166,11 @@ export function ArbCockpit() {
           defaultW: 0.5,
           mobileH: "h-[40vh]",
           bodyClassName: "overflow-hidden",
-          body: <SpreadChart pick={pick} mode="minute" />,
+          body: (
+            <Suspense fallback={<CellEmpty text="更新中…" />}>
+              <SpreadChart pick={pick} mode="minute" />
+            </Suspense>
+          ),
         },
         {
           id: "arb-daily",
@@ -174,7 +181,11 @@ export function ArbCockpit() {
           defaultW: 0.5,
           mobileH: "h-[40vh]",
           bodyClassName: "overflow-hidden",
-          body: <SpreadChart pick={pick} mode="daily" />,
+          body: (
+            <Suspense fallback={<CellEmpty text="更新中…" />}>
+              <SpreadChart pick={pick} mode="daily" />
+            </Suspense>
+          ),
         },
       ],
     },

@@ -24,8 +24,17 @@ export function useAsyncPoll<T>(fn: () => Promise<T>, interval = HOUR) {
 
   useEffect(() => {
     load();
-    const t = window.setInterval(load, interval);
-    return () => window.clearInterval(t);
+    const beat = () => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      load();
+    };
+    const t = window.setInterval(beat, interval);
+    const onVis = () => { if (!document.hidden) load(); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      window.clearInterval(t);
+      document.removeEventListener("visibilitychange", onVis);
+    };
   }, [load, interval]);
 
   return { data, loading, error, retry: load };

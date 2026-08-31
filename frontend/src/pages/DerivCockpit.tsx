@@ -1,13 +1,12 @@
-import { useLayoutEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useLayoutEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import {
   AlertCircle, CalendarDays, CandlestickChart, LineChart,
   Loader2, RefreshCw, Sparkles, Table, TrendingUp, X, Zap,
 } from "lucide-react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { AskAiButton } from "@/components/ui/AskAiButton";
+import { Md } from "@/components/ui/Md";
 import { CockpitLayout, type CockpitRow } from "@/components/cockpit/CockpitLayout";
 import { useDerivData, type DerivData } from "@/hooks/useDerivData";
 import { daysToExpiry, num } from "@/components/ovlab/shared";
@@ -18,12 +17,28 @@ import { cn } from "@/lib/utils";
 import { IndexFutPanel } from "@/components/deriv/IndexFutPanel";
 import { AlertPanel, ruleLabelOf } from "@/components/deriv/AlertPanel";
 import { ExpiryCalPanel } from "@/components/deriv/ExpiryCalPanel";
-import { TermStructPanel } from "@/components/deriv/TermStructPanel";
-import { WatchPanel } from "@/components/deriv/WatchPanel";
-import { ThsCmdIndexPanel } from "@/components/deriv/ThsCmdIndexPanel";
-import { TQuotePanel, type OptionPick } from "@/components/deriv/TQuotePanel";
-import { OptionChartCard } from "@/components/deriv/OptionChartCard";
-import { FreshTag, NightOnlySwitch, SessionBadge, contractCode, findRowByUnd, nightTradingOf, undSpotLast } from "@/components/deriv/derivShared";
+import type { OptionPick } from "@/components/deriv/TQuotePanel";
+import { CellEmpty, FreshTag, NightOnlySwitch, SessionBadge, contractCode, findRowByUnd, nightTradingOf, undSpotLast } from "@/components/deriv/derivShared";
+
+const TermStructPanel = lazy(() =>
+  import("@/components/deriv/TermStructPanel").then((m) => ({ default: m.TermStructPanel })),
+);
+const WatchPanel = lazy(() =>
+  import("@/components/deriv/WatchPanel").then((m) => ({ default: m.WatchPanel })),
+);
+const ThsCmdIndexPanel = lazy(() =>
+  import("@/components/deriv/ThsCmdIndexPanel").then((m) => ({ default: m.ThsCmdIndexPanel })),
+);
+const TQuotePanel = lazy(() =>
+  import("@/components/deriv/TQuotePanel").then((m) => ({ default: m.TQuotePanel })),
+);
+const OptionChartCard = lazy(() =>
+  import("@/components/deriv/OptionChartCard").then((m) => ({ default: m.OptionChartCard })),
+);
+
+function cellPending() {
+  return <CellEmpty text="更新中…" />;
+}
 
 /** Pack the visible cells in-browser for Ask AI; missing cells say 未取到. */
 function packCapitalLines(cap: OvlabParked | null): string {
@@ -227,17 +242,21 @@ export function DerivCockpit() {
               </div>
               {boardTab === "watch" ? (
                 <div className="min-h-0 flex-1 overflow-hidden">
-                  <WatchPanel
-                    d={d}
-                    onPick={(code, prodUnd) => {
-                      if (prodUnd) pickProduct(prodUnd, { code, name: code });
-                      else setOptPick({ kind: "und", code, und: code, name: code });
-                    }}
-                  />
+                  <Suspense fallback={cellPending()}>
+                    <WatchPanel
+                      d={d}
+                      onPick={(code, prodUnd) => {
+                        if (prodUnd) pickProduct(prodUnd, { code, name: code });
+                        else setOptPick({ kind: "und", code, und: code, name: code });
+                      }}
+                    />
+                  </Suspense>
                 </div>
               ) : boardTab === "index" ? (
                 <div className="min-h-0 flex-1 overflow-hidden">
-                  <ThsCmdIndexPanel />
+                  <Suspense fallback={cellPending()}>
+                    <ThsCmdIndexPanel />
+                  </Suspense>
                 </div>
               ) : (
                 <div className="min-h-0 flex-1 overflow-y-auto">
@@ -266,7 +285,11 @@ export function DerivCockpit() {
           defaultW: 0.22,
           mobileH: "h-[44vh]",
           right: <FreshTag updated={d.marketUpdated} />,
-          body: <TermStructPanel d={d} />,
+          body: (
+            <Suspense fallback={cellPending()}>
+              <TermStructPanel d={d} />
+            </Suspense>
+          ),
         },
         {
           id: "alert",
@@ -293,13 +316,15 @@ export function DerivCockpit() {
           maxZoomW: 0.88,
           mobileH: "h-[56vh]",
           body: (
-            <TQuotePanel
-              d={d}
-              product={tqProd}
-              onProduct={pickProduct}
-              pick={optPick}
-              onPickContract={setOptPick}
-            />
+            <Suspense fallback={cellPending()}>
+              <TQuotePanel
+                d={d}
+                product={tqProd}
+                onProduct={pickProduct}
+                pick={optPick}
+                onPickContract={setOptPick}
+              />
+            </Suspense>
           ),
         },
         {
@@ -312,21 +337,23 @@ export function DerivCockpit() {
           mobileH: "h-[40vh]",
           bodyClassName: "!overflow-hidden p-0",
           body: (
-            <div className="grid h-full min-h-0 min-w-0 grid-rows-2 gap-px bg-[#2a2a2a]">
-              <OptionChartCard
-                pick={optPick}
-                mode="minute"
-                tick={chartTick}
-                alerts={d.alerts ?? undefined}
-                hasNight={chartHasNight}
-              />
-              <OptionChartCard
-                pick={optPick}
-                mode="daily"
-                tick={chartTick}
-                alerts={d.alerts ?? undefined}
-              />
-            </div>
+            <Suspense fallback={cellPending()}>
+              <div className="grid h-full min-h-0 min-w-0 grid-rows-2 gap-px bg-[#2a2a2a]">
+                <OptionChartCard
+                  pick={optPick}
+                  mode="minute"
+                  tick={chartTick}
+                  alerts={d.alerts ?? undefined}
+                  hasNight={chartHasNight}
+                />
+                <OptionChartCard
+                  pick={optPick}
+                  mode="daily"
+                  tick={chartTick}
+                  alerts={d.alerts ?? undefined}
+                />
+              </div>
+            </Suspense>
           ),
         },
       ],
@@ -415,7 +442,7 @@ export function DerivCockpit() {
           )}
           {review ? (
             <div className="prose prose-sm dark:prose-invert mt-3 max-w-none text-slate-200">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{review}</ReactMarkdown>
+              <Md>{review}</Md>
             </div>
           ) : null}
         </div>

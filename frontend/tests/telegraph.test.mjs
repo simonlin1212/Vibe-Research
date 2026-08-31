@@ -122,5 +122,12 @@ test("site-wide toast host rides telegraphHub, no second poll", async () => {
   assert.match(host, /180_000|NEWS_TOAST_MS|enqueueNewsToasts/);
   assert.doesNotMatch(host, /setInterval\(\s*\(\)\s*=>\s*void (api\.|loadTelegraph)/);
   assert.match(layout, /<NewsToastHost/);
+  assert.match(host, /to="\/event"/);
+  assert.doesNotMatch(host, /to="\/a-share"/);
+  assert.match(host, /if \(!toasts\.length\) return/);
+  assert.match(host, /document\.hidden/);
+  assert.match(host, /visibilitychange/);
   assert.match(hub, /if \(!primed\[src\]\)/);
+  assert.match(hub, /document\.hidden/);
+  assert.match(hub, /visibilitychange/);
 });

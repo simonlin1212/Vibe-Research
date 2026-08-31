@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
-import { AlertCircle, Loader2, Plus, RefreshCw, X } from "lucide-react";
+import { lazy, Suspense, useCallback, useEffect, useState, type MouseEvent } from "react";
+import { Plus, RefreshCw, X } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
-import { LcHoverTag, LcLegend, LcWell, lcTone, type LcLegendItem } from "@/components/ui/LcFrame";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { CollapsibleSection } from "@/components/ui/CollapsibleSection";
 import { FearGreedPanel } from "@/components/cockpit/FearGreedPanel";
@@ -14,18 +13,15 @@ import {
   type GlobalOptions, type GlobalStockNews,
 } from "@/lib/api";
 import { addUsTickers, loadUsWatch, saveUsWatch } from "@/lib/usWatchlist";
-import { useExpandAll } from "@/hooks/useExpandAll";
+import { useExpandAll, useSectionOpen } from "@/hooks/useExpandAll";
 import { cn } from "@/lib/utils";
-import {
-  CandlestickSeries, HistogramSeries, applyTimeLabels, candleOpts, candleValues,
-  seriesAlive, setLogScale, setPaneWatermark, setRefPriceLine, showLatest, styleLastTag,
-  styleVolOverlay, useLcChart, useLcHoverTag, volOpts, volValues, wipeLc,
-  type IPriceLine, type ISeriesApi, type ITextWatermarkPluginApi, type Time,
-} from "@/lib/lcChart";
+
+const UsKlineChart = lazy(() =>
+  import("@/pages/us/UsKlineChart").then((m) => ({ default: m.UsKlineChart })),
+);
 
 /** Pull 365 bars; default viewport shows latest ~120; wheel zooms out to full. */
 const KLINE_NUM = 365;
-const VIEW_DAYS = 120;
 
 const US_SECTION_KEYS = [
   "us.fundamentals", "us.movers",
@@ -74,7 +70,6 @@ export function UsMarket() {
   const [chartMeta, setChartMeta] = useState<{ code: string; name?: string; adjust?: string } | null>(null);
   const [chartLoading, setChartLoading] = useState(false);
   const [chartErr, setChartErr] = useState<string | null>(null);
-  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
   const [earnCal, setEarnCal] = useState<GlobalEarningsCalendar | null>(null);
   const [earnDays, setEarnDays] = useState<7 | 5 | 10>(7);
   const [secDaily, setSecDaily] = useState<GlobalSecDaily | null>(null);
@@ -95,15 +90,14 @@ export function UsMarket() {
   const [gOptTab, setGOptTab] = useState<"0dte" | "7d">("0dte");
 
   const { allOpen, toggleAll } = useExpandAll(US_SECTION_KEYS);
-
-  const { ref: chartRef, chartRef: lcRef, labelsRef, onHoverRef } = useLcChart();
-  const bag = useRef<{
-    candle: ISeriesApi<"Candlestick"> | null;
-    vol: ISeriesApi<"Histogram"> | null;
-  }>({ candle: null, vol: null });
-  const refLine = useRef<IPriceLine | null>(null);
-  const wmRef = useRef<ITextWatermarkPluginApi<Time> | null>(null);
-  onHoverRef.current = setHoverIdx;
+  const [fundOpen] = useSectionOpen("us.fundamentals", false);
+  const [moversOpen] = useSectionOpen("us.movers", false);
+  const [optOpen] = useSectionOpen("us.options", false);
+  const [newsOpen] = useSectionOpen("us.news", false);
+  const [edgarOpen] = useSectionOpen("us.edgar", false);
+  const [earnOpen] = useSectionOpen("us.earnings", false);
+  const [secOpen] = useSectionOpen("us.sec", false);
+  const boardsOpen = moversOpen || earnOpen || secOpen;
 
   const persist = (next: string[]) => {
     setCodes(next);
@@ -169,11 +163,9 @@ export function UsMarket() {
       const data = await api.usKline(sym, num);
       setBars(data.bars ?? []);
       setChartMeta({ code: data.code, name: data.name, adjust: data.adjust });
-      setHoverIdx(null);
     } catch (e) {
       setBars([]);
       setChartMeta(null);
-      setHoverIdx(null);
       setChartErr(e instanceof ApiError ? e.message : "K 线加载失败");
     } finally {
       setChartLoading(false);
@@ -244,74 +236,24 @@ export function UsMarket() {
 
   useEffect(() => { void loadQuotes(); }, [loadQuotes]);
   useEffect(() => { void loadChart(selected, KLINE_NUM); }, [selected, loadChart]);
-  useEffect(() => { void loadPanels(); }, [loadPanels]);
-  useEffect(() => { void loadEdgar(edgarTag); }, [edgarTag, loadEdgar]);
-  useEffect(() => { void loadFund(selected); }, [selected, loadFund]);
-  useEffect(() => { void loadOptFlow(selected); }, [selected, loadOptFlow]);
+  useEffect(() => { if (boardsOpen) void loadPanels(); }, [loadPanels, boardsOpen]);
+  useEffect(() => { if (edgarOpen) void loadEdgar(edgarTag); }, [edgarTag, loadEdgar, edgarOpen]);
+  useEffect(() => { if (fundOpen) void loadFund(selected); }, [selected, loadFund, fundOpen]);
+  useEffect(() => { if (optOpen || newsOpen) void loadOptFlow(selected); }, [selected, loadOptFlow, optOpen, newsOpen]);
 
-  useEffect(() => {
-    const chart = lcRef.current;
-    if (!chart) return;
-    if (bars.length === 0) {
-      setPaneWatermark(chart, wmRef, "");
-      wipeLc(chart);
-      bag.current = { candle: null, vol: null };
-      refLine.current = null;
-      labelsRef.current = [];
-      return;
-    }
-    labelsRef.current = bars.map((b) => b.date);
-    applyTimeLabels(chart, labelsRef, "md");
-    if (!seriesAlive(chart, bag.current.candle) || !seriesAlive(chart, bag.current.vol)) {
-      wipeLc(chart);
-      refLine.current = null;
-      bag.current.candle = chart.addSeries(CandlestickSeries, candleOpts());
-      bag.current.vol = chart.addSeries(HistogramSeries, volOpts());
-      styleVolOverlay(chart);
-    }
-    bag.current.candle!.setData(candleValues(bars));
-    const last = bars[bars.length - 1];
-    styleLastTag(bag.current.candle, last?.close, last?.open);
-    setRefPriceLine(bag.current.candle, refLine, bars.length > 1 ? bars[bars.length - 2].close : null);
-    setPaneWatermark(chart, wmRef, selected, 110);
-    setLogScale(chart, bars.every((b) => !Number.isFinite(b.close) || b.close > 0));
-    bag.current.vol!.setData(volValues(bars.map((b) => ({
-      value: b.volume,
-      up: b.close >= b.open,
-    }))));
-    showLatest(chart, bars.length, VIEW_DAYS);
-  }, [bars, selected, lcRef, labelsRef]);
+  const refreshVisible = useCallback(() => {
+    void loadQuotes();
+    if (selected) void loadChart(selected, KLINE_NUM);
+    if (fundOpen && selected) void loadFund(selected);
+    if ((optOpen || newsOpen) && selected) void loadOptFlow(selected);
+    if (boardsOpen) void loadPanels();
+    if (edgarOpen) void loadEdgar(edgarTag);
+  }, [
+    selected, loadQuotes, loadChart, loadFund, loadOptFlow, loadPanels, loadEdgar,
+    fundOpen, optOpen, newsOpen, boardsOpen, edgarOpen, edgarTag,
+  ]);
 
   const selQuote = selected ? quotes[selected] : null;
-  const activeIdx = hoverIdx != null && bars[hoverIdx] ? hoverIdx : (bars.length ? bars.length - 1 : -1);
-  const bar = activeIdx >= 0 ? bars[activeIdx] : null;
-  const prevBar = activeIdx > 0 ? bars[activeIdx - 1] : null;
-  const chg = bar && prevBar ? bar.close - prevBar.close : null;
-  const chgPct = chg != null && prevBar && prevBar.close ? (chg / prevBar.close) * 100 : null;
-  const hovering = hoverIdx != null && bars[hoverIdx] != null;
-  const { tag: hoverTag, y: tagY } = useLcHoverTag(
-    () => bag.current.candle,
-    hovering ? bar?.close ?? null : null,
-    prevBar?.close ?? null,
-    fmtPrice,
-    hoverIdx,
-  );
-
-  const fmtVol = (v: number | null | undefined) => {
-    if (v == null || !Number.isFinite(v)) return "—";
-    if (v >= 1e9) return (v / 1e9).toFixed(2) + "B";
-    if (v >= 1e6) return (v / 1e6).toFixed(2) + "M";
-    if (v >= 1e3) return (v / 1e3).toFixed(1) + "K";
-    return String(Math.round(v));
-  };
-
-  const usLegend: LcLegendItem[] = bar ? [
-    { k: "O", v: fmtPrice(bar.open) },
-    { k: "H", v: fmtPrice(bar.high) },
-    { k: "L", v: fmtPrice(bar.low) },
-    { k: "C", v: fmtPrice(bar.close), tone: lcTone(chg) },
-    { k: "V", v: fmtVol(bar.volume), tone: "muted" },
-  ] : [];
 
   const glanceMetrics: GlanceMetric[] = [];
   if (selQuote?.quote) {
@@ -334,16 +276,7 @@ export function UsMarket() {
         actions={
           <button
             type="button"
-            onClick={() => {
-              void loadQuotes();
-              if (selected) {
-                void loadChart(selected, KLINE_NUM);
-                void loadFund(selected);
-                void loadOptFlow(selected);
-              }
-              void loadPanels();
-              void loadEdgar(edgarTag);
-            }}
+            onClick={refreshVisible}
             className="inline-flex items-center gap-1.5 rounded-lg border border-border/60 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground"
           >
             <RefreshCw className={cn("h-3.5 w-3.5", (quotesLoading || chartLoading || panelLoading || fundLoading) && "animate-spin")} />
@@ -360,16 +293,7 @@ export function UsMarket() {
         metrics={glanceMetrics}
         allOpen={allOpen}
         onToggleAll={toggleAll}
-        onRefresh={() => {
-          void loadQuotes();
-          if (selected) {
-            void loadChart(selected, KLINE_NUM);
-            void loadFund(selected);
-            void loadOptFlow(selected);
-          }
-          void loadPanels();
-          void loadEdgar(edgarTag);
-        }}
+        onRefresh={refreshVisible}
         refreshing={quotesLoading || chartLoading || panelLoading || fundLoading}
         updatedAt={quotesUpdatedAt}
       />
@@ -448,63 +372,17 @@ export function UsMarket() {
           </div>
         </GlassCard>
 
-        {/* Chart */}
-        <GlassCard className="p-3 sm:p-4">
-          <div className="mb-2 flex flex-wrap items-end justify-between gap-3">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-baseline gap-2">
-                <span className="font-mono text-lg font-semibold tracking-tight">{selected || "—"}</span>
-                <span className="truncate text-xs text-slate-500">
-                  {chartMeta?.name || selQuote?.name || ""}
-                </span>
-                <span className="rounded bg-white/[0.04] px-1.5 py-0.5 font-mono text-[10px] text-slate-500">
-                  {chartMeta?.adjust === "qfq" ? "qfq" : "D"}
-                </span>
-                {hovering ? (
-                  <span className="font-mono text-[10px] tracking-wide text-primary/80">CROSSHAIR</span>
-                ) : null}
-              </div>
-              <div className="mt-1 flex flex-wrap items-baseline gap-3">
-                <span className={cn(
-                  "font-mono text-2xl font-semibold tabular-nums",
-                  chgPct != null && chgPct > 0 ? "text-[#ff2d2d]"
-                    : chgPct != null && chgPct < 0 ? "text-[#00d26a]"
-                      : "text-slate-200",
-                )}>
-                  {fmtPrice(bar?.close ?? selQuote?.quote?.price)}
-                </span>
-                <span className={cn(
-                  "font-mono text-sm tabular-nums",
-                  chgPct != null && chgPct > 0 ? "text-[#ff2d2d]"
-                    : chgPct != null && chgPct < 0 ? "text-[#00d26a]"
-                      : "text-slate-500",
-                )}>
-                  {chg != null ? `${chg > 0 ? "+" : ""}${chg.toFixed(2)}` : "—"}
-                  <span className="ml-1">({fmtPct(chgPct)})</span>
-                </span>
-                {bar?.date ? (
-                  <span className="font-mono text-[11px] text-slate-600">{bar.date}</span>
-                ) : null}
-              </div>
-            </div>
-          </div>
-
-          <LcWell className="h-[480px]">
-            {chartErr ? (
-              <div className="absolute inset-0 z-20 flex items-center gap-2 bg-black/88 px-4 text-sm text-destructive">
-                <AlertCircle className="h-4 w-4 shrink-0" /> {chartErr}
-              </div>
-            ) : null}
-            {chartLoading && (
-              <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/40">
-                <Loader2 className="h-5 w-5 animate-spin text-slate-500" />
-              </div>
-            )}
-            <LcLegend items={usLegend} />
-            <LcHoverTag tag={hoverTag} y={tagY} />
-            <div ref={chartRef} className="h-full w-full" />
-          </LcWell>
-        </GlassCard>
+        <Suspense fallback={<GlassCard className="flex h-[560px] items-center justify-center text-[12px] text-slate-500">图加载中…</GlassCard>}>
+          <UsKlineChart
+            selected={selected}
+            bars={bars}
+            name={chartMeta?.name || selQuote?.name || ""}
+            adjust={chartMeta?.adjust}
+            quotePrice={selQuote?.quote?.price}
+            loading={chartLoading}
+            error={chartErr}
+          />
+        </Suspense>
       </div>
 
       {selected && (
@@ -811,18 +689,18 @@ export function UsMarket() {
         </GlassCard>
       </CollapsibleSection>
 
-      {selected && gOpt && (
+      {selected && (
         <CollapsibleSection
           storageKey="us.options"
           title="期权"
-          summary={`CBOE · ${selected}`}
+          summary={gOpt ? `CBOE · ${selected}` : "展开后加载"}
         >
           <GlassCard className="p-3 sm:p-4">
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <h3 className="text-sm font-semibold">
                 期权 · CBOE · {selected}
                 <span className="ml-2 text-[11px] font-normal text-muted-foreground/60">
-                  spot {fmtNum(gOpt.spot)} · {gOpt.et_today}
+                  spot {fmtNum(gOpt?.spot)} · {gOpt?.et_today ?? ""}
                 </span>
               </h3>
               <div className="flex gap-1">
@@ -841,7 +719,9 @@ export function UsMarket() {
                 ))}
               </div>
             </div>
-            {(() => {
+            {!gOpt ? (
+              <EmptyState className="py-6" title="展开后加载期权" description="CBOE 汇总与异动, 点开才取。" />
+            ) : (() => {
               const sum = gOptTab === "0dte" ? gOpt.summary_0dte : gOpt.summary_7d;
               const flow = gOptTab === "0dte" ? gOpt.unusual_0dte : gOpt.unusual_7d;
               if (!sum) {
@@ -897,11 +777,11 @@ export function UsMarket() {
         </CollapsibleSection>
       )}
 
-      {selected && gNews && gNews.items.length > 0 && (
+      {selected && (
         <CollapsibleSection
           storageKey="us.news"
           title="新闻"
-          summary={`${gNews.items.length} 条`}
+          summary={gNews?.items.length ? `${gNews.items.length} 条` : "展开后加载"}
         >
           <GlassCard className="p-3 sm:p-4">
             <h3 className="mb-1 text-sm font-semibold">
@@ -909,7 +789,9 @@ export function UsMarket() {
               <span className="ml-2 text-[11px] font-normal text-muted-foreground/60">Yahoo · C 级</span>
             </h3>
             <div className="mt-2 max-h-56 space-y-1.5 overflow-y-auto">
-              {gNews.items.map((n, i) => (
+              {!gNews?.items.length ? (
+                <EmptyState className="py-4" title="暂无新闻" description="展开后拉取 Yahoo 标题。" />
+              ) : gNews.items.map((n, i) => (
                 <div key={`${n.link ?? n.title}-${i}`} className="flex items-baseline gap-2 border-b border-border/40 py-1.5 text-sm last:border-0">
                   <span className="w-24 shrink-0 font-mono text-[11px] text-muted-foreground">
                     {(n.publish_time || "").slice(0, 16) || "—"}

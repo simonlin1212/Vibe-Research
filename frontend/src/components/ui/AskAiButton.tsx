@@ -2,8 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Link, useLocation } from "react-router-dom";
 import { Sparkles, X, Settings, Send, Loader2, Wrench, AlertCircle, Trash2 } from "lucide-react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { Md } from "@/components/ui/Md";
 import { cn } from "@/lib/utils";
 import { hasLlm, chatStream, type ChatMsg } from "@/lib/llm";
 import { ApiError } from "@/lib/api";
@@ -340,7 +339,7 @@ export function AskAiButton({ context, getContext, suggestions = [], label = "é—
                         )}
                         {m.role === "assistant" ? (
                           <div className="prose prose-sm dark:prose-invert max-w-none break-words text-foreground">
-                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
+                            <Md>{m.content}</Md>
                           </div>
                         ) : (
                           <p className="whitespace-pre-wrap break-words">{m.content}</p>

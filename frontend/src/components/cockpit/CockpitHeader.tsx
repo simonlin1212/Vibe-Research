@@ -48,6 +48,27 @@ export function navChipClass(active: boolean): string {
   );
 }
 
+/** Isolated so the 1s tick does not re-render PAGE_NAV. */
+function HeaderClock() {
+  const now = useClock(1000);
+  const hh = String(now.getHours()).padStart(2, "0");
+  const mm = String(now.getMinutes()).padStart(2, "0");
+  const ss = String(now.getSeconds()).padStart(2, "0");
+  const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const week = ["日", "一", "二", "三", "四", "五", "六"][now.getDay()];
+  return (
+    <>
+      <span className="hidden text-[11px] tabular-nums text-[#888] lg:inline">
+        {dateStr} 星期{week}
+      </span>
+      <span className="border border-[#2a2a2a] bg-[#111] px-1.5 py-px font-mono text-[12px] font-bold text-[#ffcc00]">
+        {hh}:{mm}
+        <span className="text-[#886600]">:{ss}</span>
+      </span>
+    </>
+  );
+}
+
 export function CockpitHeader({
   isFullscreen,
   onToggleFullscreen,
@@ -58,13 +79,6 @@ export function CockpitHeader({
   extra?: React.ReactNode;
 }) {
   const { pathname } = useLocation();
-  const now = useClock(1000);
-
-  const hh = String(now.getHours()).padStart(2, "0");
-  const mm = String(now.getMinutes()).padStart(2, "0");
-  const ss = String(now.getSeconds()).padStart(2, "0");
-  const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-  const week = ["日", "一", "二", "三", "四", "五", "六"][now.getDay()];
 
   return (
     <header className="flex h-8 shrink-0 items-center gap-1.5 border-b border-[#2a2a2a] bg-black px-1.5 sm:gap-2 sm:px-2">
@@ -87,7 +101,7 @@ export function CockpitHeader({
             <Link
               key={l.to}
               to={l.to}
-              prefetch={l.to === "/fin" ? "render" : "intent"}
+              prefetch="intent"
               aria-current={active ? "page" : undefined}
               className={navChipClass(active)}
             >
@@ -106,13 +120,7 @@ export function CockpitHeader({
           </span>
           实时
         </span>
-        <span className="hidden text-[11px] tabular-nums text-[#888] lg:inline">
-          {dateStr} 星期{week}
-        </span>
-        <span className="border border-[#2a2a2a] bg-[#111] px-1.5 py-px font-mono text-[12px] font-bold text-[#ffcc00]">
-          {hh}:{mm}
-          <span className="text-[#886600]">:{ss}</span>
-        </span>
+        <HeaderClock />
         <button
           type="button"
           onClick={onToggleFullscreen}

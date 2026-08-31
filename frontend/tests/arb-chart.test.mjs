@@ -126,6 +126,8 @@ test("下排左分时右日K, 不再切换", () => {
   assert.doesNotMatch(basis, /r\.near\.px - cash/);
   assert.doesNotMatch(src, /api\.spotTable/);
   assert.doesNotMatch(src, /now - 2 \* 86400/);
+  assert.match(cockpit, /lazy\(\(\) =>/);
+  assert.doesNotMatch(cockpit, /import \{ SpreadChart/);
 });
 
 test("parseLight 分时保留时分, 日K才收成日期", () => {

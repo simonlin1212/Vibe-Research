@@ -160,6 +160,26 @@ test("fear-greed hangs on breadth panel and US page, not quote hub", async () =>
   assert.doesNotMatch(api, /greedyfear\.com/);
 });
 
+test("US page loads quotes and kline first, detail sections on expand", async () => {
+  const us = await readFile(new URL("../src/pages/UsMarket.tsx", import.meta.url), "utf8");
+  const api = await readFile(new URL("../src/lib/api.ts", import.meta.url), "utf8");
+  assert.match(us, /useSectionOpen\("us.fundamentals"/);
+  assert.match(us, /if \(fundOpen\) void loadFund/);
+  assert.match(us, /if \(edgarOpen\) void loadEdgar/);
+  assert.match(us, /if \(boardsOpen\) void loadPanels/);
+  assert.match(us, /if \(optOpen \|\| newsOpen\) void loadOptFlow/);
+  assert.match(us, /refreshVisible/);
+  assert.match(us, /UsKlineChart/);
+  assert.doesNotMatch(us, /from "@\/lib\/lcChart"/);
+  assert.doesNotMatch(api, /ovlabFutureTsAll/);
+  assert.doesNotMatch(api, /ovlabVolatilityTs/);
+  assert.doesNotMatch(api, /ovlabDetail/);
+  assert.doesNotMatch(api, /ovlabFlowData/);
+  assert.doesNotMatch(api, /ovlabSkewmap/);
+  assert.doesNotMatch(api, /finoOverview/);
+  assert.doesNotMatch(api, /ovlabSymbolInfo/);
+});
+
 test("macro 标的 draws HK JP KR under NQ", async () => {
   const goods = await readFile(new URL("../src/components/cockpit/CommodityPanel.tsx", import.meta.url), "utf8");
   const world = await readFile(new URL("../src/components/cockpit/WorldIndexPanel.tsx", import.meta.url), "utf8");
@@ -183,4 +203,12 @@ test("board flow chart plots by session time, not point index", async () => {
   assert.match(src, /ashareSessionIdx/);
   assert.doesNotMatch(src, /i \/ Math\.max\(n - 1/);
   assert.doesNotMatch(src, /<line[^>]*lastY/);
+});
+
+test("board flow waits for ranks before asking for curves", async () => {
+  const src = await readFile(new URL("../src/components/cockpit/BoardFlowLivePanel.tsx", import.meta.url), "utf8");
+  assert.match(src, /boardFlowIntraday\(20, false\)/);
+  assert.match(src, /boardFlowIntraday\(20, true\)/);
+  assert.match(src, /rankReady/);
+  assert.match(src, /curvesEnabled && rankReady/);
 });

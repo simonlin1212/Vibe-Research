@@ -34,16 +34,24 @@ export function NewsToastHost() {
   }, [snap]);
 
   useEffect(() => {
-    const tick = window.setInterval(() => {
+    if (!toasts.length) return;
+    const prune = () => {
       if (hoverRef.current) return;
+      if (typeof document !== "undefined" && document.hidden) return;
       const now = Date.now();
       setToasts((q) => {
         const next = pruneNewsToasts(q, now);
         return next.length === q.length ? q : next;
       });
-    }, 1000);
-    return () => window.clearInterval(tick);
-  }, []);
+    };
+    const id = window.setInterval(prune, 1000);
+    const onVis = () => { if (!document.hidden) prune(); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, [toasts.length]);
 
   if (!toasts.length) return null;
 
@@ -89,7 +97,7 @@ export function NewsToastHost() {
                 <X className="h-3.5 w-3.5" />
               </button>
             </div>
-            <Link to="/a-share" className="mt-1 block text-[12px] font-semibold leading-5 text-slate-100 hover:text-primary">
+            <Link to="/event" className="mt-1 block text-[12px] font-semibold leading-5 text-slate-100 hover:text-primary">
               {t.title}
             </Link>
             {t.content && (

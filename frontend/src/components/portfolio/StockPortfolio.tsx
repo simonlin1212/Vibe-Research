@@ -37,9 +37,18 @@ export function StockPortfolio() {
   }, []);
 
   useEffect(() => {
-    load();
-    const t = setInterval(() => load(), REFRESH_MS);
-    return () => clearInterval(t);
+    const beat = () => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      void load();
+    };
+    beat();
+    const t = window.setInterval(beat, REFRESH_MS);
+    const onVis = () => { if (!document.hidden) void load(); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      window.clearInterval(t);
+      document.removeEventListener("visibilitychange", onVis);
+    };
   }, [load]);
 
   const add = async () => {

@@ -120,3 +120,21 @@ test("world index minutes subscribe to the minute hub", () => {
   assert.doesNotMatch(worldSrc, /loadLightKlineBatch/);
   assert.doesNotMatch(worldSrc, /usePolling/);
 });
+
+function chunkCodes(codes, size = 40) {
+  const out = [];
+  for (let i = 0; i < codes.length; i += size) out.push(codes.slice(i, i + size));
+  return out;
+}
+
+test("quoteFlow splits stock-flows at 40 codes so the query stays under 400", async () => {
+  const api = await readFile(new URL("../src/lib/api.ts", import.meta.url), "utf8");
+  assert.match(api, /export function chunkCodes/);
+  assert.match(api, /chunkCodes\(codes, 40\)/);
+  assert.doesNotMatch(api, /stockFlows:/);
+  assert.doesNotMatch(api, /stockFlowBatch:/);
+  const lots = Array.from({ length: 41 }, (_, i) => String(600000 + i));
+  assert.equal(chunkCodes(lots, 40).length, 2);
+  assert.equal(chunkCodes(lots, 40)[0].length, 40);
+  assert.equal(chunkCodes(lots, 40)[1].length, 1);
+});

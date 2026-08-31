@@ -144,4 +144,13 @@ test("结算卡用同一套今日预估叠全部指标", async () => {
   assert.match(port, /foldLiveMonthly/);
   assert.match(port, /buildCalDays\(rangeData, live\)/);
   assert.match(port, /含今日实时/);
+  assert.match(port, /document\.hidden/);
+  assert.match(port, /visibilitychange/);
+  assert.match(port, /if \(!settleOpen\) return/);
+  assert.match(port, /\[loggedIn, data, settleOpen\]/);
+  assert.doesNotMatch(port, /from "echarts"/);
+  assert.match(port, /CtpSettleChart/);
+  const chart = await readFile(new URL("../src/components/portfolio/CtpSettleChart.tsx", import.meta.url), "utf8");
+  assert.match(chart, /from "echarts"/);
+  assert.match(chart, /liveSettlePreview/);
 });

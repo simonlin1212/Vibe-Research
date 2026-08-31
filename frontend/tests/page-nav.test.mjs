@@ -156,6 +156,8 @@ test("A-share portfolio jumps to backtest and autostarts", () => {
   assert.match(src, /autostart=1/);
   assert.match(src, /from=portfolio/);
   assert.match(src, /slice\(0, 100\)/);
+  assert.match(src, /document\.hidden/);
+  assert.match(src, /visibilitychange/);
 });
 
 test("backtest page uses store cover and meta limit", () => {
@@ -175,8 +177,12 @@ test("backtest page uses store cover and meta limit", () => {
   assert.match(src, /Tearsheet/);
   assert.match(src, /IndexPoolButtons/);
   assert.match(src, /useBacktestJob/);
+  assert.match(src, /EquityChart/);
+  assert.doesNotMatch(src, /from "echarts"/);
   const job = readFileSync(join(root, "src/pages/backtest/useBacktestJob.ts"), "utf8");
   assert.match(job, /backtestProgress/);
+  assert.match(job, /document\.hidden/);
+  assert.match(job, /visibilitychange/);
   const tear = readFileSync(join(root, "src/pages/backtest/Tearsheet.tsx"), "utf8");
   assert.match(tear, /月收益/);
   assert.match(tear, /最大回撤/);
@@ -189,4 +195,54 @@ test("backtest page uses store cover and meta limit", () => {
   assert.match(factor, /IndexPoolButtons/);
   const api = readFileSync(join(root, "src/lib/api.ts"), "utf8");
   assert.match(api, /backtestIndexPool/);
+});
+
+test("data page sync poll is quiet and pauses when hidden", () => {
+  const data = readFileSync(join(root, "src/pages/Data.tsx"), "utf8");
+  assert.match(data, /load\(\{ quiet: true \}\)/);
+  assert.match(data, /document\.hidden/);
+  assert.match(data, /visibilitychange/);
+});
+
+test("fin window first row does not prefetch company pack", () => {
+  const page = readFileSync(join(root, "src/pages/FinWindow.tsx"), "utf8");
+  const ctx = readFileSync(join(root, "src/components/fin/FinContext.tsx"), "utf8");
+  assert.match(page, /lazy\(\(\) =>/);
+  assert.doesNotMatch(page, /import \{ FinCompanyPanel/);
+  assert.doesNotMatch(page, /import \{ FinTrendPanel/);
+  assert.doesNotMatch(page, /import \{ FinPeerPanel/);
+  assert.match(ctx, /firstReady/);
+  assert.match(ctx, /firstReady && Boolean\(company\.code\)/);
+});
+
+test("header does not prefetch /fin on every page", () => {
+  const header = readFileSync(join(root, "src/components/cockpit/CockpitHeader.tsx"), "utf8");
+  assert.match(header, /prefetch="intent"/);
+  assert.doesNotMatch(header, /prefetch=\{l\.to === "\/fin"/);
+  assert.doesNotMatch(header, /prefetch="render"/);
+});
+
+test("header clock is isolated and pauses when hidden", () => {
+  const header = readFileSync(join(root, "src/components/cockpit/CockpitHeader.tsx"), "utf8");
+  const clock = readFileSync(join(root, "src/hooks/useClock.ts"), "utf8");
+  assert.match(header, /function HeaderClock/);
+  assert.match(header, /<HeaderClock \/>/);
+  assert.match(header, /const now = useClock\(1000\)/);
+  assert.match(clock, /document\.hidden/);
+  assert.match(clock, /visibilitychange/);
+});
+
+test("Geist is Latin-only so CJK pages skip the file", () => {
+  const fonts = readFileSync(join(root, "src/fonts.css"), "utf8");
+  assert.match(fonts, /unicode-range/);
+  assert.match(fonts, /U\+0000-00FF/);
+});
+
+test("research page form does not import echarts", () => {
+  const src = readFileSync(join(root, "src/pages/Research.tsx"), "utf8");
+  assert.doesNotMatch(src, /from "echarts"/);
+  assert.match(src, /CorrHeat/);
+  assert.match(src, /ResearchKlineChart/);
+  const charts = readFileSync(join(root, "src/pages/research/ResearchCharts.tsx"), "utf8");
+  assert.match(charts, /from "echarts"/);
 });

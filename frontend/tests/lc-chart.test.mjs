@@ -89,7 +89,7 @@ test("lcChart 是 K/分时共用封装, 不画 TradingView logo", () => {
 test("四张 K/分时卡走 LC, 不直接 echarts.init", () => {
   for (const rel of [
     "src/components/ashare/AShareLcPane.tsx",
-    "src/pages/UsMarket.tsx",
+    "src/pages/us/UsKlineChart.tsx",
     "src/components/arb/SpreadChart.tsx",
     "src/components/deriv/OptionChartCard.tsx",
   ]) {
@@ -106,7 +106,7 @@ test("四张 K/分时卡走 LC, 不直接 echarts.init", () => {
   }
   const ashare = readFileSync(join(root, "src/pages/AShareLightChart.tsx"), "utf8");
   const pane = readFileSync(join(root, "src/components/ashare/AShareLcPane.tsx"), "utf8");
-  const us = readFileSync(join(root, "src/pages/UsMarket.tsx"), "utf8");
+  const us = readFileSync(join(root, "src/pages/us/UsKlineChart.tsx"), "utf8");
   const arb = readFileSync(join(root, "src/components/arb/SpreadChart.tsx"), "utf8");
   assert.match(pane, /setLogScale/);
   assert.match(us, /setLogScale/);
@@ -174,6 +174,8 @@ test("四张 K/分时卡走 LC, 不直接 echarts.init", () => {
   assert.doesNotMatch(arb, /ensureUpDown/);
   assert.match(pane, /\[wmName, code\]/);
   assert.match(ashare, /AShareLcPane/);
+  assert.match(ashare, /AShareLcPaneLazy/);
+  assert.doesNotMatch(ashare, /import \{ AShareLcPane \}/);
   assert.match(ashare, /createSeriesGate/);
   assert.match(ashare, /if \(!snap\) return/);
   assert.match(pane, /LC throws Value is null/);

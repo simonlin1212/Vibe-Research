@@ -49,23 +49,31 @@ test("macro page hangs CTFI, not quote hub", () => {
   assert.doesNotMatch(catalog, /usTNX|DINIW|US10Y/);
   assert.doesNotMatch(page, /ovlabMarket/);
   assert.doesNotMatch(goods, /api\.ctfi/);
+  assert.match(page, /lazy\(\(\) =>/);
+  assert.doesNotMatch(page, /import \{ BondPanel/);
+  assert.match(page, /firstReady/);
+  assert.match(page, /CtfiChart tick=\{tick\} ready=\{ready\}/);
 });
 
 test("LPR 月度折线走 LC, 不另开 ECharts", () => {
-  const lpr = readFileSync(join(root, "src/components/macro/LprPanel.tsx"), "utf8");
-  assert.match(lpr, /export function lprChartPoints/);
-  assert.match(lpr, /useLcChart\("glance"\)/);
-  assert.match(lpr, /LineSeries/);
-  assert.match(lpr, /LcWell/);
-  assert.match(lpr, /LcHoverTag/);
-  assert.match(lpr, /useLcHoverTag/);
-  assert.match(lpr, /setPaneWatermark/);
-  assert.match(lpr, /function LprChart/);
-  assert.match(lpr, /function LprTip/);
-  assert.match(lpr, /one_year/);
-  assert.match(lpr, /five_year/);
-  assert.doesNotMatch(lpr, /echarts\.init/);
-  assert.doesNotMatch(lpr, /from "echarts"/);
+  const panel = readFileSync(join(root, "src/components/macro/LprPanel.tsx"), "utf8");
+  const chart = readFileSync(join(root, "src/components/macro/LprChart.tsx"), "utf8");
+  assert.match(panel, /lazy\(\(\) =>/);
+  assert.doesNotMatch(panel, /from "@\/lib\/lcChart"/);
+  assert.match(chart, /export function lprChartPoints/);
+  assert.match(chart, /useLcChart\("glance"\)/);
+  assert.match(chart, /LineSeries/);
+  assert.match(chart, /LcWell/);
+  assert.match(chart, /LcHoverTag/);
+  assert.match(chart, /useLcHoverTag/);
+  assert.match(chart, /setPaneWatermark/);
+  assert.match(chart, /export function LprChart/);
+  assert.match(chart, /function LprTip/);
+  assert.match(chart, /one_year/);
+  assert.match(chart, /five_year/);
+  assert.doesNotMatch(chart, /echarts\.init/);
+  assert.doesNotMatch(chart, /from "echarts"/);
+  assert.doesNotMatch(panel, /echarts\.init/);
 });
 
 function lprChartPoints(rows) {

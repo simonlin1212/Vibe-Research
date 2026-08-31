@@ -6,17 +6,13 @@ import {
   ListOrdered, Globe, Layers, BarChart3,
   Activity, Star, Flame, ScrollText, LineChart,
 } from "lucide-react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { AskAiButton } from "@/components/ui/AskAiButton";
 import { CockpitLayout, type CockpitRow } from "@/components/cockpit/CockpitLayout";
 import { Chip, ChipGroup } from "@/components/ui/SectionHeader";
+import { Md } from "@/components/ui/Md";
 import { PageFallback } from "@/components/ui/PageFallback";
 import { ReviewSentimentPanel } from "@/components/review/ReviewSentimentPanel";
-import { ReviewBoardsSeg } from "@/components/review/ReviewBoardsSeg";
-import { ReviewMoneySeg } from "@/components/review/ReviewMoneySeg";
 import { ReviewRiskSeg } from "@/components/review/ReviewRiskSeg";
-import { ChainPanel } from "@/components/review/ChainPanel";
 import { WorldIndexPanel } from "@/components/cockpit/WorldIndexPanel";
 import { SectorHotBar, SectorHotPanel, type SectorKind } from "@/components/cockpit/SectorHotPanel";
 import { BoardFlowLivePanel } from "@/components/cockpit/BoardFlowLivePanel";
@@ -34,13 +30,31 @@ import { hasLlm, chatStream } from "@/lib/llm";
 const AShareLightChart = lazy(() =>
   import("@/pages/AShareLightChart").then((m) => ({ default: m.AShareLightChart })),
 );
+const ReviewBoardsSeg = lazy(() =>
+  import("@/components/review/ReviewBoardsSeg").then((m) => ({ default: m.ReviewBoardsSeg })),
+);
+const ReviewMoneySeg = lazy(() =>
+  import("@/components/review/ReviewMoneySeg").then((m) => ({ default: m.ReviewMoneySeg })),
+);
+const ChainPanel = lazy(() =>
+  import("@/components/review/ChainPanel").then((m) => ({ default: m.ChainPanel })),
+);
 
 /** 行情观察订了外盘, 跟报价中心同一间隔. */
 function WatchPace() {
   const [ms, setMs] = useState(() => hubPollMs(QUOTE_POLL_MS, new Date(), true));
   useEffect(() => {
-    const id = window.setInterval(() => setMs(hubPollMs(QUOTE_POLL_MS, new Date(), true)), 15_000);
-    return () => window.clearInterval(id);
+    const beat = () => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      setMs(hubPollMs(QUOTE_POLL_MS, new Date(), true));
+    };
+    const id = window.setInterval(beat, 15_000);
+    const onVis = () => { if (!document.hidden) beat(); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", onVis);
+    };
   }, []);
   return <span className="text-[10px] tabular-nums text-slate-500">{Math.round(ms / 1000)}s</span>;
 }
@@ -318,14 +332,20 @@ export function DailyReview() {
                   onRight={setMoneyRight}
                 />
               ) : d.seg === "boards" ? (
-                <ReviewBoardsSeg
-                  lhb={d.lhb}
-                  lhbDone={d.lhbDone}
-                />
+                <Suspense fallback={reviewPending(false, "table")}>
+                  <ReviewBoardsSeg
+                    lhb={d.lhb}
+                    lhbDone={d.lhbDone}
+                  />
+                </Suspense>
               ) : d.seg === "chain" ? (
-                <ChainPanel />
+                <Suspense fallback={reviewPending(false, "table")}>
+                  <ChainPanel />
+                </Suspense>
               ) : (
-                <ReviewMoneySeg {...moneyProps} />
+                <Suspense fallback={reviewPending(false, "table")}>
+                  <ReviewMoneySeg {...moneyProps} />
+                </Suspense>
               )}
             </div>
           ),
@@ -431,7 +451,7 @@ export function DailyReview() {
           )}
           {review ? (
             <div className="prose prose-sm dark:prose-invert mt-3 max-w-none text-slate-200">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{review}</ReactMarkdown>
+              <Md>{review}</Md>
             </div>
           ) : null}
         </div>

@@ -341,8 +341,17 @@ export function OptionChartCard({ pick, mode, tick, alerts = NO_ALERTS, hasNight
   const [days, setDays] = useState<MinuteDays>(loadDays);
   const [, pulse] = useState(0);
   useEffect(() => {
-    const id = window.setInterval(() => pulse((n) => n + 1), 30_000);
-    return () => window.clearInterval(id);
+    const beat = () => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      pulse((n) => n + 1);
+    };
+    const id = window.setInterval(beat, 30_000);
+    const onVis = () => { if (!document.hidden) pulse((n) => n + 1); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", onVis);
+    };
   }, []);
   const live = derivSession().live;
   const bag = useRef<{

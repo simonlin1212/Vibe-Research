@@ -19,15 +19,19 @@ test("the existing markdown stack renders common AI response formatting", () => 
 });
 
 test("Ask AI renders assistant messages with the markdown stack", async () => {
+  const md = await readFile(new URL("../src/components/ui/Md.tsx", import.meta.url), "utf8");
+  assert.match(md, /import\("react-markdown"\)/);
+  assert.match(md, /import\("remark-gfm"\)/);
   const source = await readFile(
     new URL("../src/components/ui/AskAiButton.tsx", import.meta.url),
     "utf8",
   );
 
-  assert.match(source, /import ReactMarkdown from "react-markdown";/);
-  assert.match(source, /import remarkGfm from "remark-gfm";/);
+  assert.match(source, /import \{ Md \} from "@\/components\/ui\/Md"/);
+  assert.doesNotMatch(source, /from "react-markdown"/);
+  assert.doesNotMatch(source, /from "remark-gfm"/);
   assert.match(
     source,
-    /m\.role === "assistant"\s*\?\s*\(\s*<div className="prose[^"]*">\s*<ReactMarkdown remarkPlugins=\{\[remarkGfm\]\}>\{m\.content\}<\/ReactMarkdown>\s*<\/div>/s,
+    /m\.role === "assistant"\s*\?\s*\(\s*<div className="prose[^"]*">\s*<Md>\{m\.content\}<\/Md>\s*<\/div>/s,
   );
 });

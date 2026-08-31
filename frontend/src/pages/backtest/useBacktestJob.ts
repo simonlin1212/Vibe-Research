@@ -11,15 +11,19 @@ export function useBacktestJob(active: boolean) {
     }
     let stop = false;
     const tick = () => {
+      if (typeof document !== "undefined" && document.hidden) return;
       void api.backtestProgress().then((row) => {
         if (!stop) setJob(row);
       }).catch(() => undefined);
     };
     tick();
     const id = window.setInterval(tick, 400);
+    const onVis = () => { if (!document.hidden) tick(); };
+    document.addEventListener("visibilitychange", onVis);
     return () => {
       stop = true;
       window.clearInterval(id);
+      document.removeEventListener("visibilitychange", onVis);
     };
   }, [active]);
 

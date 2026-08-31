@@ -32,11 +32,12 @@ export function BoardFlowLivePanel({
   curvesEnabled?: boolean;
 }) {
   const { data: ranks, error, updated } = usePolling(() => api.boardFlowIntraday(20, false), POLL_MS, []);
+  const rankReady = ranks != null || error != null;
   const { data: full } = usePolling(
     () => api.boardFlowIntraday(20, true),
     POLL_MS,
     [],
-    curvesEnabled,
+    curvesEnabled && rankReady,
   );
   const data = full?.some((f) => (f.points?.length ?? 0) > 2) ? full : ranks;
   const [progress, setProgress] = useState(1);

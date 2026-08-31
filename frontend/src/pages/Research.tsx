@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from "react";
-import * as echarts from "echarts";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { PageFallback } from "@/components/ui/PageFallback";
 import {
   api,
   ApiError,
@@ -24,6 +24,13 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "f13", label: "13F 环比" },
   { id: "kline", label: "扩展日 K" },
 ];
+
+const CorrHeat = lazy(() =>
+  import("@/pages/research/ResearchCharts").then((m) => ({ default: m.CorrHeat })),
+);
+const ResearchKlineChart = lazy(() =>
+  import("@/pages/research/ResearchCharts").then((m) => ({ default: m.ResearchKlineChart })),
+);
 
 const CORR_KEY = "vr-research-corr";
 const ETF_KEY = "vr-research-etf";
@@ -92,8 +99,6 @@ function CorrPanel() {
   const [data, setData] = useState<ResearchCorrelation | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const elRef = useRef<HTMLDivElement>(null);
-  const chartRef = useRef<echarts.ECharts | null>(null);
 
   async function load(codes = input, win = windowN) {
     setLoading(true);
@@ -114,70 +119,6 @@ function CorrPanel() {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- initial
   }, []);
-
-  useEffect(() => {
-    const el = elRef.current;
-    if (!el || !data?.matrix?.length) return;
-    const chart = echarts.init(el, undefined, { renderer: "canvas" });
-    chartRef.current = chart;
-    const labels = data.codes;
-    const heat = data.matrix.flatMap((row, i) =>
-      row.map((v, j) => [j, i, v == null ? "-" : v]),
-    );
-    chart.setOption({
-      backgroundColor: "transparent",
-      tooltip: {
-        formatter: (p: { data?: [number, number, number | string] }) => {
-          const d = p.data;
-          if (!d) return "";
-          return `${labels[d[1]]} × ${labels[d[0]]}<br/>r = ${d[2]}`;
-        },
-      },
-      grid: { left: 72, right: 24, top: 16, bottom: 48 },
-      xAxis: {
-        type: "category",
-        data: labels,
-        axisLabel: { color: "#94a3b8", fontSize: 10, rotate: 30 },
-        axisLine: { lineStyle: { color: "#334155" } },
-      },
-      yAxis: {
-        type: "category",
-        data: labels,
-        axisLabel: { color: "#94a3b8", fontSize: 10 },
-        axisLine: { lineStyle: { color: "#334155" } },
-      },
-      visualMap: {
-        min: -1,
-        max: 1,
-        calculable: true,
-        orient: "horizontal",
-        left: "center",
-        bottom: 0,
-        textStyle: { color: "#94a3b8", fontSize: 10 },
-        inRange: { color: ["#fb7185", "#1e293b", "#ffcc00"] },
-      },
-      series: [
-        {
-          type: "heatmap",
-          data: heat,
-          label: {
-            show: labels.length <= 8,
-            color: "#e2e8f0",
-            fontSize: 10,
-            formatter: (p: { data?: [number, number, number | string] }) =>
-              p.data && p.data[2] !== "-" ? Number(p.data[2]).toFixed(2) : "",
-          },
-        },
-      ],
-    });
-    const onResize = () => chart.resize();
-    window.addEventListener("resize", onResize);
-    return () => {
-      window.removeEventListener("resize", onResize);
-      chart.dispose();
-      chartRef.current = null;
-    };
-  }, [data]);
 
   return (
     <GlassCard>
@@ -222,8 +163,12 @@ function CorrPanel() {
       ) : null}
       {!data && !error ? (
         <EmptyState title="相关矩阵" loading={loading} />
+      ) : data?.matrix?.length ? (
+        <Suspense fallback={<PageFallback />}>
+          <CorrHeat data={data} />
+        </Suspense>
       ) : (
-        <div ref={elRef} className="h-[420px] w-full" />
+        <EmptyState title="相关矩阵" />
       )}
       <p className="mt-2 text-[11px] text-slate-500">
         Pearson, 重叠日收益。青=同向, 玫瑰=反向。不是预测, 窗口变了数字就会变。
@@ -517,7 +462,6 @@ function KlinePanel({ sources }: { sources: ResearchSources | null }) {
   const [data, setData] = useState<ResearchKline | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const elRef = useRef<HTMLDivElement>(null);
 
   async function load(symbol = input, src = source) {
     setLoading(true);
@@ -538,48 +482,6 @@ function KlinePanel({ sources }: { sources: ResearchSources | null }) {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  useEffect(() => {
-    const el = elRef.current;
-    if (!el || !data?.bars?.length) return;
-    const chart = echarts.init(el, undefined, { renderer: "canvas" });
-    const bars = data.bars;
-    chart.setOption({
-      backgroundColor: "transparent",
-      tooltip: { trigger: "axis" },
-      grid: { left: 48, right: 16, top: 12, bottom: 28 },
-      xAxis: {
-        type: "category",
-        data: bars.map((b) => b.date),
-        axisLabel: { color: "#64748b", fontSize: 10 },
-        axisLine: { lineStyle: { color: "#334155" } },
-      },
-      yAxis: {
-        type: "value",
-        scale: true,
-        splitLine: { lineStyle: { color: "#1e293b" } },
-        axisLabel: { color: "#64748b", fontSize: 10 },
-      },
-      series: [
-        {
-          type: "candlestick",
-          data: bars.map((b) => [b.open, b.close, b.low, b.high]),
-          itemStyle: {
-            color: "#f43f5e",
-            color0: "#10b981",
-            borderColor: "#f43f5e",
-            borderColor0: "#10b981",
-          },
-        },
-      ],
-    });
-    const onResize = () => chart.resize();
-    window.addEventListener("resize", onResize);
-    return () => {
-      window.removeEventListener("resize", onResize);
-      chart.dispose();
-    };
-  }, [data]);
 
   return (
     <GlassCard>
@@ -628,7 +530,15 @@ function KlinePanel({ sources }: { sources: ResearchSources | null }) {
         </p>
       )}
       {error && <p className="mb-2 text-[12px] text-rose-300">{error}</p>}
-      {loading && !data ? <EmptyState title="K 线" loading /> : <div ref={elRef} className="h-[380px] w-full" />}
+      {loading && !data ? (
+        <EmptyState title="K 线" loading />
+      ) : data?.bars?.length ? (
+        <Suspense fallback={<PageFallback />}>
+          <ResearchKlineChart data={data} />
+        </Suspense>
+      ) : (
+        <EmptyState title="K 线" />
+      )}
     </GlassCard>
   );
 }

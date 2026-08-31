@@ -90,6 +90,7 @@ test("overlayAxis 窄幅隐波只占约三成高度, 空值忽略", () => {
 test("OptionChartCard 用 hoverIdxOf, 分时白线无均价", async () => {
   const src = await readFile(new URL("../src/components/deriv/OptionChartCard.tsx", import.meta.url), "utf8");
   const lc = await readFile(new URL("../src/lib/lcChart.ts", import.meta.url), "utf8");
+  assert.ok(src.includes("document.hidden"), "分时会话心跳隐藏页暂停");
   assert.ok(src.includes("export function hoverIdxOf"), "十字光标走 hoverIdxOf");
   assert.ok(src.includes("seriesDataIndices"), "类目轴读 dataIndex");
   assert.ok(src.includes("minuteLineOpts"), "分时白线");
@@ -196,6 +197,11 @@ test("驾驶舱日K分时叠在同一张卡", async () => {
   assert.ok(src.includes("undChart"), "行情观察行带标的码给图卡");
   assert.ok(src.includes("findRowByUnd"), "T 表换品种从行情观察行出主力码");
   assert.ok(src.includes("undChart?.code"), "有标的码时空 prodUnd 也出图");
+  assert.match(src, /lazy\(\(\) =>/);
+  assert.match(src, /TermStructPanel/);
+  assert.match(src, /TQuotePanel/);
+  assert.doesNotMatch(src, /import \{ TermStructPanel/);
+  assert.doesNotMatch(src, /import \{ TQuotePanel/);
 });
 
 test("IndexFutPanel 行点击出标的图, 不再跳独立 K线页", async () => {
