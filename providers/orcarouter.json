@@ -1,0 +1,31 @@
+{
+  "id": "orcarouter",
+  "name": "OrcaRouter(OpenAI 兼容网关 · 自适应路由 / 自动故障转移 / agent 治理)",
+  "wire_api": "responses",
+  "base_url": "https://api.orcarouter.ai/v1",
+  "env_key": "ORCAROUTER_API_KEY",
+  "auth_modes": [
+    "api_key"
+  ],
+  "requires_openai_auth": false,
+  "default_model": "orcarouter/auto",
+  "responses_support": "native",
+  "stream_format": "responses-sse",
+  "tool_calls": true,
+  "reasoning": "orcarouter/auto 实测回传 reasoning 项(由路由到的模型决定);reasoning.summary 接受",
+  "context_limit_tokens": null,
+  "retryable_errors": [
+    "429",
+    "5xx",
+    "stream-idle"
+  ],
+  "known_incompatibilities": [
+    "orcarouter/auto 下实际模型由路由器按请求挑选(实测路由到 deepseek-v4-pro),行为(reasoning / 多轮 / 上下文长度)随路由到的厂商变化",
+    "多轮 previous_response_id 是否被遵守取决于路由到的模型;store 恒为 true"
+  ],
+  "matrix": {
+    "status": "untested",
+    "note": "2026-08-31 live 探针:POST /v1/responses → 200 原生 Responses 对象;responses-sse 流式;text.format.type=json_schema 接受。完整 10 项用 provider_matrix.ts 跑后回填"
+  },
+  "verified_at": "2026-08-31"
+}
