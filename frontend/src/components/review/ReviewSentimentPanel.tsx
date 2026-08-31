@@ -1,8 +1,9 @@
 import { type ReactNode } from "react";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { FearGreedPanel } from "@/components/cockpit/FearGreedPanel";
+import { HsgtStrip } from "@/components/review/HsgtStrip";
 import { pctColor } from "@/components/review/format";
-import type { MarketBreadth, MarketSentiment } from "@/lib/api";
+import type { HsgtLive, MarketBreadth, MarketSentiment } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 function fmtPct(v: number | null | undefined): string {
@@ -35,6 +36,7 @@ interface Props {
   ovDone: boolean;
   pending: ReactNode;
   breadth?: MarketBreadth | null;
+  hsgt?: HsgtLive | null;
 }
 
 /** TickFlow-style up/down distribution + market breadth. */
@@ -43,6 +45,7 @@ export function ReviewSentimentPanel({
   ovDone,
   pending,
   breadth,
+  hsgt,
 }: Props) {
   const up = breadth?.up ?? sentiment?.up ?? 0;
   const down = breadth?.down ?? sentiment?.down ?? 0;
@@ -127,6 +130,7 @@ export function ReviewSentimentPanel({
           <FearGreedPanel compact className="shrink-0" />
         </div>
       )}
+      <HsgtStrip data={hsgt ?? null} />
     </div>
   );
 }

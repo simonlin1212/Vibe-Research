@@ -10,7 +10,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@fontsource-variable/jetbrains-mono": "^5.3.0",
     "clsx": "^2.1.0",
     "echarts": "^6.0.0",
     "geist": "^1.7.2",

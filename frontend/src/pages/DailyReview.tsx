@@ -153,6 +153,7 @@ export function DailyReview() {
               ovDone={d.ovDone}
               pending={reviewPending(false, "lines")}
               breadth={d.breadth}
+              hsgt={d.hsgt}
             />
           ),
         },

@@ -203,7 +203,7 @@ cd frontend && npm install && npm run dev
   - Qwen / DeepSeek：装各自 CLI 并登录
 - 在「接入 AI 页 → 订阅接入」选一个即可，**无需填 key**。
 - 原理：后端 `cli_runtime.py` 检测本机命令并 `spawn` 它一次性作答（数据已在提示词里）。⚠️ CLI 不做多轮工具调用，适合「复盘 / 今日要点 / 个股页问 AI」这类**数据已备好**的场景；要 AI 自己现场调数据工具的自由问答，用下面的「API 接入」。
-- **复盘快照**：点「AI 复盘 / 问 AI」时，前端把当前驾驶舱各格打成一份文本（指数 / 涨跌分布 / 涨跌停 / 板块 / 资金 / 个股榜 / 商品 / 实时热点 7×24 全文 / 自选 / 龙虎 / 利率），缺格标明「未取到」。实现见 `frontend/src/lib/reviewContext.ts`。
+- **复盘快照**：点「AI 复盘 / 问 AI」时，网页调 `POST /api/market/review-context`（与定时邮件同一段打包口），缺格标明「未取到」。
 - **定时复盘邮件**（可选）：A 股交易日收盘后后端自己跑一轮同样的总结，SMTP 发到你的邮箱（休市日不发）。开关 / 时间 / 收件人在接入 AI 页改。网页 key 定时任务读不到，必须在 `backend/.env` 再配一份模型 + SMTP。详见 `backend/.env.example`。
 
 ### 2. API 接入（填自己的 key）

@@ -98,6 +98,7 @@ test("breadth strip is not three cells", async () => {
   assert.match(src, /flatShare/);
   assert.match(src, /平均 /);
   assert.match(src, /中位 /);
+  assert.match(src, /HsgtStrip/);
   assert.doesNotMatch(src, /家数/);
   assert.doesNotMatch(src, /grid-cols-3 gap-1.5/);
 });

@@ -36,7 +36,7 @@ export function HsgtStrip({ data }: { data: HsgtLive | null }) {
   const s = latest?.sgt_yi;
 
   return (
-    <div className="flex items-center gap-2 border-b border-slate-700/40 px-2 py-1">
+    <div className="flex items-center gap-2 border-t border-slate-700/40 py-1">
       <span className="shrink-0 text-[10px] text-slate-500">北向</span>
       {hgt.length > 1 ? <Spark values={hgt} /> : <span className="text-[10px] text-slate-600">暂无</span>}
       <div className="ml-auto flex items-center gap-2 font-mono text-[10px] tabular-nums">

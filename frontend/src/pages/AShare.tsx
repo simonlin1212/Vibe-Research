@@ -20,10 +20,6 @@ export function AShare() {
   const overlay = parseOverlay(params.get("tab"));
 
   useEffect(() => {
-    void import("@/pages/FinWindow");
-  }, []);
-
-  useEffect(() => {
     const raw = params.get("tab");
     if (raw === "kline" || raw === "chart" || raw === "stock") {
       const p = new URLSearchParams(params);
