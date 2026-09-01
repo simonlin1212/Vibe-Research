@@ -73,6 +73,8 @@ test("chart last bar overlays quote hub and minutes keep polling", async () => {
   assert.match(chartSrc, /overlayQuoteBar\(daily\.bars/);
   assert.match(chartSrc, /isFuturesCode\(code\) \? HUB_POLL_FUTURES_MS : MINUTE_POLL_MS/);
   assert.match(chartSrc, /quiet: true/);
+  assert.match(chartSrc, /if \(opts\?\.quiet\) return;/);
+  assert.doesNotMatch(chartSrc, /if \(opts\?\.quiet\) \{\s*setErr/);
   assert.match(chartSrc, /isFuturesCode\(selected\)/);
   assert.doesNotMatch(chartSrc, /api\.quote\(/);
 });

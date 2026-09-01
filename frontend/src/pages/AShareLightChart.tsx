@@ -198,10 +198,8 @@ function useAShareSeries(code: string, res: "1" | "5" | "1D", num: number, poll 
       setErr(null);
     } catch (e) {
       if (!gate.current.take(mine, true)) return;
-      if (opts?.quiet) {
-        setErr(e instanceof ApiError ? e.message : "K 线加载失败");
-        return;
-      }
+      // Quiet refresh keeps last-good. Do not banner over a chart that already painted.
+      if (opts?.quiet) return;
       setBars([]);
       setMeta(null);
       setErr(e instanceof ApiError ? e.message : "K 线加载失败");
