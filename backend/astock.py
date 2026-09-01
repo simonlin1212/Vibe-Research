@@ -54,15 +54,42 @@ def get_prefix(code: str) -> str:
     """6 位代码 → 交易所前缀。5 开头是沪市基金/ETF（51/56/58 等），深市基金 15/16 开头走默认 sz。
 
     920 是北交所新代码; 900 仍是沪 B。4x/8x 是北交所老号段（多数已迁 920）。
-    000001 走 sz（平安银行）。上证须显式传 sh000001。
+    000001 走 sz（平安银行）。上证须显式传 sh000001 或 000001.SH。
+    显式前缀/后缀优先于号段（a-stock-data v3.7.1）。裸 000016 仍是深市个股, 不进沪指数白名单。
     """
-    if code.startswith("920"):
+    raw = (code or "").strip()
+    low = raw.lower()
+    if "." in low:
+        body, _, suf = low.rpartition(".")
+        if suf in ("sh", "sz", "bj") and re.fullmatch(r"\d{6}", body):
+            return suf
+    if len(low) >= 8 and low[:2] in ("sh", "sz", "bj") and re.fullmatch(r"\d{6}", low[2:]):
+        return low[:2]
+    if low.startswith("920"):
         return "bj"
-    if code.startswith(("6", "9", "5")):
+    if low.startswith(("6", "9", "5")):
         return "sh"
-    if code.startswith(("4", "8")):
+    if low.startswith(("4", "8")):
         return "bj"
     return "sz"
+
+
+def em_market_code(code: str) -> int:
+    """Eastmoney market flag: 1=SH, 0=SZ/BJ."""
+    return 1 if get_prefix(code) == "sh" else 0
+
+
+def em_secid(code: str) -> str:
+    """Eastmoney secid. 000016.SH -> 1.000016 (SSE 50); bare 000016 -> 0.000016."""
+    raw = (code or "").strip()
+    try:
+        digits = norm_ticker(raw)
+    except ValueError:
+        digits = raw
+    return f"{em_market_code(raw)}.{digits}"
+
+
+_CNINFO_MARKET = {"sh": "沪市", "sz": "深市", "bj": "北交所"}
 
 
 # Whole-string match; prefix and suffix are mutually exclusive (SKILL v3.6.0).
@@ -178,6 +205,7 @@ def resolve_symbol(code: str) -> str:
     """Normalize to tencent/catalog symbol: sh600519 / hkHSI / usIXIC / jpN225 / ksKOSPI / whUSDCNY.
 
     Accepts bare 6-digit (uses get_prefix), explicit sh|sz|bj + 6 digits,
+    or suffix 000016.SH (上证50; bare 000016 is still 深康佳).
     HK indices hkHSI / hkHSTECH, US indices usDJI / usIXIC / usINX / usVIX / usSOXX,
     JP/KR jpN225 / ksKOSPI, or FX whUSDCNY (case-insensitive input, canonical case out).
     Indices like 上证 must be passed as sh000001 (bare 000001 = 平安银行).
@@ -201,6 +229,9 @@ def resolve_symbol(code: str) -> str:
         return f"{m.group(1)}{m.group(2)}"
     if re.fullmatch(r"\d{6}", low):
         return f"{get_prefix(low)}{low}"
+    suf = re.fullmatch(r"(\d{6})\.(sh|sz|bj)", low)
+    if suf:
+        return f"{suf.group(2)}{suf.group(1)}"
     return ""
 
 
@@ -689,7 +720,7 @@ def cls_telegraph(page_size: int = 50) -> list[dict]:
 def disclosure(code: str) -> list[dict]:
     """巨潮公告全文列表（akshare cninfo，本环境不稳，保留作备用）。"""
     ak = _akshare()
-    market = "沪市" if code.startswith("6") else ("北交所" if code.startswith("8") else "深市")
+    market = _CNINFO_MARKET.get(get_prefix(code), "深市")
     df = ak.stock_zh_a_disclosure_report_cninfo(symbol=code, market=market)
     return df.head(30).to_dict("records") if df is not None and not df.empty else []
 
@@ -1514,9 +1545,8 @@ def dividend_history(code: str, page_size: int = 20) -> list[dict]:
 
 def stock_fund_flow_120d(code: str) -> list[dict]:
     """个股资金流（日级，最近 120 交易日）：主力 / 小单 / 中单 / 大单 / 超大单净流入（元）。"""
-    market_code = 1 if code.startswith("6") else 0
     params = {
-        "secid": f"{market_code}.{code}",
+        "secid": em_secid(code),
         "fields1": "f1,f2,f3,f7",
         "fields2": "f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61,f62,f63,f64,f65",
         "lmt": "120",
@@ -1528,7 +1558,7 @@ def stock_fund_flow_120d(code: str) -> list[dict]:
     except Exception:
         return []
     rows = []
-    for line in d.get("data", {}).get("klines", []):
+    for line in (d.get("data") or {}).get("klines") or []:
         p = line.split(",")
         if len(p) >= 6:
             def _f(x):
@@ -1549,11 +1579,12 @@ def eastmoney_fund_flow_minute(code: str) -> list[dict]:
     返回 [{time, main_net, small_net, mid_net, large_net, super_net}, ...]。
     """
     c = (code or "").strip()
-    if not re.fullmatch(r"\d{6}", c):
+    try:
+        norm_ticker(c)
+    except ValueError:
         return []
-    secid = f"1.{c}" if c.startswith("6") else f"0.{c}"
     params = {
-        "secid": secid,
+        "secid": em_secid(c),
         "klt": 1,
         "fields1": "f1,f2,f3,f7",
         "fields2": "f51,f52,f53,f54,f55,f56,f57",
@@ -1909,8 +1940,7 @@ def lockup_expiry(code: str, trade_date: str | None = None, forward_days: int = 
 
 def concept_blocks(code: str) -> dict:
     """个股所属板块/概念归属（东财 slist，行业/概念/地域混合，板块名自解释）。"""
-    market_code = 1 if code.startswith("6") else 0
-    params = {"fltt": "2", "invt": "2", "secid": f"{market_code}.{code}",
+    params = {"fltt": "2", "invt": "2", "secid": em_secid(code),
               "spt": "3", "pi": "0", "pz": "200", "po": "1", "fields": "f12,f14,f3,f128"}
     headers = {"User-Agent": UA, "Referer": "https://quote.eastmoney.com/"}
     try:
@@ -1929,10 +1959,11 @@ def hot_concepts(code: str) -> list[dict]:
     import requests
 
     try:
-        prefix = "SH" if code.startswith("6") else "SZ"
+        digits = norm_ticker(code)
+        prefix = get_prefix(code).upper()
         r = requests.post(
             "https://emappdata.eastmoney.com/stockrank/getHotStockRankList",
-            json={"appId": "appId01", "globalId": "786e4c21-70dc-435a-93bb-38", "srcSecurityCode": prefix + code},
+            json={"appId": "appId01", "globalId": "786e4c21-70dc-435a-93bb-38", "srcSecurityCode": prefix + digits},
             headers={"User-Agent": UA}, timeout=10)
         data = r.json().get("data") or []
     except Exception:

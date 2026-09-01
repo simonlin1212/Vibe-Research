@@ -370,3 +370,105 @@ def investor_qa(code: str = Query(...)):
     except Exception as e:
         raise HTTPException(502, f"互动易异常：{e}") from e
 
+
+def _research(key: str, slot: str, ttl: float, fetch):
+    """v3.7 extras: last-good cache, 501 if optional package missing."""
+    try:
+        return {"data": _read(key, slot, ttl, fetch)}
+    except astock.DependencyMissing as e:
+        raise HTTPException(501, str(e)) from e
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(502, f"{key} 异常：{e}") from e
+
+
+def _ticker(code: str) -> str:
+    try:
+        return astock.norm_ticker(code)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+
+@router.get("/api/astock/chips")
+def astock_chips(
+    code: str = Query(...),
+    start: str = Query(""),
+    end: str = Query(""),
+):
+    """筹码分布 (baostock 前复权+换手). 钥匙 astock_chips, 不进预热."""
+    import astock_research as ar
+
+    code = _validate(code)
+    s, e = ar.window(start, end)
+    return _research("astock_chips", f"{code}:{s}:{e}", 3600, lambda: ar.chips(code, s, e))
+
+
+@router.get("/api/astock/adjust-factor")
+def astock_adjust_factor(code: str = Query(...), kind: str = Query("qfq")):
+    """新浪复权因子. 钥匙 astock_adj. 指数须写 000016.SH / sh000016."""
+    import astock_research as ar
+
+    raw = (code or "").strip()
+    _ticker(raw)
+    if kind not in ("qfq", "hfq"):
+        raise HTTPException(400, "kind 只能是 qfq 或 hfq")
+    return _research("astock_adj", f"{raw}:{kind}", 3600, lambda: ar.sina_adjust_factor(raw, kind))
+
+
+@router.get("/api/astock/valuation-history")
+def astock_valuation_history(
+    code: str = Query(...),
+    start: str = Query(""),
+    end: str = Query(""),
+):
+    """baostock 日频 PE/PB/PS/换手/停牌/ST. 钥匙 astock_valhist."""
+    import astock_research as ar
+
+    code = _validate(code)
+    s, e = ar.window(start, end, 365)
+    return _research(
+        "astock_valhist", f"{code}:{s}:{e}", 3600,
+        lambda: ar.baostock_valuation_history(code, s, e),
+    )
+
+
+@router.get("/api/astock/list-status")
+def astock_list_status(code: str = Query(...)):
+    """baostock 上市/退市日. 钥匙 astock_ipo."""
+    import astock_research as ar
+
+    code = _validate(code)
+    return _research("astock_ipo", code, 86400, lambda: ar.baostock_stock_basic(code))
+
+
+@router.get("/api/astock/sw-industry")
+def astock_sw_industry(code: str = Query(...), as_of: str = Query("")):
+    """申万行业变迁 as-of. 钥匙 astock_sw. 消除用今天行业套过去."""
+    import astock_research as ar
+
+    code = _validate(code)
+    day = as_of or ""
+    if day:
+        ar.window(day, day)
+    return _research("astock_sw", f"{code}:{day or 'today'}", 86400, lambda: ar.sw_industry_lookup(code, day))
+
+
+@router.get("/api/astock/pboc-sfin")
+def astock_pboc_sfin(year: int | None = Query(None)):
+    """央行社融增量原表 (2021+). 钥匙 astock_pboc, 不碰 macro_board."""
+    import astock_research as ar
+
+    slot = str(year) if year else "latest"
+    return _research("astock_pboc", slot, 86400, lambda: ar.pboc_social_financing(year))
+
+
+@router.get("/api/astock/nbs-pmi")
+def astock_nbs_pmi():
+    """统计局 PMI 原文. 钥匙 astock_nbs_pmi, 不碰 macro_board."""
+    import astock_research as ar
+
+    return _research("astock_nbs_pmi", "latest", 86400, ar.nbs_pmi)
+

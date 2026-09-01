@@ -15,12 +15,22 @@ def test_get_prefix():
     assert astock.get_prefix("510300") == "sh"   # 沪 ETF（issue #10：曾误判 sz → 行情为 0）
     assert astock.get_prefix("588000") == "sh"   # 科创 50 ETF
     assert astock.get_prefix("159915") == "sz"   # 深 ETF 15 开头走默认 sz
+    # a-stock-data v3.7.1: suffix == prefix. Bare 000016 stays 深市, not 沪指数白名单.
+    assert astock.get_prefix("000016.SH") == "sh"
+    assert astock.get_prefix("000016") == "sz"
+    assert astock.get_prefix("000016.SZ") == "sz"
+    assert astock.get_prefix("sh000016") == "sh"
+    assert astock.get_prefix("920982.BJ") == "bj"
+    assert astock.get_prefix("600519.SH") == "sh"
+    assert astock.get_prefix("SH600519") == "sh"
 
 
 def test_resolve_symbol():
     assert astock.resolve_symbol("600519") == "sh600519"
     assert astock.resolve_symbol("000001") == "sz000001"       # bare = 平安银行
     assert astock.resolve_symbol("sh000001") == "sh000001"     # 上证须显式前缀
+    assert astock.resolve_symbol("000016.SH") == "sh000016"    # 上证50, not 深康佳
+    assert astock.resolve_symbol("000016") == "sz000016"
     assert astock.resolve_symbol("SZ399006") == "sz399006"
     assert astock.resolve_symbol("hkHSI") == "hkHSI"           # case-sensitive on wire
     assert astock.resolve_symbol("hkhstech") == "hkHSTECH"
@@ -34,6 +44,37 @@ def test_resolve_symbol():
     assert astock.resolve_symbol("ksKOSPI") == "ksKOSPI"
     assert astock.resolve_symbol("kskospi") == "ksKOSPI"
     assert astock.resolve_symbol("bad") == ""
+
+
+def test_em_secid():
+    """Eastmoney secid: SH=1, SZ/BJ=0. Suffix market wins; bare 000016 stays SZ."""
+    assert astock.em_secid("000016.SH") == "1.000016"
+    assert astock.em_secid("000016") == "0.000016"
+    assert astock.em_secid("510300") == "1.510300"
+    assert astock.em_secid("588000") == "1.588000"
+    assert astock.em_secid("600519") == "1.600519"
+    assert astock.em_secid("300750") == "0.300750"
+    assert astock.em_secid("920982") == "0.920982"
+    assert astock.em_secid("159915") == "0.159915"
+
+
+def test_em_callers_not_digit6():
+    """Fund-flow / boards / hot concepts / cninfo must not guess SH from startswith 6."""
+    import inspect
+
+    for fn in (
+        astock.stock_fund_flow_120d,
+        astock.eastmoney_fund_flow_minute,
+        astock.concept_blocks,
+        astock.hot_concepts,
+        astock.disclosure,
+    ):
+        src = inspect.getsource(fn)
+        assert 'startswith("6")' not in src, fn.__name__
+    import astock_boards
+
+    assert "em_secid" in inspect.getsource(astock_boards.stock_basic_info)
+    assert 'startswith(("5", "6", "9"))' not in inspect.getsource(astock_boards.stock_basic_info)
 
 
 def test_norm_ticker():

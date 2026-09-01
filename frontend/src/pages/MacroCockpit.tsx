@@ -8,12 +8,13 @@ import { FxPanel } from "@/components/macro/FxPanel";
 import { LprPanel } from "@/components/macro/LprPanel";
 import { MoneyPanel } from "@/components/macro/MoneyPanel";
 import { MonthPanel } from "@/components/macro/MonthPanel";
+import { NbsPmiPanel, PbocSfinPanel } from "@/components/macro/OfficialPrints";
 
 const BondPanel = lazy(() =>
   import("@/components/macro/BondPanel").then((m) => ({ default: m.BondPanel })),
 );
 import { usePolling } from "@/hooks/usePolling";
-import { api, type CnBondYield, type CtfiQuote, type LprData, type MacroBoard } from "@/lib/api";
+import { api, type CnBondYield, type CtfiQuote, type LprData, type MacroBoard, type NbsPmi, type PbocSfinRow } from "@/lib/api";
 import { pctColor } from "@/components/review/format";
 import { cn } from "@/lib/utils";
 
@@ -57,12 +58,48 @@ function packItems(title: string, items: { name: string; value: number | null; p
   return lines;
 }
 
+function packOfficial(pboc: PbocSfinRow[] | null, pmi: NbsPmi | null): string[] {
+  const lines: string[] = ["", "## 人行社融"];
+  const rows = (pboc || []).filter((r) => r.month);
+  if (!rows.length) {
+    lines.push("未取到");
+  } else {
+    for (const r of rows.slice(-4)) {
+      const bits = [
+        r.afre_total != null ? `增量 ${r.afre_total}亿` : "",
+        r.rmb_loans != null ? `人民币贷款 ${r.rmb_loans}亿` : "",
+        r.government_bonds != null ? `政府债 ${r.government_bonds}亿` : "",
+      ].filter(Boolean);
+      lines.push(`${r.month} ${bits.join(" ")}`.trim());
+    }
+    lines.push("来源 人民银行社会融资规模增量统计表");
+  }
+  lines.push("", "## 统计局 PMI");
+  if (!pmi || pmi.manufacturing_pmi == null) {
+    lines.push("未取到");
+  } else {
+    lines.push(
+      `${pmi.period || "—"} 制造业 ${pmi.manufacturing_pmi} 非制造业 ${pmi.non_manufacturing_pmi} 综合 ${pmi.composite_pmi}`,
+    );
+    const size = [
+      pmi.pmi_large != null ? `大型 ${pmi.pmi_large}` : "",
+      pmi.pmi_medium != null ? `中型 ${pmi.pmi_medium}` : "",
+      pmi.pmi_small != null ? `小型 ${pmi.pmi_small}` : "",
+    ].filter(Boolean);
+    if (size.length) lines.push(size.join(" "));
+    lines.push("来源 国家统计局公开稿 · 50 荣枯");
+  }
+  return lines;
+}
+
 function packMacroContext(
   q: CtfiQuote | null,
   lpr: LprData | null,
   bond: CnBondYield | null,
   policy: CnBondYield | null,
   board: MacroBoard | null,
+  pboc: PbocSfinRow[] | null,
+  pmi: NbsPmi | null,
 ): string {
   const lines = ["# 宏观页快照"];
   lines.push("", "## LPR");
@@ -75,6 +112,7 @@ function packMacroContext(
   lines.push(...packBond("政策性金融债收益率", policy));
   lines.push(...packItems("银行间利率", board?.money?.items));
   lines.push(...packItems("月度宏观", board?.month?.items));
+  lines.push(...packOfficial(pboc, pmi));
   lines.push(...packItems("美债与美元指数", board?.us?.items));
   lines.push("", "## 美元/人民币");
   lines.push("实时价走报价中心 whUSDCNY, 见行情格子");
@@ -196,6 +234,8 @@ export function MacroCockpit() {
   const bond = usePolling(() => api.cnBondYield("treasury"), 300_000, [tick], firstReady);
   const policy = usePolling(() => api.cnBondYield("policy"), 300_000, [tick], firstReady);
   const poll = usePolling(() => api.ctfi(), 300_000, [tick], firstReady);
+  const pboc = usePolling(() => api.pbocSfin(), 300_000, [tick], firstReady);
+  const nbs = usePolling(() => api.nbsPmi(), 300_000, [tick], firstReady);
 
   useLayoutEffect(() => {
     setHeaderSlot(document.getElementById("cockpit-header-actions"));
@@ -281,7 +321,7 @@ export function MacroCockpit() {
       ],
     },
     {
-      defaultH: 0.18,
+      defaultH: 0.22,
       panels: [
         {
           id: "month",
@@ -289,11 +329,35 @@ export function MacroCockpit() {
           hint: "CPI / PPI / PMI / 社融 / M2",
           icon: <Percent size={14} />,
           accent: "#fb7185",
-          defaultW: 1,
+          defaultW: 0.28,
           mobileH: "h-[36vh]",
           right: <FreshTag updated={board.updated} />,
           bodyClassName: "overflow-hidden",
           body: <MonthPanel data={board.data} err={board.error} />,
+        },
+        {
+          id: "pboc",
+          title: "人行社融",
+          hint: "社会融资规模增量 · 月更",
+          icon: <Landmark size={14} />,
+          accent: "#f97316",
+          defaultW: 0.46,
+          mobileH: "h-[42vh]",
+          right: <FreshTag updated={pboc.updated} />,
+          bodyClassName: "overflow-hidden",
+          body: <PbocSfinPanel data={pboc.data} err={pboc.error} />,
+        },
+        {
+          id: "nbs-pmi",
+          title: "统计局 PMI",
+          hint: "采购经理指数 · 月更",
+          icon: <Activity size={14} />,
+          accent: "#22d3ee",
+          defaultW: 0.26,
+          mobileH: "h-[36vh]",
+          right: <FreshTag updated={nbs.updated} />,
+          bodyClassName: "overflow-hidden",
+          body: <NbsPmiPanel data={nbs.data} err={nbs.error} />,
         },
       ],
     },
@@ -320,6 +384,8 @@ export function MacroCockpit() {
     bond.data, bond.error, bond.updated,
     policy.data, policy.error, policy.updated,
     board.data, board.error, board.updated,
+    pboc.data, pboc.error, pboc.updated,
+    nbs.data, nbs.error, nbs.updated,
     firstReady, tick,
   ]);
 
@@ -339,13 +405,14 @@ export function MacroCockpit() {
       </button>
       <AskAiButton
         context=""
-        getContext={() => packMacroContext(poll.data, lpr.data, bond.data, policy.data, board.data)}
+        getContext={() => packMacroContext(poll.data, lpr.data, bond.data, policy.data, board.data, pboc.data, nbs.data)}
         label="问 AI"
         scopeKey="macro"
         suggestions={[
           "今天 LPR、DR007、SHIBOR 怎么读?",
           "国债和政策性金融债曲线差在哪?",
           "月度 CPI/PPI/PMI/社融/M2 和美债10Y、美元指数怎么放在一起看?",
+          "人行社融分项和统计局 PMI 荣枯怎么读?",
           "今天 CTFI 综合和中东/西非航线怎么读?",
         ]}
       />

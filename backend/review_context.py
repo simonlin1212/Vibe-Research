@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -462,6 +463,9 @@ def pack_review_context(data: dict[str, Any]) -> str:
     miss = missing_panels(body)
     footer = f"\n【未取到】{'、'.join(miss)}。这些格子没有数据, 不要编造数字。" if miss else ""
     text = (body or "（复盘看板数据尚未加载）") + footer
+    vs = format_vs_prior(text)
+    if vs:
+        text = f"{text}\n{vs}"
     if len(text) <= REVIEW_CONTEXT_MAX_CHARS:
         return text
     return text[:REVIEW_CONTEXT_MAX_CHARS] + "\n…(快照已截断)"
@@ -513,3 +517,132 @@ def archive_from_bundle() -> Path | None:
 
     data, _ = review_snapshot.collect_review_bundle()
     return save_archive(pack_review_context(data), day)
+
+
+_HEAD = re.compile(r"^【([^】]+)】[ \t]*", re.M)
+_SKIP_SECTIONS = frozenset({"未取到", "相对昨日"})
+
+
+def today_bj() -> str:
+    return datetime.now(_BJ).strftime("%Y-%m-%d")
+
+
+def archive_days() -> list[str]:
+    if not _archive_enabled():
+        return []
+    out = [p.stem for p in archive_dir().glob("????-??-??.txt") if p.is_file()]
+    return sorted(out)
+
+
+def read_archive(day: str) -> str | None:
+    if not _archive_enabled():
+        return None
+    p = archive_dir() / f"{day}.txt"
+    if not p.is_file():
+        return None
+    try:
+        return p.read_text(encoding="utf-8")
+    except OSError:
+        log.warning("review archive read failed %s", p.name, exc_info=True)
+        return None
+
+
+def prior_day(today: str | None = None) -> str | None:
+    """Latest archived day strictly before today. None = still only one day."""
+    day = today or today_bj()
+    older = [d for d in archive_days() if d < day]
+    return older[-1] if older else None
+
+
+def split_sections(text: str) -> dict[str, str]:
+    """【标题】 bodies. Skip 未取到 / 相对昨日 so a packed vs-prior line does not self-diff."""
+    parts = _HEAD.split(text or "")
+    out: dict[str, str] = {}
+    it = iter(parts[1:])
+    for name, raw in zip(it, it):
+        if name in _SKIP_SECTIONS:
+            continue
+        body = "\n".join(ln.rstrip() for ln in (raw or "").strip().splitlines()).strip()
+        if body:
+            out[name] = body
+    return out
+
+
+def _clip(text: str, n: int = 160) -> str:
+    s = re.sub(r"\s+", " ", (text or "").strip())
+    return s if len(s) <= n else s[: n - 1] + "…"
+
+
+def archive_diff(today_text: str, today: str | None = None) -> dict[str, Any]:
+    """Compare today's packed snapshot to the last archived day.
+
+    status is the truth: need_two_runs / unchanged / changed.
+    Empty changes only when status=unchanged. need_two_runs keeps changes=None
+    so a client cannot read [] as 'compared, nothing moved'.
+    """
+    day = today or today_bj()
+    if not _archive_enabled():
+        return {
+            "status": "need_two_runs",
+            "today": day,
+            "prior": None,
+            "message": "还只有一天, 没法比 (复盘存档已关)",
+            "changes": None,
+        }
+    prior = prior_day(day)
+    prior_text = read_archive(prior) if prior else None
+    if not prior or prior_text is None:
+        return {
+            "status": "need_two_runs",
+            "today": day,
+            "prior": None,
+            "message": "还只有一天, 没法比",
+            "changes": None,
+        }
+    now = split_sections(today_text)
+    old = split_sections(prior_text)
+    names = list(dict.fromkeys([*old, *now]))
+    changes: list[dict[str, str]] = []
+    for name in names:
+        a, b = old.get(name, ""), now.get(name, "")
+        if a == b:
+            continue
+        if not a:
+            kind = "added"
+        elif not b:
+            kind = "removed"
+        else:
+            kind = "changed"
+        changes.append({
+            "name": name,
+            "kind": kind,
+            "before": _clip(a),
+            "after": _clip(b),
+        })
+    if not changes:
+        return {
+            "status": "unchanged",
+            "today": day,
+            "prior": prior,
+            "message": f"比过了没变 (对照 {prior})",
+            "changes": [],
+        }
+    return {
+        "status": "changed",
+        "today": day,
+        "prior": prior,
+        "message": f"对照 {prior}: {'、'.join(c['name'] for c in changes[:8])} 有变化",
+        "changes": changes[:12],
+    }
+
+
+def format_vs_prior(today_text: str, today: str | None = None) -> str:
+    """One packed line for 问 AI / 邮件. Not an EXPECTED panel."""
+    d = archive_diff(today_text, today)
+    extra = ""
+    if d["status"] == "need_two_runs":
+        extra = "不要把空变化说成没变。"
+    elif d["status"] == "unchanged":
+        extra = "这是比过之后的没变, 不是缺档。"
+    body = f"{d['message']}。{extra}".strip()
+    return f"【相对昨日】\n{body}"

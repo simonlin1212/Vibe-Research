@@ -5,6 +5,22 @@
 
 ## Unreleased
 
+### 新增：复盘页对照昨日档
+
+顶上一行比昨日 archive 和今日打包。还只有一天写 `need_two_runs`，比过了没变写 `unchanged`，空列表不当缺档。问 AI 快照带【相对昨日】。不进预热。
+
+### 新增：宏观页挂人行社融和统计局 PMI
+
+`/macro` 月度行两侧画人民银行社融原表和统计局 PMI 原文。走已有 `/api/astock/pboc-sfin` · `/nbs-pmi`，LPR/board 出齐再取。不进预热，不并进 `macro_board`。
+
+### 新增：a-stock-data v3.7 多出来的源先挂上
+
+筹码 / 新浪复权因子 / baostock 估值史与上市状态 / 申万行业变迁 / 央行社融原表 / 统计局 PMI 原文进 `astock_research`。HTTP `/api/astock/*`，问 AI 能查筹码和估值史。社融 / PMI 画在 `/macro`，其余先不画。不进预热，不跟 `macro_board` 抢钥匙。baostock / xlrd 没装就 501。
+
+### 修复：东财 secid 不再按首位 6 猜市场
+
+`get_prefix` 认 `000016.SH` / `sh000016`（a-stock-data v3.7.1）。资金流 / 板块 / 热门概念 / 基本资料走 `em_secid`，510300 / 588000 不再打成深市。裸 `000016` 仍是深康佳。
+
 ### 改进：宏观 LPR 数字先出, 折线按需拆 LC
 
 `/macro` 首行先出 1Y/5Y 数字. Lightweight Charts 有月度序列才挂.

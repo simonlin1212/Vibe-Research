@@ -482,8 +482,7 @@ def stock_basic_info(code: str) -> dict:
     code = (code or "").strip()
     if not code.isdigit() or len(code) != 6:
         return {}
-    market = 1 if code.startswith(("5", "6", "9")) else 0
-    secid = f"{market}.{code}"
+    secid = astock.em_secid(code)
     params = {
         "secid": secid,
         "fields": "f57,f58,f84,f85,f116,f117,f127,f128,f129,f162,f167,f173,f189",

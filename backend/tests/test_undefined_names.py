@@ -173,6 +173,7 @@ def test_gstock_deep_and_routers_import() -> None:
         "gstock",
         "routers.global_routes",
         "routers.market_routes",
+        "astock_research",
         "routers.ashare",
         "routers.fin_routes",
         "routers.research_routes",

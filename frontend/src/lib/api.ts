@@ -991,6 +991,31 @@ export interface MacroBoard {
   month?: MacroBoardBucket;
   us?: MacroBoardBucket;
 }
+export interface PbocSfinRow {
+  month: string;
+  afre_total: number | null;
+  rmb_loans: number | null;
+  fx_loans: number | null;
+  entrusted_loans: number | null;
+  trust_loans: number | null;
+  undiscounted_bankers_acceptance: number | null;
+  corporate_bonds: number | null;
+  government_bonds: number | null;
+  equity_financing: number | null;
+  abs_by_depository: number | null;
+  loans_written_off: number | null;
+}
+export interface NbsPmi {
+  title: string;
+  period: string | null;
+  manufacturing_pmi: number | null;
+  non_manufacturing_pmi: number | null;
+  composite_pmi: number | null;
+  pmi_large: number | null;
+  pmi_medium: number | null;
+  pmi_small: number | null;
+  source_url?: string;
+}
 export interface DividendRow { date: string; bonus_rmb: number; transfer_ratio: number; bonus_ratio: number | null; plan: string }
 export interface FundFlowRow { date: string; main_net: number; small_net: number; mid_net: number; large_net: number; super_net: number }
 export interface DtSeat { name: string; buy_amt: number; sell_amt: number; net: number }
@@ -1494,6 +1519,20 @@ export interface ReviewContextPacked {
   prompt_task: string;
   errors: string[];
 }
+export interface ReviewArchiveChange {
+  name: string;
+  kind: "added" | "removed" | "changed";
+  before: string;
+  after: string;
+}
+export interface ReviewArchiveDiff {
+  status: "need_two_runs" | "unchanged" | "changed";
+  today: string;
+  prior: string | null;
+  message: string;
+  changes: ReviewArchiveChange[] | null;
+  errors?: string[];
+}
 
 export const api = {
   reviewWarmup: () => get<ReviewWarmupStatus>("/market/review-warmup"),
@@ -1510,6 +1549,7 @@ export const api = {
     sector_kind?: "01" | "02";
     news_source?: "cls" | "lives" | "jin10";
   }) => request<ReviewContextPacked>("/market/review-context", "POST", body),
+  reviewArchiveDiff: () => get<ReviewArchiveDiff>("/market/review-archive-diff"),
   stockFlow: (top = 15, board?: string | null) =>
     get<StockFlow>(`/market/stock-flow?top=${top}${board ? `&board=${encodeURIComponent(board)}` : ""}`),
   /** Quote-row 主力净额/净占比. 60ms 合并, 对齐参考看板 api.stockFlow(code). */
@@ -1616,6 +1656,9 @@ export const api = {
   cnBondYield: (curveType: "treasury" | "policy" = "treasury") =>
     get<CnBondYield>(`/market/bond-yield?curve_type=${curveType}`),
   macroBoard: () => get<MacroBoard>("/market/macro-board"),
+  pbocSfin: (year?: number) =>
+    get<PbocSfinRow[]>(`/astock/pboc-sfin${year != null ? `?year=${year}` : ""}`),
+  nbsPmi: () => get<NbsPmi>("/astock/nbs-pmi"),
   stockBasic: (code: string) => get<StockBasicInfo>(`/stock-basic?code=${code}`),
   globalStock: (symbol: string, opts?: { withMetrics?: boolean }) => {
     const p = new URLSearchParams({ symbol });

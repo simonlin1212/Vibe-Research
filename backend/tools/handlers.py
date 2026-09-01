@@ -618,6 +618,43 @@ def _13f(args: dict) -> dict:
     return out
 
 
+def _chips(args: dict) -> dict:
+    import astock_research as ar
+
+    out = ar.chips(str(args["code"]), str(args.get("start") or ""), str(args.get("end") or ""))
+    hist = out.pop("histogram", None) or []
+    out["histogram_n"] = len(hist)
+    return out
+
+
+def _valhist(args: dict) -> dict:
+    import astock_research as ar
+
+    rows = ar.baostock_valuation_history(
+        str(args["code"]), str(args.get("start") or ""), str(args.get("end") or ""),
+    )
+    return {
+        "rows": _pick(
+            rows,
+            ("date", "close", "peTTM", "pbMRQ", "psTTM", "turn", "tradestatus", "isST"),
+            40,
+        ),
+        "n": len(rows),
+    }
+
+
+def _list_status(args: dict) -> dict:
+    import astock_research as ar
+
+    return ar.baostock_stock_basic(str(args["code"])) or {"error": "未找到该标的上市状态"}
+
+
+def _sw_industry(args: dict) -> dict:
+    import astock_research as ar
+
+    return ar.sw_industry_lookup(str(args["code"]), str(args.get("as_of") or ""))
+
+
 # name -> 执行函数。绝大多数是「调后端函数 + 裁剪」，复杂的抽成上面的私有函数。
 _HANDLERS = {
     "query_quote": lambda a: astock.tencent_quote([str(c) for c in a.get("codes", [])]),
@@ -644,6 +681,10 @@ _HANDLERS = {
     "query_margin": lambda a: _pick(astock.margin_trading(str(a["code"])),
                                     ("date", "rzye", "rzmre", "rzche", "rqye", "rzrqye"), 15),
     "query_holders": lambda a: _pick(astock.holder_num_change(str(a["code"])), None, 10),
+    "query_chips": _chips,
+    "query_valuation_history": _valhist,
+    "query_list_status": _list_status,
+    "query_sw_industry": _sw_industry,
     "query_etf_shares": lambda a: etf_shares.etf_shares(
         str(a.get("code") or "510300"),
         int(a.get("n") or 80),

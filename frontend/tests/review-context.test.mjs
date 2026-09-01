@@ -116,6 +116,18 @@ test("breadth strip is not three cells", async () => {
   assert.doesNotMatch(src, /grid-cols-3 gap-1.5/);
 });
 
+test("review archive diff hangs on Daily Review, not a second snapshot", async () => {
+  assert.match(reviewSrc, /ReviewArchiveDiffBar/);
+  assert.match(reviewSrc, /reviewArchiveDiff|diffTick/);
+  assert.match(apiSrc, /\/market\/review-archive-diff/);
+  const bar = await readFile(new URL("../src/components/review/ReviewArchiveDiff.tsx", import.meta.url), "utf8");
+  assert.match(bar, /need_two_runs/);
+  assert.match(bar, /unchanged/);
+  assert.match(bar, /api\.reviewArchiveDiff/);
+  assert.doesNotMatch(bar, /reviewSnapshot/);
+  assert.doesNotMatch(bar, /useQuotes/);
+});
+
 test("Daily Review and Ask AI send the packed snapshot", () => {
   assert.match(reviewSrc, /collectReviewContext/);
   assert.match(reviewSrc, /api\.reviewContext/);

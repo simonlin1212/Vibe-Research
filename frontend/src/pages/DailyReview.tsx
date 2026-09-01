@@ -11,6 +11,7 @@ import { CockpitLayout, type CockpitRow } from "@/components/cockpit/CockpitLayo
 import { Chip, ChipGroup } from "@/components/ui/SectionHeader";
 import { Md } from "@/components/ui/Md";
 import { PageFallback } from "@/components/ui/PageFallback";
+import { ReviewArchiveDiffBar } from "@/components/review/ReviewArchiveDiff";
 import { ReviewSentimentPanel } from "@/components/review/ReviewSentimentPanel";
 import { ReviewRiskSeg } from "@/components/review/ReviewRiskSeg";
 import { WorldIndexPanel } from "@/components/cockpit/WorldIndexPanel";
@@ -73,6 +74,7 @@ export function DailyReview() {
   const [sectorQ, setSectorQ] = useState("");
   const [rankTab, setRankTab] = useState<RankTab>("hot");
   const [headerSlot, setHeaderSlot] = useState<HTMLElement | null>(null);
+  const [diffTick, setDiffTick] = useState(0);
   useLayoutEffect(() => {
     setHeaderSlot(document.getElementById("cockpit-header-actions"));
   }, []);
@@ -358,7 +360,7 @@ export function DailyReview() {
     <>
       <button
         type="button"
-        onClick={d.refreshTopRows}
+        onClick={() => { d.refreshTopRows(); setDiffTick((n) => n + 1); }}
         disabled={d.topRefreshing}
         className="inline-flex items-center gap-1 border border-[#333] bg-[#111] px-1.5 py-0.5 text-[10px] text-[#aaa] hover:border-primary/50 hover:text-primary disabled:opacity-50"
       >
@@ -389,6 +391,7 @@ export function DailyReview() {
   return (
     <div className="relative flex flex-col bg-background lg:h-full lg:min-h-0 lg:flex-1 lg:overflow-hidden">
       {headerSlot ? createPortal(headerActions, headerSlot) : null}
+      <ReviewArchiveDiffBar tick={diffTick} />
       <div className="flex min-h-0 flex-1 flex-col gap-px bg-[#2a2a2a] lg:h-full lg:flex-row">
         <div className="flex min-h-0 flex-col lg:h-full lg:w-[30%]">
           <div className="flex min-h-0 flex-col lg:h-[40%]">

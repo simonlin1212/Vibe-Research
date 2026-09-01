@@ -97,6 +97,31 @@ def market_review_context(body: ReviewContextIn):
     }
 
 
+@router.get("/api/market/review-archive-diff")
+def market_review_archive_diff():
+    """今日打包 vs 上一档. 钥匙 review_archive_diff, 不进预热, 不另开 snapshot."""
+
+    def fetch():
+        data, errors = review_snapshot.collect_review_bundle()
+        text = review_context.pack_review_context(data)
+        out = review_context.archive_diff(text)
+        out["errors"] = errors[-8:]
+        return out
+
+    try:
+        return {"data": _cached(
+            "review_archive_diff",
+            review_context.today_bj(),
+            60,
+            fetch,
+            valid=lambda v: isinstance(v, dict) and v.get("status") in (
+                "need_two_runs", "unchanged", "changed",
+            ),
+        )}
+    except Exception as e:
+        raise HTTPException(502, f"复盘对照异常：{e}") from e
+
+
 def _parse_flow_codes(codes: str, cap: int = 40) -> list[str]:
     raw: list[str] = []
     seen: set[str] = set()
