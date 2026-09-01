@@ -1,6 +1,6 @@
 /** Futures/option minute axis: X spans the full session, prints stay left at open. */
 
-export type DerivAxisKind = "etf" | "cmd" | "cmd23" | "cmdDay";
+export type DerivAxisKind = "etf" | "hk" | "cmd" | "cmd23" | "cmdDay";
 
 const INDEX_ROOTS = new Set(["IF", "IH", "IM", "IO", "HO", "MO"]);
 /** GFEX 白盘: no 21:00. Other day-only cmds use has_night_trading=0 from 行情观察. */
@@ -179,6 +179,12 @@ export function derivMinuteSlots(td: string, kind: DerivAxisKind): string[] {
       ...expandIncl(td, 13 * 60, 15 * 60),
     ];
   }
+  if (kind === "hk") {
+    return [
+      ...expandIncl(td, 9 * 60 + 30, 12 * 60),
+      ...expandIncl(td, 13 * 60, 16 * 60),
+    ];
+  }
   if (kind === "cmdDay") {
     return [
       ...expandIncl(td, 9 * 60, 10 * 60 + 15),
@@ -253,6 +259,7 @@ export function concatDaySlots(
 /** Spark X index. ETF matches A-share 240; commodity skips 10:15-10:30. */
 export function derivSessionSpan(kind: DerivAxisKind): number {
   if (kind === "etf") return 240;
+  if (kind === "hk") return 330;
   if (kind === "cmdDay") return 225;
   if (kind === "cmd23") return 346;
   return 555;
@@ -266,6 +273,12 @@ export function derivSessionIdx(t: string, kind: DerivAxisKind): number {
     let e = m - open;
     if (m >= 13 * 60) e -= 90;
     return Math.max(0, Math.min(e, 240));
+  }
+  if (kind === "hk") {
+    const open = 9 * 60 + 30;
+    let e = m - open;
+    if (m >= 13 * 60) e -= 60;
+    return Math.max(0, Math.min(e, 330));
   }
   const day = (clock: number): number => {
     if (clock < 9 * 60) return 0;

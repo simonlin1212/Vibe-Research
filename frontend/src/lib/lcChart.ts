@@ -271,18 +271,29 @@ export function chgToneHex(pct: number | null | undefined): string {
   return pct >= 0 ? UP : DN;
 }
 
-/** Nice 1/2/5 * 10^n ticks so the right scale reads 4660 / 4680, not 4663. */
-export function nicePriceTicks(lo: number, hi: number, maxN = 7): number[] {
+/** Nice 1/2/5 * 10^n ticks so the right scale reads 4660 / 4680, not 4663.
+ *  Prefer fewer labels (about 4-5) so 分时/日K 右轴不挤. */
+export function nicePriceTicks(lo: number, hi: number, maxN = 5): number[] {
   if (!Number.isFinite(lo) || !Number.isFinite(hi) || hi <= lo) return [];
   const span = hi - lo;
   const raw = span / Math.max(2, maxN - 1);
   const mag = 10 ** Math.floor(Math.log10(raw));
   const err = raw / mag;
-  const step = (err >= 5 ? 5 : err >= 2 ? 2 : 1) * mag;
-  const start = Math.ceil((lo - step * 1e-9) / step) * step;
-  const out: number[] = [];
-  for (let p = start; p <= hi + step * 1e-9; p += step) {
-    out.push(Number(p.toPrecision(12)));
+  let step = (err >= 5 ? 10 : err >= 2 ? 5 : err >= 1.5 ? 2 : 1) * mag;
+  const fill = (s: number): number[] => {
+    const start = Math.ceil((lo - s * 1e-9) / s) * s;
+    const out: number[] = [];
+    for (let p = start; p <= hi + s * 1e-9; p += s) {
+      out.push(Number(p.toPrecision(12)));
+    }
+    return out;
+  };
+  let out = fill(step);
+  while (out.length > maxN + 1) {
+    const next = step * (out.length > maxN + 3 ? 5 : 2);
+    if (!(next > step)) break;
+    step = next;
+    out = fill(step);
   }
   return out;
 }

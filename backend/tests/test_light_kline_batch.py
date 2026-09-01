@@ -52,6 +52,33 @@ def test_light_kline_ttl_outlasts_keep_warm():
     assert api_common.light_kline_ttl("sh000001", "1", session="lunch") == 180
     assert api_common.light_kline_ttl("sh000001", "1", session="closed") == 960
     assert api_common.light_kline_ttl("sh000001", "1D") == 60
+    assert api_common.light_kline_ttl("hkHSI", "1", session="closed") == 4
+    assert api_common.light_kline_ttl("hkHSTECH", "1", session="lunch") == 4
+    assert api_common.light_kline_ttl("usIXIC", "1", session="closed") == 4
+
+
+def test_hk_minute_refetches_after_ashare_close(monkeypatch):
+    """HSI prints to 16:00. A 15:00 last-good must not freeze the catalog key."""
+    calls: list[str] = []
+    monkeypatch.setattr(api_common, "_session_kind", lambda: "closed")
+    monkeypatch.setattr(
+        api_common.astock,
+        "light_kline",
+        lambda sym, res, num=240: calls.append(sym) or {
+            "symbol": sym,
+            "bars": [{"datetime": "2026-09-01 15:30", "close": 2}],
+        },
+    )
+    api_common._DC_CACHE.clear()
+    api_common._put(
+        "ashare_light:1:240",
+        "hkHSI",
+        {"symbol": "hkHSI", "bars": [{"datetime": "2026-09-01 15:00", "close": 1}]},
+        960,
+    )
+    out = api_common.serve_light_kline("hkHSI", "1", 240)
+    assert calls == ["hkHSI"]
+    assert out["bars"][-1]["datetime"] == "2026-09-01 15:30"
 
 
 def test_catalog_minute_incomplete_refetch_when_closed(monkeypatch):

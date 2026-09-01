@@ -122,6 +122,8 @@ test("四张 K/分时卡走 LC, 不直接 echarts.init", () => {
   assert.match(pane, /volUp/);
   assert.match(pane, /barOpenForVol/);
   assert.match(pane, /concatDaySlots/);
+  assert.match(pane, /ashareMinuteAxisKind/);
+  assert.match(pane, /ashareMinuteFrame\(bars, days, code\)/);
   assert.match(pane, /isFuturesCode\(code\)/);
   assert.match(pane, /tradingDaysOf/);
   assert.match(pane, /mdhm/);
@@ -465,17 +467,27 @@ test("chgToneCls +0% 及以上红, 小于 0 绿", () => {
   assert.equal(chgToneCls(null), "text-slate-400");
 });
 
-function nicePriceTicks(lo, hi, maxN = 7) {
+function nicePriceTicks(lo, hi, maxN = 5) {
   if (!Number.isFinite(lo) || !Number.isFinite(hi) || hi <= lo) return [];
   const span = hi - lo;
   const raw = span / Math.max(2, maxN - 1);
   const mag = 10 ** Math.floor(Math.log10(raw));
   const err = raw / mag;
-  const step = (err >= 5 ? 5 : err >= 2 ? 2 : 1) * mag;
-  const start = Math.ceil((lo - step * 1e-9) / step) * step;
-  const out = [];
-  for (let p = start; p <= hi + step * 1e-9; p += step) {
-    out.push(Number(p.toPrecision(12)));
+  let step = (err >= 5 ? 10 : err >= 2 ? 5 : err >= 1.5 ? 2 : 1) * mag;
+  const fill = (s) => {
+    const start = Math.ceil((lo - s * 1e-9) / s) * s;
+    const out = [];
+    for (let p = start; p <= hi + s * 1e-9; p += s) {
+      out.push(Number(p.toPrecision(12)));
+    }
+    return out;
+  };
+  let out = fill(step);
+  while (out.length > maxN + 1) {
+    const next = step * (out.length > maxN + 3 ? 5 : 2);
+    if (!(next > step)) break;
+    step = next;
+    out = fill(step);
   }
   return out;
 }
@@ -500,8 +512,14 @@ test("nicePriceTicks 走出 4660/4680 这种整数档", () => {
   const ticks = nicePriceTicks(4654, 4708);
   assert.ok(ticks.includes(4660));
   assert.ok(ticks.includes(4680));
+  assert.ok(ticks.length <= 6);
   assert.equal(formatAxisPx(4660), "4660");
   assert.equal(formatAxisPx(12.35), "12.35");
+  const wide = nicePriceTicks(4000, 5000);
+  assert.ok(wide.length <= 6);
+  const pctTicks = nicePriceTicks(-2.15, 2.15);
+  assert.ok(pctTicks.includes(0));
+  assert.ok(pctTicks.length <= 6);
 });
 
 function klineCodeKey(code) {
@@ -529,7 +547,7 @@ test("formatAxisPct 分时右轴写涨跌幅", () => {
   assert.equal(formatAxisPct(0), "0.00%");
   const pctTicks = nicePriceTicks(-2.15, 2.15);
   assert.ok(pctTicks.includes(0));
-  assert.ok(pctTicks.includes(1) || pctTicks.includes(1.5) || pctTicks.includes(0.5));
+  assert.ok(pctTicks.length <= 6);
 });
 
 test("chgToneHex 价轴字 +0% 及以上红, 小于 0 绿", () => {

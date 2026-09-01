@@ -5,6 +5,7 @@ import { LcHoverTag, LcLegend, LcWell, lcTone, type LcLegendItem } from "@/compo
 import type { AShareLightBar } from "@/lib/api";
 import {
   concatDaySlots, lastFiniteIdx, padToSlots, tradingDayOf, tradingDaysOf,
+  type DerivAxisKind,
 } from "@/lib/derivMinuteAxis";
 import { laterQuoteClock } from "@/lib/freshness";
 import { isFuturesCode } from "@/lib/quoteHub";
@@ -45,12 +46,16 @@ export function minuteHasFlow(bars: AShareLightBar[]): boolean {
   return bars.some((b) => Number(b.amount) > 0 || Number(b.volume) > 0);
 }
 
-export function ashareMinuteFrame(bars: AShareLightBar[], days: 1 | 2 = 1) {
+export function ashareMinuteAxisKind(code: string): DerivAxisKind {
+  return /^hk/i.test(code) ? "hk" : "etf";
+}
+
+export function ashareMinuteFrame(bars: AShareLightBar[], days: 1 | 2 = 1, code = "") {
   const tds = tradingDaysOf(bars.map((b) => b.datetime).filter(Boolean)).slice(-(days === 2 ? 2 : 1));
   if (!tds.length) return null;
   const want = new Set(tds);
   const kept = bars.filter((b) => want.has(tradingDayOf(b.datetime)));
-  const { cats } = concatDaySlots(tds, "etf");
+  const { cats } = concatDaySlots(tds, ashareMinuteAxisKind(code));
   return { cats, padded: padToSlots(kept, cats, (b) => b.datetime), days };
 }
 
@@ -116,7 +121,7 @@ export function AShareLcPane({
   const showVol = isDaily || minuteHasFlow(bars);
   const wmName = name.trim();
   const minute = useMemo(
-    () => (isDaily || isFuturesCode(code) ? null : ashareMinuteFrame(bars, days)),
+    () => (isDaily || isFuturesCode(code) ? null : ashareMinuteFrame(bars, days, code)),
     [isDaily, bars, days, code],
   );
 

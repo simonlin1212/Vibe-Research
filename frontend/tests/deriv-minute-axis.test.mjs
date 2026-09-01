@@ -44,6 +44,9 @@ function derivMinuteSlots(td, kind) {
   if (kind === "etf") {
     return [...expandIncl(td, 9 * 60 + 30, 11 * 60 + 30), ...expandIncl(td, 13 * 60, 15 * 60)];
   }
+  if (kind === "hk") {
+    return [...expandIncl(td, 9 * 60 + 30, 12 * 60), ...expandIncl(td, 13 * 60, 16 * 60)];
+  }
   if (kind === "cmdDay") {
     return [
       ...expandIncl(td, 9 * 60, 10 * 60 + 15),
@@ -124,6 +127,21 @@ function derivSessionIdx(t, kind) {
   }
   return NaN;
 }
+
+test("恒生轴含 11:30-12:00 与 15:00-16:00, 午休空着", () => {
+  const slots = derivMinuteSlots("2026-09-01", "hk");
+  assert.ok(slots.includes("2026-09-01 11:45:00"));
+  assert.ok(slots.includes("2026-09-01 12:00:00"));
+  assert.ok(slots.includes("2026-09-01 15:30:00"));
+  assert.ok(slots.includes("2026-09-01 16:00:00"));
+  assert.ok(!slots.includes("2026-09-01 12:30:00"));
+  const padded = padToSlots(
+    [{ t: "2026-09-01 15:30:00", close: 1 }, { t: "2026-09-01 16:00:00", close: 2 }],
+    slots,
+    (b) => b.t,
+  );
+  assert.equal(padded.filter(Boolean).length, 2);
+});
 
 test("ETF 开盘几分钟停在轴左侧, 不铺满", () => {
   const slots = derivMinuteSlots("2026-08-18", "etf");
@@ -208,6 +226,8 @@ test("分时图走交易时段轴, 不按点序均分", async () => {
   assert.match(spark, /derivSessionIdx/);
   assert.match(spark, /hasNight/, "行情观察迷你分时也走行情夜盘旗");
   assert.match(axis, /export function derivMinuteSlots/);
+  assert.match(axis, /kind === "hk"/);
+  assert.match(axis, /16 \* 60/);
   assert.match(axis, /export function concatDaySlots/);
   assert.match(axis, /export function liveAxisKind/);
   assert.match(axis, /export function isDaySessionUnd/);

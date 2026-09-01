@@ -6,7 +6,7 @@ import { Chip, ChipGroup } from "@/components/ui/SectionHeader";
 import { PageFallback } from "@/components/ui/PageFallback";
 import { WatchlistFeed } from "@/components/WatchlistFeed";
 import { ApiError, type AShareLightBar } from "@/lib/api";
-import { isFuturesCode, useQuotes, type HubQuote } from "@/lib/quoteHub";
+import { isFuturesCode, isOffshoreCode, useQuotes, type HubQuote } from "@/lib/quoteHub";
 import { loadLightKline, overlayQuoteBar } from "@/lib/lightKline";
 import { MINUTE_POLL_MS } from "@/lib/minuteHub";
 import { createSeriesGate } from "@/lib/seriesGate";
@@ -239,9 +239,9 @@ function useAShareSeries(code: string, res: "1" | "5" | "1D", num: number, poll 
         if (!document.hidden) void load({ quiet: true });
         arm();
       }, hubPollMs(
-        isFuturesCode(code) ? HUB_POLL_FUTURES_MS : MINUTE_POLL_MS,
+        isOffshoreCode(code) ? HUB_POLL_FUTURES_MS : MINUTE_POLL_MS,
         new Date(),
-        isFuturesCode(code),
+        isOffshoreCode(code),
       ));
     };
     arm();
@@ -363,7 +363,7 @@ export function AShareLightChart({
   const wantDay = !embedded || pane === "daily" || pane === "charts";
   const minute = useAShareSeries(wantMin ? selected : "", minuteDays === 2 ? "5" : "1", minuteDays === 2 ? 1000 : 240, true);
   const daily = useAShareSeries(wantDay ? selected : "", "1D", KLINE_NUM);
-  const liveQuote = Boolean(selected && (isFuturesCode(selected) || session.kind === "open"));
+  const liveQuote = Boolean(selected && (isOffshoreCode(selected) || session.kind === "open"));
   const qSel = selected ? quotes[selected] : undefined;
   const quoteTime = qSel && !qSel.fromStore ? qSel.time : undefined;
   const minBars = useMemo(

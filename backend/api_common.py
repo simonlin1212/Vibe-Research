@@ -94,8 +94,13 @@ def _read(endpoint: str, code: str, ttl: float, fetch, valid=is_nonempty, defaul
     return _dc(endpoint, code, ttl, fetch, valid, default=default)
 
 
-def minute_covers_close(data: Any) -> bool:
-    """True if the last 1-min bar reached the afternoon close (~15:00)."""
+def is_offshore_symbol(sym: str) -> bool:
+    """HK / US / JP / KR / FX. Still tick after the A-share 15:00 close."""
+    return (sym or "").strip().lower().startswith(("hk", "us", "jp", "ks", "wh"))
+
+
+def minute_covers_close(data: Any, hm: int = 1457) -> bool:
+    """True if the last 1-min bar reached hm (HHMM). A-share 1457, HK 1557."""
     bars = data.get("bars") if isinstance(data, dict) else None
     if not bars:
         return False
@@ -103,7 +108,7 @@ def minute_covers_close(data: Any) -> bool:
     m = re.search(r"(\d{1,2}):(\d{2})", dt)
     if not m:
         return False
-    return int(m.group(1)) * 100 + int(m.group(2)) >= 1457
+    return int(m.group(1)) * 100 + int(m.group(2)) >= hm
 
 
 def serve_light_kline(sym: str, res: str, num: int):
@@ -111,16 +116,28 @@ def serve_light_kline(sym: str, res: str, num: int):
 
     Closed last-good that stops before 14:57 is treated as incomplete (Tencent
     501 mid-session) and expired so the next read can refill.
+    Offshore catalog (hkHSI / usIXIC / ...) does not follow A-share last-good:
+    Hang Seng prints through 16:00. A 15:00 cache is expired so the next read
+    can refill 15:01-16:00.
     """
     ep = f"ashare_light:{res}:{num}"
     catalog_min = res == "1" and int(num) == 240 and is_catalog_symbol(sym)
     kind = _session_kind()
-    last = catalog_min and kind != "open"
-    if last and kind == "closed":
+    offshore = is_offshore_symbol(sym)
+    last = catalog_min and kind != "open" and not offshore
+    if catalog_min and kind != "open":
         hit = _serve(ep, sym)
-        if isinstance(hit, dict) and hit.get("bars") and not minute_covers_close(hit):
-            _DC_CACHE.expire((ep, sym))
-            last = False
+        if isinstance(hit, dict) and hit.get("bars"):
+            s = (sym or "").lower()
+            if s.startswith("hk"):
+                done = minute_covers_close(hit, 1557)
+            elif not offshore:
+                done = minute_covers_close(hit, 1457)
+            else:
+                done = True
+            if not done:
+                _DC_CACHE.expire((ep, sym))
+                last = False
     return _dc(
         ep,
         sym,
@@ -156,13 +173,16 @@ def _session_kind() -> str:
 def light_kline_ttl(sym: str, res: str, session: str | None = None) -> int:
     """Index minutes: 4s open so 行情观察 5s polls see new bars. Stocks 120s.
 
-    Closed/lunch still outlast keep-warm (960/180) and stay last-good.
+    Closed/lunch A-share still outlast keep-warm (960/180) and stay last-good.
+    Offshore (hk/us/jp/ks/wh) stays 4s after the A-share close.
     """
     if res != "1":
         return 60
+    if is_offshore_symbol(sym):
+        return 4
     kind = session if session is not None else _session_kind()
     s = (sym or "").lower()
-    index = s.startswith(("sh000", "sz399", "hk", "us", "wh", "jp", "ks"))
+    index = s.startswith(("sh000", "sz399"))
     if kind == "open":
         return 4 if index else 120
     if kind == "lunch":
