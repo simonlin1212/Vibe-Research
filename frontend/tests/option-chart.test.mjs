@@ -107,6 +107,7 @@ test("OptionChartCard 用 hoverIdxOf, 分时白线无均价", async () => {
   assert.ok(src.includes("chgToneCls"), "四角按涨跌幅红绿");
   assert.ok(src.includes("bindChgPriceAxis"), "右侧价轴刻度按昨结红绿");
   assert.ok(src.includes("axis.maxTone"), "上沿跟该端涨跌幅");
+  assert.ok(src.includes("setLast") || src.includes("finite[finite.length - 1]"), "最新价红绿块躲开刻度");
   assert.ok(src.includes("guardLc"), "快切分时/两日吞 LC Value is null");
 });
 

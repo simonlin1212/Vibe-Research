@@ -146,7 +146,7 @@ _Avoid_: 第二条日历, 第二条报价轮询, 重叠持有期×252/horizon �
 
 大文件就地改：`backend/astock.py`、`frontend/src/pages/StockData.tsx`、`frontend/src/pages/CtpPortfolio.tsx`、`frontend/src/lib/api.ts`。
 
-K/分时（A 股轻量图、美股日K、期权日K/分时、套利价差）和复盘资金页 ETF 份额日线、宏观 LPR 折线走 `lightweight-charts`，入口 `frontend/src/lib/lcChart.ts`。十字右侧价签一律 `LcHoverTag`（白底黑字, 涨跌幅相对昨收/昨结红绿, 不标距今）。ECharts 只留给非时间序列（期限结构、国债曲线、相关热力图、回测）。T 表 IV 微笑/期限走 `createOptionsChart`，浮窗用 React 叠在 LC 上（深色能看清即可）。格子小走势仍是手写 SVG。
+K/分时（A 股轻量图、美股日K、期权日K/分时、套利价差）和复盘资金页 ETF 份额日线、宏观 LPR 折线走 `lightweight-charts`，入口 `frontend/src/lib/lcChart.ts`。十字右侧价签一律 `LcHoverTag`（白底黑字, 涨跌幅相对昨收/昨结红绿, 不标距今）。右轴最新价红绿块由 `ChgPriceAxisPrimitive` 画在刻度字之上, 邻近刻度让开。ECharts 只留给非时间序列（期限结构、国债曲线、相关热力图、回测）。T 表 IV 微笑/期限走 `createOptionsChart`，浮窗用 React 叠在 LC 上（深色能看清即可）。格子小走势仍是手写 SVG。
 
 报价中心、分时、快讯三个 hub 各自保留。`CockpitLayout` / `QuoteStockRow` 继续用。快讯新条全站右上角弹 3 分钟（Layout 订 `telegraphHub`，首屏不弹，最多 4 条叠，悬停先不撤，不另开轮询）。
 

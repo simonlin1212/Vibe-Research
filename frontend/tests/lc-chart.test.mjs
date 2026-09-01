@@ -145,8 +145,14 @@ test("四张 K/分时卡走 LC, 不直接 echarts.init", () => {
   assert.match(src, /tickVisible\(\) \{ return false; \}/);
   assert.match(src, /textColor: "rgba\(0,0,0,0\)"/);
   assert.match(src, /export function hoverPxPct/);
+  assert.match(src, /export function tickClearsLast/);
+  assert.match(src, /export const LAST_TAG_GAP = 14/);
+  assert.match(src, /class ChgLastView/);
+  assert.match(src, /lastValueVisible: false/);
+  assert.match(src, /setLast\(last\)/);
   assert.match(pane, /chgToneCls/);
   assert.match(pane, /bindChgPriceAxis/);
+  assert.match(pane, /lastI != null \? prices\[lastI\]/);
   assert.match(pane, /axis\.maxTone/);
   assert.match(src, /export function minuteHiLo/);
   assert.match(src, /export function minuteScaleRange/);
@@ -505,6 +511,18 @@ test("hoverPxPct 右侧价签是 价格 (+/-%) 相对昨收", () => {
   const frame = readFileSync(join(root, "src/components/ui/LcFrame.tsx"), "utf8");
   assert.match(frame, /export function LcHoverTag/);
   assert.match(frame, /text-\[#ff2d2d\].*text-\[#00d26a\]/s);
+});
+
+function tickClearsLast(y, lastY, gap = 14) {
+  if (lastY == null || !Number.isFinite(lastY)) return true;
+  return Math.abs(y - lastY) >= gap;
+}
+
+test("tickClearsLast 刻度字躲开最新价红绿块", () => {
+  assert.equal(tickClearsLast(100, 100), false);
+  assert.equal(tickClearsLast(105, 100), false);
+  assert.equal(tickClearsLast(120, 100), true);
+  assert.equal(tickClearsLast(100, null), true);
 });
 
 test("httpDetail 不把 FastAPI 422 列表打成 [object Object]", () => {

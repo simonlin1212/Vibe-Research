@@ -209,6 +209,7 @@ export function AShareLcPane({
             bag.current.main,
             bag.current.chgAxis,
             bars.length > 1 ? bars[bars.length - 2].close : null,
+            last?.close,
           );
         }
         if (!lastOnly) showLatest(chart, bars.length, VIEW_DAYS);
@@ -252,7 +253,13 @@ export function AShareLcPane({
         }
       }
       if (bag.current.main) {
-        bindChgPriceAxis(chart, bag.current.main, bag.current.chgAxis, baseline > 0 ? baseline : prevClose);
+        bindChgPriceAxis(
+          chart,
+          bag.current.main,
+          bag.current.chgAxis,
+          baseline > 0 ? baseline : prevClose,
+          lastI != null ? prices[lastI] : null,
+        );
       }
       if (!lastOnly) showSession(chart, cats.length);
     } catch {

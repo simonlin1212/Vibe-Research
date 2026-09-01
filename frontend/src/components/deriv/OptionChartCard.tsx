@@ -538,7 +538,7 @@ export function OptionChartCard({ pick, mode, tick, alerts = NO_ALERTS, hasNight
       const days = dailyBars.map((b) => b.t);
       setSeriesMarks(bag.current.px, marksRef, toMarks(alertMarkIdxs(days, alerts, pick.code)));
       if (bag.current.px) {
-        bindChgPriceAxis(chart, bag.current.px, bag.current.chgAxis, prevClose);
+        bindChgPriceAxis(chart, bag.current.px, bag.current.chgAxis, prevClose, last?.close);
       }
       if (!lastOnly) showLatest(chart, dailyBars.length, 80);
       return;
@@ -619,7 +619,13 @@ export function OptionChartCard({ pick, mode, tick, alerts = NO_ALERTS, hasNight
     }
     setSeriesMarks(bag.current.px, marksRef, toMarks(alertMarkIdxs(cats, alerts, pick.code)));
     if (bag.current.px) {
-      bindChgPriceAxis(chart, bag.current.px, bag.current.chgAxis, pre !== null && pre > 0 ? pre : baseline);
+      bindChgPriceAxis(
+        chart,
+        bag.current.px,
+        bag.current.chgAxis,
+        pre !== null && pre > 0 ? pre : baseline,
+        finite[finite.length - 1],
+      );
     }
     if (!lastOnly) showSession(chart, cats.length);
   };

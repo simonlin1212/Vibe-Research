@@ -303,9 +303,29 @@ class ChgTickView implements ISeriesPrimitiveAxisView {
   tickVisible() { return false; }
 }
 
+/** Last-price plate on the right scale. Last in the view list so ticks cannot cover it. */
+class ChgLastView implements ISeriesPrimitiveAxisView {
+  constructor(private y: number, private label: string, private up: boolean) {}
+  coordinate() { return this.y; }
+  fixedCoordinate() { return this.y; }
+  text() { return this.label; }
+  textColor() { return "#fff"; }
+  backColor() { return this.up ? UP : DN; }
+  tickVisible() { return false; }
+}
+
+export const LAST_TAG_GAP = 14;
+
+/** False when a tick would sit on the last-price plate. */
+export function tickClearsLast(y: number, lastY: number | null | undefined, gap = LAST_TAG_GAP): boolean {
+  if (lastY == null || !Number.isFinite(lastY)) return true;
+  return Math.abs(y - lastY) >= gap;
+}
+
 /** Recolor the right price scale vs 昨收/昨结. Native labels stay transparent. */
 export class ChgPriceAxisPrimitive implements ISeriesPrimitive {
   private _ref: number | null = null;
+  private _last: number | null = null;
   private _chart: IChartApi | null = null;
   private _series: ISeriesApi<SeriesType> | null = null;
   private _request: (() => void) | null = null;
@@ -313,6 +333,12 @@ export class ChgPriceAxisPrimitive implements ISeriesPrimitive {
 
   setRef(ref: number | null | undefined) {
     this._ref = ref != null && Number.isFinite(ref) && ref > 0 ? ref : null;
+    this.updateAllViews();
+    this._request?.();
+  }
+
+  setLast(last: number | null | undefined) {
+    this._last = last != null && Number.isFinite(last) ? last : null;
     this.updateAllViews();
     this._request?.();
   }
@@ -355,6 +381,15 @@ export class ChgPriceAxisPrimitive implements ISeriesPrimitive {
     } catch {
       /* series gone */
     }
+    let lastY: number | null = null;
+    if (this._last != null) {
+      try {
+        lastY = series.priceToCoordinate(this._last);
+      } catch {
+        lastY = null;
+      }
+      if (lastY != null && !Number.isFinite(lastY)) lastY = null;
+    }
     const next: ISeriesPrimitiveAxisView[] = [];
     for (const p of nicePriceTicks(rng.from, rng.to)) {
       let y: number | null = null;
@@ -364,7 +399,12 @@ export class ChgPriceAxisPrimitive implements ISeriesPrimitive {
         y = null;
       }
       if (y == null || !Number.isFinite(y)) continue;
+      if (!tickClearsLast(y, lastY)) continue;
       next.push(new ChgTickView(y, formatAxisPx(p, precision), chgToneHex(vsRefPct(p, this._ref))));
+    }
+    if (lastY != null && this._last != null) {
+      const up = this._ref == null || this._last >= this._ref;
+      next.push(new ChgLastView(lastY, formatAxisPx(this._last, precision), up));
     }
     this._views = next;
   }
@@ -390,6 +430,7 @@ export function bindChgPriceAxis(
   series: ISeriesApi<SeriesType>,
   slot: { prim: ChgPriceAxisPrimitive | null },
   ref: number | null | undefined,
+  last?: number | null,
 ): void {
   if (!slot.prim) {
     slot.prim = new ChgPriceAxisPrimitive();
@@ -397,6 +438,12 @@ export function bindChgPriceAxis(
     hideNativePriceLabels(chart);
   }
   slot.prim.setRef(ref);
+  slot.prim.setLast(last);
+  try {
+    series.applyOptions({ lastValueVisible: false });
+  } catch {
+    /* series gone */
+  }
 }
 
 /** Session high / low vs 昨收. Corner labels use this, not the padded scale ends. */
