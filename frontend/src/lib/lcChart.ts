@@ -1115,6 +1115,15 @@ export function paintHist(
 
 const WM_INK = "rgba(200,205,214,0.22)";
 
+/** Drop a pane watermark. Price-scale applyOptions can detach it without throwing. */
+export function clearPaneWatermark(
+  apiRef: { current: ITextWatermarkPluginApi<Time> | null },
+): void {
+  if (!apiRef.current) return;
+  try { apiRef.current.detach(); } catch { /* already gone */ }
+  apiRef.current = null;
+}
+
 /** Pane watermark. Keep faint so the HUD / crosshair stay readable. */
 export function setPaneWatermark(
   chart: { panes: () => unknown[] },
@@ -1139,14 +1148,8 @@ export function setPaneWatermark(
       fontStyle: i === 0 ? "bold" : "",
     })),
   };
-  if (apiRef.current) {
-    try {
-      apiRef.current.applyOptions(opts);
-      return;
-    } catch {
-      apiRef.current = null;
-    }
-  }
+  // Recreate. applyOptions on a detached plugin is a silent no-op (no requestUpdate).
+  clearPaneWatermark(apiRef);
   if (!parts.length) return;
   try {
     apiRef.current = createTextWatermark(pane, opts) as ITextWatermarkPluginApi<Time>;

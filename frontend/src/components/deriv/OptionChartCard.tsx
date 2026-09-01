@@ -14,7 +14,7 @@ import {
   CandlestickSeries, HistogramSeries, LineSeries, UP, DN, applyTimeLabels,
   candleOpts, candleValues, finiteLine, fmtPx, hoverIdxFromParam, lcTime,
   bindChgPriceAxis, chgToneCls, type ChgPriceAxisPrimitive, ensureUpDown, lineValues, minuteHiLo, minuteLineOpts, minuteScaleRange, overlayLineOpts, paintCandles, paintHist, paintLine, paintUpDown,
-  priceFormatOf, seriesAlive, setPaneWatermark, setRefPriceLine, setSeriesMarks, showLatest,
+  priceFormatOf, seriesAlive, clearPaneWatermark, setPaneWatermark, setRefPriceLine, setSeriesMarks, showLatest,
   showSession, sparseLine, styleIvOverlay, styleLastTag, styleMinuteSymScale, styleOiPane,
   styleVolPane, useLcChart, useLcHoverTag, volPaneOpts, volUp, volValues, wipeLc, guardLc, IV_COLOR, OI_COLOR,
   type IPriceLine, type ISeriesApi, type ISeriesMarkersPluginApi, type ISeriesUpDownMarkerPluginApi,
@@ -479,13 +479,12 @@ export function OptionChartCard({ pick, mode, tick, alerts = NO_ALERTS, hasNight
       marksRef.current = null;
       tickRef.current = null;
       udRef.current = null;
+      clearPaneWatermark(wmRef);
     };
     if (!pick) {
-      setPaneWatermark(chart, wmRef, "");
       reset();
       return;
     }
-    setPaneWatermark(chart, wmRef, pick.name || pick.code, 56);
     const lastMinI = lastFiniteIdx(minData?.prices ?? [], null);
     const lastPx = mode === "daily"
       ? dailyBars[dailyBars.length - 1]?.close
@@ -541,6 +540,7 @@ export function OptionChartCard({ pick, mode, tick, alerts = NO_ALERTS, hasNight
         bindChgPriceAxis(chart, bag.current.px, bag.current.chgAxis, prevClose, last?.close);
       }
       if (!lastOnly) showLatest(chart, dailyBars.length, 80);
+      setPaneWatermark(chart, wmRef, pick.name || pick.code, 56);
       return;
     }
 
@@ -629,6 +629,7 @@ export function OptionChartCard({ pick, mode, tick, alerts = NO_ALERTS, hasNight
       );
     }
     if (!lastOnly) showSession(chart, cats.length);
+    setPaneWatermark(chart, wmRef, pick.name || pick.code, 56);
   };
 
   const hoverPx = hover == null ? null : (

@@ -13,7 +13,7 @@ import {
   CandlestickSeries, HistogramSeries, LineSeries, MA_COLORS, MA_PERIODS, applyTimeLabels,
   barOpenForVol, bindChgPriceAxis, candleOpts, candleValues, chgToneCls, type ChgPriceAxisPrimitive, ensureUpDown, lineValues,
   minuteHiLo, minuteLineOpts, minuteScaleRange, overlayLineOpts, paintCandles, paintHist, paintLine, paintUpDown, resizeLc,
-  seriesAlive, setLogScale, setPaneWatermark, setRefPriceLine, showLatest,
+  seriesAlive, setLogScale, clearPaneWatermark, setPaneWatermark, setRefPriceLine, showLatest,
   showSession, sma, sparseLine, styleLastTag, styleMinuteSymScale, styleVolPane, useLcChart,
   useLcHoverTag, volPaneOpts, volUp, volValues, wipeLc,
   type CandlestickData, type HistogramData, type IPriceLine, type ISeriesApi,
@@ -131,7 +131,7 @@ export function AShareLcPane({
         chgAxis: { prim: null },
       };
       refLine.current = null;
-      wmRef.current = null;
+      clearPaneWatermark(wmRef);
       tickRef.current = null;
       udRef.current = null;
     };
@@ -170,7 +170,6 @@ export function AShareLcPane({
         }
         bag.current.kind = seriesKind;
       }
-      setPaneWatermark(chart, wmRef, wmName ? [wmName, code] : code, 72);
 
       if (isDaily) {
         labelsRef.current = bars.map((b) => b.datetime);
@@ -213,6 +212,7 @@ export function AShareLcPane({
           );
         }
         if (!lastOnly) showLatest(chart, bars.length, VIEW_DAYS);
+        setPaneWatermark(chart, wmRef, wmName ? [wmName, code] : code, 72);
         return;
       }
 
@@ -263,6 +263,7 @@ export function AShareLcPane({
         );
       }
       if (!lastOnly) showSession(chart, cats.length);
+      setPaneWatermark(chart, wmRef, wmName ? [wmName, code] : code, 72);
     } catch {
       /* LC throws Value is null if wipe/resize races; keep the pane */
     }

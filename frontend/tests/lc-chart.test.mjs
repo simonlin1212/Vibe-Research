@@ -67,7 +67,9 @@ test("lcChart 是 K/分时共用封装, 不画 TradingView logo", () => {
   assert.match(src, /ResizeObserver/);
   assert.match(src, /localization: \{ locale: "zh-CN", precision: 0 \}/);
   assert.match(src, /createTextWatermark/);
+  assert.match(src, /export function clearPaneWatermark/);
   assert.match(src, /export function setPaneWatermark/);
+  assert.match(src, /apiRef\.current\.detach/);
   assert.match(src, /text: string \| readonly string\[\]/);
   assert.match(src, /mid-resize \/ already removed/);
   assert.match(src, /apiRef\.current = null/);
@@ -183,11 +185,14 @@ test("四张 K/分时卡走 LC, 不直接 echarts.init", () => {
   assert.match(arb, /candleOpts/);
   assert.doesNotMatch(arb, /ensureUpDown/);
   assert.match(pane, /\[wmName, code\]/);
+  assert.ok(pane.lastIndexOf("setPaneWatermark") > pane.indexOf("styleMinuteSymScale"));
+  assert.match(pane, /clearPaneWatermark/);
   assert.match(ashare, /AShareLcPane/);
   assert.match(ashare, /AShareLcPaneLazy/);
   assert.doesNotMatch(ashare, /import \{ AShareLcPane \}/);
   assert.match(ashare, /createSeriesGate/);
   assert.match(ashare, /if \(!snap\) return/);
+  assert.match(ashare, /name: snap\.meta\.name \|\| prev\?\.name/);
   assert.match(pane, /LC throws Value is null/);
   assert.match(pane, /wmRef\.current = null/);
   assert.match(ashare, /kind="minute"/);

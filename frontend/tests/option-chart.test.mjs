@@ -247,6 +247,8 @@ test("驾驶舱日K分时吃 dataview tick", async () => {
   assert.ok(card.includes("setRefPriceLine"), "昨收/昨结价线");
   assert.ok(card.includes("setSeriesMarks"), "异动分钟箭头");
   assert.ok(card.includes("setPaneWatermark"), "合约淡字水印");
+  assert.ok(card.lastIndexOf("setPaneWatermark") > card.indexOf("styleMinuteSymScale"), "分时水印在价轴样式之后再挂");
+  assert.ok(card.includes("clearPaneWatermark"), "wipe 卸掉旧水印");
   assert.ok(card.includes("ensureUpDown"), "分时最新一跳红绿闪");
   assert.ok(card.includes("paintUpDown"), "MQTT 最后一根才闪");
   assert.ok(!card.includes("sessionMarkIdxs") && !card.includes("expiryMarkIdx"), "图上不钉夜盘/到期点");

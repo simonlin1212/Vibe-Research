@@ -194,7 +194,10 @@ function useAShareSeries(code: string, res: "1" | "5" | "1D", num: number, poll 
       });
       if (!snap) return;
       setBars(snap.bars);
-      setMeta(snap.meta);
+      setMeta((prev) => ({
+        ...snap.meta,
+        name: snap.meta.name || prev?.name,
+      }));
       setErr(null);
     } catch (e) {
       if (!gate.current.take(mine, true)) return;
