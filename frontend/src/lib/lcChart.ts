@@ -292,6 +292,19 @@ export function formatAxisPx(p: number, precision = 2): string {
   return p.toFixed(precision);
 }
 
+/** Right-scale tick on 分时: +1.20% / 0.00% / -0.50%. */
+export function formatAxisPct(pct: number): string {
+  if (!Number.isFinite(pct)) return "—";
+  if (Math.abs(pct) < 5e-13) return "0.00%";
+  return `${pct > 0 ? "+" : ""}${pct.toFixed(2)}%`;
+}
+
+export type ChgAxisKind = "price" | "pct";
+
+function priceFromPct(ref: number, pct: number): number {
+  return ref * (1 + pct / 100);
+}
+
 class ChgTickView implements ISeriesPrimitiveAxisView {
   constructor(private y: number, private label: string, private color: string) {}
   /** Negative so LC auto-layout does not reserve a blank slot next to the fixed label. */
@@ -326,6 +339,7 @@ export function tickClearsLast(y: number, lastY: number | null | undefined, gap 
 export class ChgPriceAxisPrimitive implements ISeriesPrimitive {
   private _ref: number | null = null;
   private _last: number | null = null;
+  private _kind: ChgAxisKind = "price";
   private _chart: IChartApi | null = null;
   private _series: ISeriesApi<SeriesType> | null = null;
   private _request: (() => void) | null = null;
@@ -339,6 +353,12 @@ export class ChgPriceAxisPrimitive implements ISeriesPrimitive {
 
   setLast(last: number | null | undefined) {
     this._last = last != null && Number.isFinite(last) ? last : null;
+    this.updateAllViews();
+    this._request?.();
+  }
+
+  setKind(kind: ChgAxisKind) {
+    this._kind = kind === "pct" ? "pct" : "price";
     this.updateAllViews();
     this._request?.();
   }
@@ -391,7 +411,14 @@ export class ChgPriceAxisPrimitive implements ISeriesPrimitive {
       if (lastY != null && !Number.isFinite(lastY)) lastY = null;
     }
     const next: ISeriesPrimitiveAxisView[] = [];
-    for (const p of nicePriceTicks(rng.from, rng.to)) {
+    const usePct = this._kind === "pct" && this._ref != null;
+    const loPct = usePct ? vsRefPct(rng.from, this._ref) : null;
+    const hiPct = usePct ? vsRefPct(rng.to, this._ref) : null;
+    const tickVals = usePct && loPct != null && hiPct != null
+      ? nicePriceTicks(loPct, hiPct)
+      : nicePriceTicks(rng.from, rng.to);
+    for (const t of tickVals) {
+      const p = usePct && this._ref != null ? priceFromPct(this._ref, t) : t;
       let y: number | null = null;
       try {
         y = series.priceToCoordinate(p);
@@ -400,11 +427,16 @@ export class ChgPriceAxisPrimitive implements ISeriesPrimitive {
       }
       if (y == null || !Number.isFinite(y)) continue;
       if (!tickClearsLast(y, lastY)) continue;
-      next.push(new ChgTickView(y, formatAxisPx(p, precision), chgToneHex(vsRefPct(p, this._ref))));
+      const label = usePct ? formatAxisPct(t) : formatAxisPx(t, precision);
+      next.push(new ChgTickView(y, label, chgToneHex(vsRefPct(p, this._ref))));
     }
     if (lastY != null && this._last != null) {
+      const lastPct = vsRefPct(this._last, this._ref);
       const up = this._ref == null || this._last >= this._ref;
-      next.push(new ChgLastView(lastY, formatAxisPx(this._last, precision), up));
+      const lastLabel = usePct && lastPct != null
+        ? formatAxisPct(lastPct)
+        : formatAxisPx(this._last, precision);
+      next.push(new ChgLastView(lastY, lastLabel, up));
     }
     this._views = next;
   }
@@ -431,12 +463,14 @@ export function bindChgPriceAxis(
   slot: { prim: ChgPriceAxisPrimitive | null },
   ref: number | null | undefined,
   last?: number | null,
+  kind: ChgAxisKind = "price",
 ): void {
   if (!slot.prim) {
     slot.prim = new ChgPriceAxisPrimitive();
     series.attachPrimitive(slot.prim);
     hideNativePriceLabels(chart);
   }
+  slot.prim.setKind(kind);
   slot.prim.setRef(ref);
   slot.prim.setLast(last);
   try {
@@ -773,7 +807,7 @@ export function styleMinuteSymScale(chart: IChartApi): void {
       alignLabels: true,
       ticksVisible: false,
       textColor: "rgba(0,0,0,0)",
-      minimumWidth: 40,
+      minimumWidth: 54,
     });
   } catch {
     /* scale already gone */
@@ -981,7 +1015,7 @@ export function setRefPriceLine(
     color,
     lineWidth: 1 as const,
     lineStyle: LineStyle.Dashed,
-    axisLabelVisible: true,
+    axisLabelVisible: false,
     title,
   };
   if (lineRef.current) {

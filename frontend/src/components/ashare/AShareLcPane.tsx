@@ -259,6 +259,7 @@ export function AShareLcPane({
           bag.current.chgAxis,
           baseline > 0 ? baseline : prevClose,
           lastI != null ? prices[lastI] : null,
+          "pct",
         );
       }
       if (!lastOnly) showSession(chart, cats.length);

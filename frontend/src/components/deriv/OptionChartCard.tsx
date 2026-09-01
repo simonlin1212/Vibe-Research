@@ -625,6 +625,7 @@ export function OptionChartCard({ pick, mode, tick, alerts = NO_ALERTS, hasNight
         bag.current.chgAxis,
         pre !== null && pre > 0 ? pre : baseline,
         finite[finite.length - 1],
+        "pct",
       );
     }
     if (!lastOnly) showSession(chart, cats.length);

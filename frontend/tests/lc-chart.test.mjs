@@ -53,6 +53,7 @@ test("lcChart 是 K/分时共用封装, 不画 TradingView logo", () => {
   assert.match(src, /rightOffsetPixels/);
   assert.match(src, /export function pxPrec/);
   assert.match(src, /export function setRefPriceLine/);
+  assert.match(src, /axisLabelVisible: false/);
   assert.match(src, /createPriceLine/);
   assert.match(src, /export function setSeriesMarks/);
   assert.match(src, /export function canUpdateLast/);
@@ -140,7 +141,9 @@ test("四张 K/分时卡走 LC, 不直接 echarts.init", () => {
   assert.match(src, /export function chgToneCls/);
   assert.match(src, /export function chgToneHex/);
   assert.match(src, /export function nicePriceTicks/);
+  assert.match(src, /export function formatAxisPct/);
   assert.match(src, /export function bindChgPriceAxis/);
+  assert.match(src, /kind: ChgAxisKind = "price"/);
   assert.match(src, /export class ChgPriceAxisPrimitive/);
   assert.match(src, /tickVisible\(\) \{ return false; \}/);
   assert.match(src, /textColor: "rgba\(0,0,0,0\)"/);
@@ -158,10 +161,11 @@ test("四张 K/分时卡走 LC, 不直接 echarts.init", () => {
   assert.match(src, /export function minuteScaleRange/);
   assert.match(src, /export function styleMinuteSymScale/);
   assert.match(src, /scaleMargins: \{ top: 0\.02, bottom: 0\.02 \}/);
-  assert.match(src, /minimumWidth: 40/);
+  assert.match(src, /minimumWidth: 54/);
   assert.match(pane, /minuteScaleRange/);
   assert.match(pane, /minuteHiLo/);
   assert.match(pane, /styleMinuteSymScale/);
+  assert.match(pane, /lastI != null \? prices\[lastI\] : null,\s*"pct"/);
   assert.match(pane, /laterQuoteClock/);
   assert.match(pane, /isDaily \? undefined/);
   assert.match(pane, /更新 \{quoteClock\}/);
@@ -479,12 +483,27 @@ function chgToneHex(pct) {
   return pct >= 0 ? "#ff2d2d" : "#00d26a";
 }
 
+function formatAxisPct(pct) {
+  if (!Number.isFinite(pct)) return "—";
+  if (Math.abs(pct) < 5e-13) return "0.00%";
+  return `${pct > 0 ? "+" : ""}${pct.toFixed(2)}%`;
+}
+
 test("nicePriceTicks 走出 4660/4680 这种整数档", () => {
   const ticks = nicePriceTicks(4654, 4708);
   assert.ok(ticks.includes(4660));
   assert.ok(ticks.includes(4680));
   assert.equal(formatAxisPx(4660), "4660");
   assert.equal(formatAxisPx(12.35), "12.35");
+});
+
+test("formatAxisPct 分时右轴写涨跌幅", () => {
+  assert.equal(formatAxisPct(1.2), "+1.20%");
+  assert.equal(formatAxisPct(-0.5), "-0.50%");
+  assert.equal(formatAxisPct(0), "0.00%");
+  const pctTicks = nicePriceTicks(-2.15, 2.15);
+  assert.ok(pctTicks.includes(0));
+  assert.ok(pctTicks.includes(1) || pctTicks.includes(1.5) || pctTicks.includes(0.5));
 });
 
 test("chgToneHex 价轴字 +0% 及以上红, 小于 0 绿", () => {
