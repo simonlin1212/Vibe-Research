@@ -23,7 +23,7 @@ import { CockpitHeader, PAGE_NAV } from "@/components/cockpit/CockpitHeader";
 import { NewsToastHost } from "@/components/cockpit/NewsToastHost";
 import { TickerTape } from "@/components/cockpit/TickerTape";
 import { useFullscreen } from "@/hooks/useFullscreen";
-import { useTapeQuotes } from "@/hooks/useTapeQuotes";
+import { tapeLivePath, useTapeQuotes } from "@/hooks/useTapeQuotes";
 import { cn } from "@/lib/utils";
 
 const NAV_ICONS: Record<string, LucideIcon> = {
@@ -62,7 +62,7 @@ export function Layout() {
   const { pathname } = useLocation();
   const [params] = useSearchParams();
   const { isFullscreen, toggle } = useFullscreen();
-  const tapeItems = useTapeQuotes();
+  const tapeItems = useTapeQuotes(tapeLivePath(pathname));
   const cockpit = isCockpitPath(pathname, params.get("tab"));
   const [moreOpen, setMoreOpen] = useState(false);
   const moreActive = MORE_NAV.some((l) => l.match(pathname));

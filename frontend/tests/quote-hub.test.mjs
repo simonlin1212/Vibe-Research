@@ -10,6 +10,8 @@ const WORLD = new URL("../src/components/cockpit/WorldIndexPanel.tsx", import.me
 const SESSION = new URL("../src/lib/ashareSession.ts", import.meta.url);
 const FRESH = new URL("../src/lib/freshness.ts", import.meta.url);
 const DIRECT = new URL("../src/lib/tencentDirect.ts", import.meta.url);
+const TAPE = new URL("../src/hooks/useTapeQuotes.ts", import.meta.url);
+const LAYOUT = new URL("../src/components/layout/Layout.tsx", import.meta.url);
 
 const chartSrc = await readFile(CHART, "utf8");
 const feedSrc = await readFile(FEED, "utf8");
@@ -19,6 +21,32 @@ const worldSrc = await readFile(WORLD, "utf8");
 const sessionSrc = await readFile(SESSION, "utf8");
 const directSrc = await readFile(DIRECT, "utf8");
 const freshSrc = await readFile(FRESH, "utf8");
+const tapeSrc = await readFile(TAPE, "utf8");
+const layoutSrc = await readFile(LAYOUT, "utf8");
+
+function tapeLivePath(pathname) {
+  const p = pathname || "";
+  return !["/settings", "/backtest", "/data", "/research"].some(
+    (root) => p === root || p.startsWith(`${root}/`),
+  );
+}
+
+test("tape unsubscribes the quote hub on settings/backtest/data/research", () => {
+  assert.match(tapeSrc, /export function tapeLivePath/);
+  assert.match(tapeSrc, /peekQuotes/);
+  assert.match(tapeSrc, /useQuotes\(live \? TAPE_CODES : \[\]\)/);
+  assert.match(tapeSrc, /"\/settings", "\/backtest", "\/data", "\/research"/);
+  assert.match(layoutSrc, /useTapeQuotes\(tapeLivePath\(pathname\)\)/);
+  assert.equal(tapeLivePath("/a-share"), true);
+  assert.equal(tapeLivePath("/macro"), true);
+  assert.equal(tapeLivePath("/us-market"), true);
+  assert.equal(tapeLivePath("/portfolio"), true);
+  assert.equal(tapeLivePath("/settings"), false);
+  assert.equal(tapeLivePath("/backtest"), false);
+  assert.equal(tapeLivePath("/data"), false);
+  assert.equal(tapeLivePath("/research"), false);
+  assert.equal(tapeLivePath("/research/foo"), false);
+});
 
 test("K-line page and watchlist feed subscribe to the quote hub", () => {
   assert.match(chartSrc, /useQuotes\(/);
