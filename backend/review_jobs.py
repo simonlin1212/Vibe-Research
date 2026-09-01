@@ -199,7 +199,7 @@ def _cls_tg_40(*, write: bool = False) -> list:
     import astock
 
     op = _clock(write)
-    return op("cls_tg", "40", 120, lambda: astock.cls_telegraph(40))
+    return op("cls_tg", "40", 10, lambda: astock.cls_telegraph(40))
 
 
 def money_jobs(*, write: bool = False) -> list[Job]:

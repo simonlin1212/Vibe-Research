@@ -70,6 +70,7 @@ test("lcChart 是 K/分时共用封装, 不画 TradingView logo", () => {
   assert.match(src, /export function clearPaneWatermark/);
   assert.match(src, /export function setPaneWatermark/);
   assert.match(src, /apiRef\.current\.detach/);
+  assert.match(src, /apiRef\.current\.applyOptions\(opts\)/);
   assert.match(src, /text: string \| readonly string\[\]/);
   assert.match(src, /mid-resize \/ already removed/);
   assert.match(src, /apiRef\.current = null/);
@@ -192,7 +193,8 @@ test("四张 K/分时卡走 LC, 不直接 echarts.init", () => {
   assert.doesNotMatch(ashare, /import \{ AShareLcPane \}/);
   assert.match(ashare, /createSeriesGate/);
   assert.match(ashare, /if \(!snap\) return/);
-  assert.match(ashare, /name: snap\.meta\.name \|\| prev\?\.name/);
+  assert.match(ashare, /export function seriesNameFor/);
+  assert.match(ashare, /klineCodeKey\(prev\.code\) === klineCodeKey\(snap\.meta\.code\)/);
   assert.match(pane, /LC throws Value is null/);
   assert.match(pane, /wmRef\.current = null/);
   assert.match(ashare, /kind="minute"/);
@@ -500,6 +502,25 @@ test("nicePriceTicks 走出 4660/4680 这种整数档", () => {
   assert.ok(ticks.includes(4680));
   assert.equal(formatAxisPx(4660), "4660");
   assert.equal(formatAxisPx(12.35), "12.35");
+});
+
+function klineCodeKey(code) {
+  return code.trim().toLowerCase().replace(/^(sh|sz|bj)/, "");
+}
+
+function seriesNameFor(meta, selected) {
+  const name = (meta?.name || "").trim();
+  const got = (meta?.code || "").trim();
+  if (!name || !got || !selected) return "";
+  return klineCodeKey(got) === klineCodeKey(selected) || got.toLowerCase() === selected.toLowerCase()
+    ? name
+    : "";
+}
+
+test("seriesNameFor 换票不用上一只的名字", () => {
+  assert.equal(seriesNameFor({ code: "600519", name: "贵州茅台" }, "000001"), "");
+  assert.equal(seriesNameFor({ code: "000001", name: "上证指数" }, "sh000001"), "上证指数");
+  assert.equal(seriesNameFor({ code: "600519", name: "贵州茅台" }, "600519"), "贵州茅台");
 });
 
 test("formatAxisPct 分时右轴写涨跌幅", () => {

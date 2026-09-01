@@ -85,7 +85,7 @@ def _dc(endpoint: str, code: str, ttl: float, fetch, valid=is_nonempty, *, last:
 
 
 def _cached(endpoint: str, code: str, ttl: float, fetch, valid=is_nonempty):
-    """Expire may fetch again: watchlist minutes, board stocks, concept 120, rank up/down, lives."""
+    """Expire may fetch again: watchlist minutes, board stocks, concept 120, rank up/down, lives, cls telegraph."""
     return _dc(endpoint, code, ttl, fetch, valid, last=False)
 
 

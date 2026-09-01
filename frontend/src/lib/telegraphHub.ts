@@ -9,7 +9,7 @@ export function itemKey(it: ClsTelegraphItem, i: number) {
 
 const SEEN_KEY = "vr.cls.seenId";
 const LIMIT = 40;
-const REFRESH_MS = 30_000;
+export const REFRESH_MS = 10_000;
 
 function readSeen(): string {
   try {

@@ -160,6 +160,23 @@ function basicTd(key: ColKey, c: string, q: HubQuote | undefined) {
 
 const MINUTE_DAYS_KEY = "ashare.minute.days";
 
+function klineCodeKey(code: string): string {
+  return code.trim().toLowerCase().replace(/^(sh|sz|bj)/, "");
+}
+
+/** Ignore a leftover name from the previous ticker. */
+export function seriesNameFor(
+  meta: { code?: string; name?: string } | null | undefined,
+  selected: string,
+): string {
+  const name = (meta?.name || "").trim();
+  const got = (meta?.code || "").trim();
+  if (!name || !got || !selected) return "";
+  return klineCodeKey(got) === klineCodeKey(selected) || got.toLowerCase() === selected.toLowerCase()
+    ? name
+    : "";
+}
+
 function useAShareSeries(code: string, res: "1" | "5" | "1D", num: number, poll = false) {
   const [bars, setBars] = useState<AShareLightBar[]>([]);
   const [meta, setMeta] = useState<{
@@ -196,7 +213,9 @@ function useAShareSeries(code: string, res: "1" | "5" | "1D", num: number, poll 
       setBars(snap.bars);
       setMeta((prev) => ({
         ...snap.meta,
-        name: snap.meta.name || prev?.name,
+        name: snap.meta.name || (
+          prev && klineCodeKey(prev.code) === klineCodeKey(snap.meta.code) ? prev.name : undefined
+        ),
       }));
       setErr(null);
     } catch (e) {
@@ -355,7 +374,10 @@ export function AShareLightChart({
     () => overlayQuoteBar(daily.bars, qSel, "daily", liveQuote),
     [daily.bars, qSel, liveQuote],
   );
-  const wmName = minute.meta?.name || daily.meta?.name || (selected ? quotes[selected]?.name : "") || "";
+  const wmName = seriesNameFor(minute.meta, selected)
+    || seriesNameFor(daily.meta, selected)
+    || (selected ? quotes[selected]?.name : "")
+    || "";
 
   useEffect(() => {
     if (!urlCode) return;

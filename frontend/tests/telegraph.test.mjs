@@ -130,4 +130,5 @@ test("site-wide toast host rides telegraphHub, no second poll", async () => {
   assert.match(hub, /if \(!primed\[src\]\)/);
   assert.match(hub, /document\.hidden/);
   assert.match(hub, /visibilitychange/);
+  assert.match(hub, /export const REFRESH_MS = 10_000/);
 });

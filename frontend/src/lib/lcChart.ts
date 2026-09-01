@@ -1148,7 +1148,12 @@ export function setPaneWatermark(
       fontStyle: i === 0 ? "bold" : "",
     })),
   };
-  // Recreate. applyOptions on a detached plugin is a silent no-op (no requestUpdate).
+  // Update leftover text first. Detach can miss; applyOptions on a live plugin
+  // changes the name when switching tickers. Then recreate so a detached
+  // plugin (price-scale applyOptions) is not left as a silent no-op.
+  if (apiRef.current) {
+    try { apiRef.current.applyOptions(opts); } catch { /* gone */ }
+  }
   clearPaneWatermark(apiRef);
   if (!parts.length) return;
   try {

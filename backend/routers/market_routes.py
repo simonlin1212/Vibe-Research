@@ -284,12 +284,12 @@ def iwencai_select(
 
 @router.get("/api/cls-telegraph")
 def cls_telegraph(limit: int = Query(50, ge=10, le=100)):
-    """财联社电报（全市场实时快讯，零 key）。缓存 120 秒，长过整页预热 90 秒。客观呈现，不附推荐。"""
+    """财联社电报（全市场实时快讯，零 key）。过期重取 10 秒，跟网页 telegraphHub 同一口。客观呈现，不附推荐。"""
     try:
-        data = _dc(
+        data = _cached(
             "cls_tg",
             str(limit),
-            120,
+            10,
             lambda: astock.cls_telegraph(limit),
         )
         if not data:
