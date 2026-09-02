@@ -53,30 +53,32 @@ export function Panel({
             {icon}
           </span>
         )}
-        <h2 className="min-w-0 flex-1 truncate text-[12px] font-semibold tracking-wide text-[#ffcc00]">
+        <h2 className="shrink-0 text-[12px] font-semibold tracking-wide text-[#ffcc00]">
           {title}
-          {hint && (
-            <span className="ml-1.5 font-normal text-[10px] text-[#888]">{hint}</span>
-          )}
         </h2>
-        <div className="flex min-w-0 max-w-[min(240px,48vw)] shrink items-center justify-end gap-1 overflow-x-auto sm:max-w-none sm:shrink-0 sm:gap-1.5">
+        {hint ? (
+          <span className="min-w-0 max-w-[8rem] truncate font-normal text-[10px] text-[#888]" title={hint}>
+            {hint}
+          </span>
+        ) : null}
+        <div className="flex min-w-0 flex-1 items-center justify-end gap-1 overflow-x-auto [scrollbar-width:none]">
           {right}
-          {panelId && onToggleZoom && (
-            <button
-              type="button"
-              onClick={() => onToggleZoom(panelId)}
-              title={isZoomed ? "缩小" : "放大"}
-              className={cn(
-                "flex h-[18px] w-[18px] items-center justify-center border transition-colors",
-                isZoomed
-                  ? "border-primary/70 bg-primary/10 text-primary"
-                  : "border-[#333] bg-[#111] text-[#888] hover:border-primary/70 hover:text-primary",
-              )}
-            >
-              {isZoomed ? <ZoomOut size={12} /> : <ZoomIn size={12} />}
-            </button>
-          )}
         </div>
+        {panelId && onToggleZoom ? (
+          <button
+            type="button"
+            onClick={() => onToggleZoom(panelId)}
+            title={isZoomed ? "缩小" : "放大"}
+            className={cn(
+              "flex h-[18px] w-[18px] shrink-0 items-center justify-center border transition-colors",
+              isZoomed
+                ? "border-primary/70 bg-primary/10 text-primary"
+                : "border-[#333] bg-[#111] text-[#888] hover:border-primary/70 hover:text-primary",
+            )}
+          >
+            {isZoomed ? <ZoomOut size={12} /> : <ZoomIn size={12} />}
+          </button>
+        ) : null}
       </header>
       <div className={cn("min-h-0 flex-1 overflow-auto", bodyClassName)}>{children}</div>
     </section>

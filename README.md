@@ -26,7 +26,7 @@
 
 Vibe-Research 是一个开源的「个人 AI 投研看板」，**主推 A 股、兼看美股 / 港股**（A 股常要看隔夜外围脸色，数据配上更全）。它不替你做决定——把行情、研报、估值、财务、公告、资金面、资讯都配齐，放进一个干净的看板，再留一个能接入**你自己的 AI** 的接口。方向和结论，交给你自己配置的模型 / agent。
 
-**看板读法**：复盘页是一屏驾驶舱（桌面无需滚动，点面板放大；首行行情/广度/板块热点/板块资金，下面左自选、正中上分时下日K）；手机底栏切主页面，浏览器可「添加到主屏幕」。美股 / 期权 / 套利 / 事件 / 持仓走同一套黑底看盘台（红涨绿跌、黄字高亮、格子拼贴），不再切主题。
+**看板读法**：复盘页是一屏驾驶舱（桌面无需滚动，点面板放大；首行行情/广度/板块热点/板块资金，下面左自选、正中上分时下日K）；手机底栏切主页面，浏览器可「添加到主屏幕」。美股 / 期权 / 套利 / 资讯 / 持仓走同一套黑底看盘台（红涨绿跌、黄字高亮、格子拼贴），不再切主题。
 
 > *Vibe-Research: Your Personal Trading Research Agent. An open dashboard for China A-share (plus US / HK): it wires up all the data and plugs into **your own AI / agent** — it never recommends a stock. You bring the model, it brings the data.*
 
@@ -36,21 +36,21 @@ Vibe-Research 是一个开源的「个人 AI 投研看板」，**主推 A 股、
 
 | 页面 | 包含的模块 / 能力 |
 |---|---|
-| 🇨🇳&nbsp;**A&#8288;股** | 复盘一屏（可放大面板）：首行 **行情观察** / **涨跌分布** / **市场板块热点** / **板块资金流向**；下面左 **自选**（基础列），正中 **上分时下日K**（可切一日/两日，进详情/公告），右 **个股榜单** / **涨跌停** / **主力·龙虎·资金·产业链**（默认主力净流入）。点榜单/板块/指数/商品出分时日K，不写自选。整站顶栏下方横向滚动行情条（全球指数 + 黄金/原油/BTC 等商品，与驾驶舱共用 5 秒报价中心）。7×24 快讯不占复盘格，新条仍全站右上角弹 3 分钟，事件页可看全文。 |
+| 🇨🇳&nbsp;**A&#8288;股** | 复盘一屏（可放大面板）：首行 **行情观察** / **涨跌分布** / **市场板块热点** / **板块资金流向**；下面左 **自选**（基础列），正中 **上分时下日K**（可切一日/两日，进详情/公告），右 **个股榜单** / **涨跌停** / **主力·龙虎·资金·产业链**（默认主力净流入）。点榜单/板块/指数/商品出分时日K，不写自选。整站顶栏下方横向滚动行情条（全球指数 + 黄金/原油/BTC 等商品，与驾驶舱共用 5 秒报价中心）。7×24 快讯不占复盘格，全文在资讯页。 |
 | 🪟&nbsp;**财&#8288;报&#8288;窗&#8288;口** | 顶栏进入 `/fin`：对齐参考看板两行七格。披露日历（21 天可点柱带）/ 业绩预告 / 行业树状·条形榜 / 个股盈利榜 / 公司 3×3 指标+主营 / 近 12 期趋势 / 同业对比。默认贵州茅台；宏观包与 F10 **并行拉东财**，不再串行估值/公告/研报 |
-| 📡&nbsp;**资&#8288;讯&#8288;雷&#8288;达** | 复盘第一行右侧**快讯格**（财联社 / 新浪/见闻 / 金十，打标 + NEW，默认自动滚到顶）。新条全站右上角弹窗停留 3 分钟（最多 4 条，点标题回复盘） |
+| 📡&nbsp;**资&#8288;讯&#8288;雷&#8288;达** | 全文在顶栏 **资讯** `/event`（财联社 / 新浪见闻 / 金十 三栏）。不弹窗。 |
 | ⭐&nbsp;**自&#8288;选&#8288;股** | **批量粘贴一串代码即加**（逗号 / 空格 / 换行都行）· 一屏表格总览（现价 / 涨跌 / PE / PB / 换手）· **实时行情开关**（右上角，默认关；开了在交易时段每 3 秒自动刷新，非交易时段与页面切走时自动暂停）· 一键交给 AI 读。只存本地 |
 | 💼&nbsp;**我&#8288;的&#8288;持&#8288;仓** | **A股**：录入即实时盈亏 · 已清仓记录（只存本地）。**期货账户**：CTP 只读 · 区间结算单本地缓存 · 净值/累计收益/盈亏日历/统计（能按今日实时预估的都按预估；年化按自然日 365；账号在本机 `~/.vibe-research/ctp.json`）|
 | 🌊&nbsp;**期&#8288;权&#8288;/&#8288;期&#8288;货** | 顶栏 `/derivatives`（紧挨 A 股，旧 `/ovlab` 书签自动跳转）：**驾驶舱一屏** = 行情观察（一张竖表：价/涨跌/沉淀资金（期货本地：持仓×价格×乘数×九期网交易所保证金，ETF 份额×现价）/隐波/IV分位色带/溢价/分时；卡内 tab 切自选 `deriv.watch` / 指数（同花顺商品指数分时））· 临期期权日历（当月未过期月历，切月看远月，格子标交易所，点/悬停看标的）· 期限结构（品种可搜；选中品种：远期曲线点上标现值/涨幅 · 今实线/昨虚线 + 同月持仓量柱 + 仓单最新/日变/近90日，在异动左侧）· 异动（成交/走势/连续可关 · 剩余天数 · 区间涨幅 · 区间成交量 · 本机阈值）· **T 型报价联动区**（品种可搜；品种旁大号当月期货最新/涨跌；左侧上下叠 IV 微笑（LC：原始 theovol、今紫昨灰、合成标的现价竖线）与 ATM 隐波期限（LC 复刻 vol-ts 浮窗），同 tquote，点期限月切表；全部行权价链：理论价=Black-76/IV 买卖/Delta/持仓，价旁标涨幅，标的现价蓝线卡在两档之间，默认隐藏实值可关，按到期月切换；默认 ATM 购出图；点行情观察标的出标的日K/分时，点 T 表合约出期权图；上分时下日K叠在右侧一小条（标题同 A 股「分时 / 日K」），主看 T 表；日K=分钟聚合+标的隐波日线+下方量窗，分时=昨结对称价轴+四角高低+合约隐波+下方量窗叠持仓线，可切一日/两日，X 轴按交易时段铺满不拉满）。数据全部走 **OpenVlab** 公开缓存（市场概览 / flow-alert / price-volatility-series），60s 轮询同一把钥匙，盘中按 TTL 刷新、**休市（盘后/午休/周末）冻结只读上一笔**，后端启动时补一次首屏；CTP 账户只留在「我的持仓」 |
 | ⚖️&nbsp;**套&#8288;利** | 顶栏 `/arb`（紧挨期权期货）：**驾驶舱一屏** = 跨期价差（近月−次月）· 跨品种价差（近月对近月）· 期现（股指 IF/IH/IM vs 沪深300/上证50/中证1000 及对应 ETF；**现期** tab：生意社现期表 + 化工现货）· 上排**两腿/仓单** · 下排左**分时**右**日K**（股指日线标**日度基差**=指数−期货）。期货腿走 OpenVlab `future-ts` 瘦身看板，现货腿走报价中心，不另开 market 轮询。只呈现价差，不评分、不标可做。 |
-| 🗞️&nbsp;**事&#8288;件** | 顶栏 `/event`（紧挨套利）：**实时新闻**（财联社 / 新浪见闻 / 金十，与复盘快讯同一口）· **财经日历**（短线侠日程，与 [九言日历](https://jiuyan.033533.online/) 同一口）。 |
-| 🚢&nbsp;**宏&#8288;观** | 顶栏 `/macro`（紧挨事件）：**LPR**（1Y/5Y 折线）· **银行间**（DR007 定盘 / SHIBOR）· **汇率/美债**（美元人民币走报价中心；美债 10Y、美元指数）· **中债国债 + 政策性金融债**曲线 · **月度** CPI/PPI/PMI/社融/M2 · **人行社融原表** · **统计局 PMI 原文** · 上海航运交易所 **CTFI 进口原油运价**。美元人民币不另开轮询。 |
-| ⚡&nbsp;**短&#8288;线&#8288;侠** | 顶栏 `/dxx`（紧挨宏观）：**竞价封单**（9:15/20/25）· **竞价/打板** · **涨停直播** · **情绪**（上游字段，不是本站评分）· **板块强度** · **复盘/挖掘**（匹配次数）。只接免登录公开口，日历仍在事件页。点代码出 A 股分时日K。 |
+| 🗞️&nbsp;**资&#8288;讯** | 顶栏 `/event`（紧挨套利）：**实时新闻**（财联社 / 新浪见闻 / 金十 三栏并列，与复盘快讯同一口）· **财经日历**（短线侠日程，与 [九言日历](https://jiuyan.033533.online/) 同一口）· **热榜**（[SoPilot X起爆](https://sopilot.net/zh/rank/tweets) · [NewsNow](https://newsnow.busiyi.world/)+[REBANG](https://top.open2hub.com/) 合成一格 · [AIHOT](https://aihot.virxact.com/all)）。 |
+| 🚢&nbsp;**宏&#8288;观** | 顶栏 `/macro`（紧挨资讯）：**LPR**（1Y/5Y 折线）· **银行间**（DR007 定盘 / SHIBOR）· **汇率/美债**（美元人民币走报价中心；美债 10Y、美元指数）· **中债国债 + 政策性金融债**曲线 · **月度** CPI/PPI/PMI/社融/M2 · **人行社融原表** · **统计局 PMI 原文** · 上海航运交易所 **CTFI 进口原油运价**。美元人民币不另开轮询。 |
+| ⚡&nbsp;**短&#8288;线&#8288;侠** | 顶栏 `/dxx`（紧挨宏观）：**竞价封单**（9:15/20/25）· **竞价/打板** · **涨停直播** · **情绪**（上游字段，不是本站评分）· **板块强度** · **复盘/挖掘**（匹配次数）。只接免登录公开口，日历仍在资讯页。点代码出 A 股分时日K。 |
 | 🇺🇸&nbsp;**美&#8288;股** | 顶上一行**全球情绪**（加密 Alternative.me / 美股 CNN / 日港金油波动率）· 本地观察列表（ticker）· 东财快照行情 · **日 K + 成交量**（新浪）· **财报日历** · **SEC 当日申报流**（需 `VR_SEC_CONTACT`）。点列表即切图 |
 | 🔬&nbsp;**研&#8288;究&#8288;桌** | 顶栏 `/research`：多标的 **相关性热力图** · **ETF 穿透**（A 股东财中报/年报全持仓，美股 N-PORT）· **13F 环比** · Stooq/Baostock/pykrx K 线。只呈现公开披露，持仓天生滞后 |
 | 🧪&nbsp;**回&#8288;测** | 顶栏 `/backtest`：账户 + **因子** + **模型**。因子多超额动量 / 动量加速 / 量变等公式，Rank IC / Pearson IC / 五档 / 多空；周/月调仓用交易期末。默认剔 ST / 次新。账户有 `top_k` 目标权重、个股上限、行业中性、Sortino。模型页同一日 K 训 LightGBM（可选），分数进 Top-K。网格只在样本内选参 |
 | 🗄️&nbsp;**数&#8288;据** | 顶栏更多 `/data`：看本机日历、日 K 覆盖、实验。可补齐标的池近 3 年已收盘日 K。命令行: `python backend/fill_2y_bars.py` |
-| 🤖&nbsp;**AI&#8288;观&#8288;察** | 顶栏进入：公有云 Token 消耗（OpenRouter 日榜）· LLM 价格趋势 / 降价事件（TrakToken TTSI）· 大模型价格表与智能×成本散点（Artificial Analysis，可选 key）· AI 基建 CapEx/ROI（SEC + 模型外推）。只客观呈现，预测段标「模型假设」 |
+| 🤖&nbsp;**AI&#8288;观&#8288;察** | 顶栏进入：公有云 Token 消耗（OpenRouter 日榜）· LLM 价格趋势 / 降价事件（TrakToken TTSI）· 大模型价格表与智能×成本散点（Artificial Analysis，可选 key）· AI 基建 CapEx/ROI（SEC + 模型外推）· **[AIHOT](https://aihot.virxact.com/all)**（与资讯页同一口，含 [主题](https://aihot.virxact.com/topics)）。只客观呈现，预测段标「模型假设」 |
 | 🔌&nbsp;**接&#8288;入&nbsp;AI** | 订阅接入（本机 CLI，免 key）· API 多模型（自动填 baseURL）· MCP（挂进 Claude Code 等 agent）|
 
 > **投研分析框架**：让 AI 分析个股时，按 估值 / 资金面 / 财报质量 / 行业景气 / 事件催化与风险 五维组织结论。
@@ -73,6 +73,7 @@ Vibe-Research 把三套公开数据源**直接集成进仓库**——`git clone`
 - **定时复盘邮件**（默认关）：接入 AI 页可开关、改时间、改收件人（立刻生效）。A 股交易日到点按同一份复盘清单收集 → 同一套复盘上下文 → SMTP 发出（法定节假日不发；日历取不到时只跳过周末）。`GET/PUT /api/market/review-mail` · `POST /api/market/review-mail/run`。SMTP 与模型 key 仍在 `.env`
 - **全球情绪**：`GET /api/market/fear-greed`（钥匙 `fear_greed`，5 分钟）。加密 Alternative.me、美股 CNN Fear & Greed、日/港/金/油波动率反转分。复盘「涨跌分布 / 广度」下部与美股页同一口，不进报价中心。
 - **财经日历**：`GET /api/event/calendar`（钥匙 `event_cal`，300s）。短线侠 timeline，和九言日历同一口。网页 `/event` 用。不进复盘预热、不进报价中心。
+- **热榜**：`GET /api/event/ranks`（钥匙 `event_rank`，180s）。SoPilot X起爆 / NewsNow / REBANG / AIHOT 官方 `/api/v1` + `/topics` 主题卡。网页 `/event` 下行三格（NewsNow+REBANG 合成热榜，微博/知乎/金十去重）；`/ai-watch` 底栏同一把 `event_rank/aihot`（`?part=aihot`）。不进复盘预热、不进报价中心。
 - **短线侠看板**：`GET /api/dxx/board`（钥匙 `dxx`，盘中 60s / 历史 300s）。封单 / 打板 / 涨停直播 / 情绪 / 板块强度 / 复盘 / 挖掘。网页 `/dxx` 用，不进复盘预热、不进报价中心。
 - **生意社现货（参考看板补齐）**：`GET /api/market/spot-table` 现货/期货/基差对照（8h 缓存，历史落在 `~/.vibe-research/spot-history.json`）· `GET /api/market/chem-spot?id=` 化工现货中位数。套利期现卡「现期」tab 读这两口，A 股宏观观察不画。
 - **期货日 K / 个股板块 / 直播快讯**：`GET /api/market/future-daily?code=nf_AU0`（新浪内盘/外盘日 K）· `GET /api/market/stock-boards?code=600519` · `GET /api/market/stock-boards-batch?codes=`（东财行业/地域/概念）· `GET /api/market/lives`（新浪 7×24，失败回退华尔街见闻；`source=jin10` 走金十 `flash_newest.js`；快讯格三档共用这条）
@@ -92,7 +93,7 @@ Vibe-Research 把三套公开数据源**直接集成进仓库**——`git clone`
 - **研究桌**：`GET /api/research/kline`（Stooq / Baostock / pykrx）· `/correlation` · `/etf-holdings` · `/13f`。韩股日 K 需 `pip install pykrx`（Naver 复权，不是 KRX 原始盘）。
 - **回测**：`GET /api/backtest/meta` · `GET /api/backtest/index-pool`（沪深300 / 中证500 / 科创50 / 创业板指；`history=1` 同时写入中证变动日快照）· `POST /api/backtest/run`（可 `index` + `pit_members` 按日成分回放；策略含 `top_k` 目标权重，可 `max_weight` / `industry_neutral`；`exclude_st` / `min_list_days` 可交易掩码）· `POST /api/backtest/factor`（含 ROE/净利润/营收公告日 PIT；周/月=交易期末）· `POST /api/backtest/model`（LightGBM 可选，分数进 Top-K）· `GET/DELETE /api/backtest/runs` · `GET /api/backtest/store`（可带 `?codes=` 看这批覆盖）· `POST /api/backtest/store/sync` · `POST /api/backtest/store/members` · `POST /api/backtest/store/fundamentals`。库存不齐会现拉, 会慢。日 K 走 `daily_bars`（腾讯，与 light_kline 同源）。实验在 `~/.vibe-research/backtest/runs/<id>/`。表单默认仍是最新名单静态池；勾选按日成分才回放。沪深300 基准有快照时是等权可交易账户，不是指数价格比。北交所 920 按 30% 涨跌停。
 - **美股页**：观察列表 + K 线 + **EDGAR Screener（S 级）** + 涨跌榜 + 选中标的期权 + 财报日历 + SEC 日报。
-- **AI 观察**：`GET /api/ai-watch/openrouter-usage`（需 `OPENROUTER_API_KEY`，无 key 读本地缓存）· `spend-index`（TrakToken RSS）· `aa-models`（可选 `ARTIFICIAL_ANALYSIS_API_KEY`）· `ai-infra`（SEC CapEx + 模型外推）。快照落在 `~/.vibe-research/ai-watch/`。
+- **AI 观察**：`GET /api/ai-watch/openrouter-usage`（需 `OPENROUTER_API_KEY`，无 key 读本地缓存）· `spend-index`（TrakToken RSS）· `aa-models`（可选 `ARTIFICIAL_ANALYSIS_API_KEY`）· `ai-infra`（SEC CapEx + 模型外推）。快照落在 `~/.vibe-research/ai-watch/`。AIHOT 不走这四把钥匙，走资讯页 `GET /api/event/ranks?part=aihot`。
 - **SEC**：设置 `VR_SEC_CONTACT="Name you@example.com"`，否则 SEC 端点返回 503。
 - **CBOE 期权**：合规 C 级，仅个人研究；商用须先取得 Cboe 授权。延时数据，不用于实盘下单。
 - **韩股**：加 `.KS`（如 `005930.KS`）；行情 + 研究桌日 K（pykrx）。台股走 ADR（如 `TSM`）。

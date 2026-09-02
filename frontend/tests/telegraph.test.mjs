@@ -19,7 +19,7 @@ function countNew(items, seen) {
 test("event page rides telegraphHub, no second news poll", async () => {
   const { readFile } = await import("node:fs/promises");
   const page = await readFile(new URL("../src/pages/EventCockpit.tsx", import.meta.url), "utf8");
-  assert.match(page, /NewsCockpitPanel/);
+  assert.match(page, /NewsTriple/);
   assert.match(page, /from "@\/lib\/telegraphHub"/);
   assert.doesNotMatch(page, /api\.clsTelegraph/);
   assert.doesNotMatch(page, /api\.marketLives/);
@@ -32,7 +32,10 @@ test("news cell has jin10 tab on the same telegraph hub", async () => {
   const api = await readFile(new URL("../src/lib/api.ts", import.meta.url), "utf8");
   assert.match(hub, /"cls" \| "lives" \| "jin10"/);
   assert.match(hub, /src === "jin10" \? "jin10"/);
-  assert.match(panel, /\["jin10", "金十"\]/);
+  assert.match(hub, /if \(primed\[src\]\) void pull\(src, true\)/);
+  assert.match(panel, /src: "jin10", label: "金十"/);
+  assert.match(panel, /accent: "#ffcc00"/);
+  assert.match(panel, /export function NewsTriple/);
   assert.match(panel, /cats=\{it\.tags\}/);
   assert.match(api, /source=\$\{source\}/);
 });
@@ -55,78 +58,11 @@ test("countNew caps first visit and unread", () => {
   assert.equal(countNew(items, "never"), 20);
 });
 
-function incomingFromFresh(items, fresh, source, already) {
-  const out = [];
-  items.forEach((it, i) => {
-    const id = itemKey(it, i);
-    if (!fresh.has(id) || already.has(id)) return;
-    const extra = it.content || it.summary || "";
-    out.push({
-      id, title: it.title,
-      content: extra && extra !== it.title ? extra : undefined,
-      time: it.time, tags: it.tags, source,
-    });
-  });
-  return out;
-}
-
-function enqueueNewsToasts(queue, incoming, now, ttl = 180_000, cap = 4) {
-  const alive = queue.filter((t) => t.until > now);
-  const have = new Set(alive.map((t) => t.id));
-  const add = incoming
-    .filter((it) => it.id && !have.has(it.id))
-    .map((it) => ({ ...it, until: now + ttl }));
-  return [...add, ...alive].slice(0, cap);
-}
-
-function pruneNewsToasts(queue, now) {
-  return queue.filter((t) => t.until > now);
-}
-
-test("incomingFromFresh skips seen and first-paint keys", () => {
-  const items = [
-    { id: "a", title: "A", time: "2026-08-20 10:00", content: "A" },
-    { id: "b", title: "B", time: "2026-08-20 10:01", content: "正文" },
-  ];
-  assert.deepEqual(incomingFromFresh(items, new Set(), "cls", new Set()), []);
-  const neu = incomingFromFresh(items, new Set(["b"]), "cls", new Set(["a"]));
-  assert.equal(neu.length, 1);
-  assert.equal(neu[0].id, "b");
-  assert.equal(neu[0].content, "正文");
-});
-
-test("news toasts last 3 min, cap 4, drop expired", () => {
-  const now = 1_000_000;
-  const incoming = ["1", "2", "3", "4", "5"].map((id) => ({
-    id, title: id, source: "cls", time: "10:00",
-  }));
-  const q = enqueueNewsToasts([], incoming, now);
-  assert.equal(q.length, 4);
-  assert.equal(q[0].id, "1");
-  assert.equal(q[0].until, now + 180_000);
-  assert.equal(enqueueNewsToasts(q, [{ id: "1", title: "1", source: "cls" }], now + 10).length, 4);
-  assert.deepEqual(pruneNewsToasts(q, now + 180_001).map((t) => t.id), []);
-  assert.equal(pruneNewsToasts(q, now + 179_999).length, 4);
-});
-
-test("site-wide toast host rides telegraphHub, no second poll", async () => {
+test("layout has no site-wide news toast", async () => {
   const { readFile } = await import("node:fs/promises");
-  const toast = await readFile(new URL("../src/lib/newsToast.ts", import.meta.url), "utf8");
-  const host = await readFile(new URL("../src/components/cockpit/NewsToastHost.tsx", import.meta.url), "utf8");
   const layout = await readFile(new URL("../src/components/layout/Layout.tsx", import.meta.url), "utf8");
   const hub = await readFile(new URL("../src/lib/telegraphHub.ts", import.meta.url), "utf8");
-  assert.match(toast, /export const NEWS_TOAST_MS = 180_000/);
-  assert.match(toast, /export const NEWS_TOAST_CAP = 4/);
-  assert.match(host, /useTelegraph/);
-  assert.match(host, /incomingFromFresh/);
-  assert.match(host, /180_000|NEWS_TOAST_MS|enqueueNewsToasts/);
-  assert.doesNotMatch(host, /setInterval\(\s*\(\)\s*=>\s*void (api\.|loadTelegraph)/);
-  assert.match(layout, /<NewsToastHost/);
-  assert.match(host, /to="\/event"/);
-  assert.doesNotMatch(host, /to="\/a-share"/);
-  assert.match(host, /if \(!toasts\.length\) return/);
-  assert.match(host, /document\.hidden/);
-  assert.match(host, /visibilitychange/);
+  assert.doesNotMatch(layout, /NewsToastHost|newsToast/);
   assert.match(hub, /if \(!primed\[src\]\)/);
   assert.match(hub, /document\.hidden/);
   assert.match(hub, /visibilitychange/);

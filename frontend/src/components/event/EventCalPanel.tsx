@@ -91,11 +91,13 @@ export function EventCalPanel({
                 <span className="text-[14px] font-medium">{lab.wd}</span>
                 <span className="font-mono text-[14px] tabular-nums">{lab.md}</span>
               </span>
-              <span className="text-right text-[12px] text-slate-500">{g.items.length}</span>
+              <span className="text-right font-mono text-[12px] tabular-nums text-slate-400">
+                {g.items.length}条
+              </span>
             </div>
             <ul className="border border-[#2a2a2a]">
               {g.items.map((t, i) => (
-                <li key={`${g.date}-${i}`} className="border-t border-[#2a2a2a] px-2 py-1.5 text-[13px] leading-snug text-slate-200 first:border-t-0">
+                <li key={`${g.date}-${i}`} className="border-t border-[#2a2a2a] px-2 py-1.5 text-[13px] leading-snug text-slate-100 first:border-t-0 hover:bg-white/[0.03]">
                   {t}
                 </li>
               ))}

@@ -2,6 +2,7 @@ import { useSyncExternalStore } from "react";
 import { api, ApiError, type ClsTelegraph, type ClsTelegraphItem } from "@/lib/api";
 
 export type FeedSource = "cls" | "lives" | "jin10";
+export const FEED_SOURCES: FeedSource[] = ["cls", "lives", "jin10"];
 
 export function itemKey(it: ClsTelegraphItem, i: number) {
   return String(it.id ?? `${it.time}-${i}`);
@@ -53,7 +54,6 @@ export function feedOf(snap: Snap, src: FeedSource): ClsTelegraph | null {
 }
 
 let seenId = readSeen();
-let lastSrc: FeedSource = "cls";
 const primed: Record<FeedSource, boolean> = { cls: false, lives: false, jin10: false };
 const seenKeys = new Set<string>();
 let snap: Snap = {
@@ -74,7 +74,6 @@ function emit() {
 }
 
 async function pull(src: FeedSource, silent: boolean) {
-  lastSrc = src;
   if (src === "cls") {
     if (clsInflight) return;
     clsInflight = true;
@@ -140,13 +139,19 @@ export function markClsSeen() {
   emit();
 }
 
-function beat() {
+function refreshOpen() {
   if (typeof document !== "undefined" && document.hidden) return;
-  void pull(lastSrc, true);
+  for (const src of FEED_SOURCES) {
+    if (primed[src]) void pull(src, true);
+  }
+}
+
+function beat() {
+  refreshOpen();
 }
 
 function onVis() {
-  if (!document.hidden) void pull(lastSrc, true);
+  if (!document.hidden) refreshOpen();
 }
 
 function subscribe(fn: () => void) {

@@ -377,6 +377,37 @@ export interface EventCalBoard {
   count: number;
   src?: string;
 }
+export interface EventRankItem {
+  rank: number;
+  title: string;
+  url: string;
+  extra?: string;
+  name?: string;
+  handle?: string;
+  age?: string;
+  metric?: string;
+  views?: string;
+  likes?: string;
+}
+export interface EventRankTab {
+  id: string;
+  name: string;
+  hint?: string;
+  cat?: string;
+  items: EventRankItem[];
+}
+export interface EventRankPart {
+  src?: string;
+  rising?: EventRankItem[];
+  hot?: EventRankItem[];
+  tabs?: EventRankTab[];
+}
+export interface EventRankBoard {
+  sopilot: EventRankPart | null;
+  newsnow: EventRankPart | null;
+  rebang: EventRankPart | null;
+  aihot?: EventRankPart | null;
+}
 export interface DxxFengRow {
   code: string; name: string; tags: string[]; a15: string; a20: string; a25: string;
 }
@@ -1610,6 +1641,8 @@ export const api = {
     return resp.blob();
   },
   eventCalendar: () => get<EventCalBoard>("/event/calendar"),
+  eventRanks: (part?: string) =>
+    get<EventRankBoard>(`/event/ranks${part ? `?part=${encodeURIComponent(part)}` : ""}`),
   dxxBoard: () => get<DxxBoard>("/dxx/board"),
   commodityMinutes: (codes: string) =>
     get<Record<string, CommodityMinute | null>>(`/market/commodity-minutes?codes=${encodeURIComponent(codes)}`),

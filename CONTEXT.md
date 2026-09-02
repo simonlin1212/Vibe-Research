@@ -58,13 +58,18 @@ _Avoid_: 第二把 qihuo_fee 钥匙, iframe 九期网, 手写 fut_spec.SPEC, 期
 入口: `frontend/src/pages/ArbCockpit.tsx` + `frontend/src/hooks/useArbData.ts` + `frontend/src/components/arb/`。
 _Avoid_: 第二条 /api/ovlab/market 轮询, future-ts-all, 第二份配对 JSON, 把套利塞进 /derivatives, 上证50 塞进指数目录, 新浪 commodity-minutes, CTP, 持有成本/套利评分
 
-**事件驾驶舱**:
-`/event` 顶栏紧挨套利。格子：财经日历 | 实时新闻。快讯走同一份电报中心（财联社 / 新浪见闻 / 金十），不是推送，网页 10 秒拉，过期重取，不另开轮询。**财经日历** ← `GET /api/event/calendar`（钥匙 `event_cal` / `timeline`，300s 上一笔），上游短线侠 `getHotNewsByType type=timeline`，和 [jiuyan.033533.online](https://jiuyan.033533.online/) 同一口，不 iframe、不进复盘预热/报价中心。
-入口: `frontend/src/pages/EventCockpit.tsx` + `frontend/src/components/event/`；后端 `backend/event_cal.py`；HTTP `GET /api/event/calendar`。
-_Avoid_: 第二条快讯轮询, 把日历塞进 telegraphHub, 塞进复盘预热, 报价中心, CTP
+**资讯驾驶舱**:
+`/event` 顶栏紧挨套利。格子：财经日历 | 实时新闻（财联社 / 新浪见闻 / 金十 三栏各三分之一）；下行 X起爆 | 热榜（NewsNow+REBANG 合成一格，微博/知乎/金十去重，雪球不拉） | AIHOT。快讯走同一份电报中心，三栏同订，不是推送，网页 10 秒拉已点亮的源，过期重取，不另开轮询。**财经日历** ← `GET /api/event/calendar`（钥匙 `event_cal` / `timeline`，300s 上一笔），上游短线侠 `getHotNewsByType type=timeline`，和 [jiuyan.033533.online](https://jiuyan.033533.online/) 同一口。**热榜** ← `GET /api/event/ranks`（钥匙 `event_rank` / `sopilot` `newsnow` `rebang` `aihot`，180s 上一笔）：SoPilot 推文起爆榜 HTML、NewsNow `/api/s`、REBANG 首页+财经页、AIHOT 官方 `/api/v1/items` + `hot-topics` + `dailies/latest` + `/topics` 主题卡（官方 v1 无 topics 口）。不 iframe、不经 NewsNow 转 AIHOT、不进复盘预热/报价中心。
+入口: `frontend/src/pages/EventCockpit.tsx` + `frontend/src/components/event/`；后端 `backend/event_cal.py` + `backend/event_rank.py`；HTTP `GET /api/event/calendar` · `/api/event/ranks`。
+_Avoid_: 第二条快讯轮询, 把日历/热榜塞进 telegraphHub, 塞进复盘预热, 报价中心, CTP, 第二把 aihot 钥匙
+
+**AI 观察**:
+`/ai-watch` 顶栏。原格子：OpenRouter Token / TTSI / 基建 ROI / 价格表 / 散点。底栏再挂 **AIHOT**（与资讯页同一把 `event_rank/aihot`，`GET /api/event/ranks?part=aihot`，180s）。不另开钥匙、不拉 SoPilot/NewsNow/REBANG。
+入口: `frontend/src/pages/AiWatch.tsx` + `frontend/src/components/ai-watch/AihotPanel.tsx`。
+_Avoid_: 第二把 aihot 钥匙, iframe, 把 AIHOT 塞进 aiw_or / aiw_ttsi / aiw_aa / aiw_infra
 
 **短线侠驾驶舱**:
-`/dxx` 顶栏紧挨宏观。格子：竞价封单 | 竞价/打板 | 涨停直播 | 情绪 | 板块强度 | 复盘/挖掘。只接免登录公开口：`getFengdanLast` / `getDabanData` / `getZtliveData` / `getChartByQingxu` / `getLastQxlive` / `getLiveByStrong` / `getFupanByYidong` / `getWajueMatch`。日历仍走事件页 `event_cal`，不在这页再拉 timeline。一把钥匙 `dxx`（live 60s / 历史 300s，上一笔），不进复盘清单/预热、不进报价中心。QX 等是上游字段，页面标「不是本站评分」。挖掘只列匹配次数。点代码出 A 股分时日K（`?code=`），不另开轮询。
+`/dxx` 顶栏紧挨宏观。格子：竞价封单 | 竞价/打板 | 涨停直播 | 情绪 | 板块强度 | 复盘/挖掘。只接免登录公开口：`getFengdanLast` / `getDabanData` / `getZtliveData` / `getChartByQingxu` / `getLastQxlive` / `getLiveByStrong` / `getFupanByYidong` / `getWajueMatch`。日历仍走资讯页 `event_cal`，不在这页再拉 timeline。一把钥匙 `dxx`（live 60s / 历史 300s，上一笔），不进复盘清单/预热、不进报价中心。QX 等是上游字段，页面标「不是本站评分」。挖掘只列匹配次数。点代码出 A 股分时日K（`?code=`），不另开轮询。
 入口: `frontend/src/pages/DxxCockpit.tsx` + `frontend/src/components/dxx/`；后端 `backend/dxx.py`；HTTP `GET /api/dxx/board`。
 _Avoid_: 第二条报价轮询, 第二把 dxx 钥匙, 塞进复盘预热, 日历再拉一份 timeline, 登录/加密接口, 把 QX 当本站评分
 
@@ -74,7 +79,7 @@ _Avoid_: 第二条报价轮询, 第二把 dxx 钥匙, 塞进复盘预热, 日历
 _Avoid_: 第二份情绪名单, 第二条报价轮询, 把大盘股 52 周位置塞进来
 
 **宏观驾驶舱**:
-`/macro` 顶栏紧挨事件。格子：LPR（中国货币网 1Y/5Y 折线，走 `lcChart`）| 银行间（DR007 取银银间 7 天定盘 FDR007 + FR007 + SHIBOR ON/1W/3M）| 汇率/美债（美元人民币订报价中心 `whUSDCNY`；美债 10Y FRED DGS10、美元指数东财 `100.UDI`）| 中债国债 + 政策性金融债曲线 | 月度 CPI/PPI/PMI/社融/M2 | 人行社融原表 | 统计局 PMI 原文 | 上海航运交易所 [CTFI](https://www.sse.net.cn/index/singleIndex?indexType=ctfi) 综合 + CT1/CT2（基期 2012-11-28=1000，涨跌按点数换算百分比）+ 官方走势图（`indexImg?name=ctfi`）。LPR/国债/政金债走已有 `GET /api/market/lpr` · `/bond-yield`（钥匙仍是 `lpr` / `cn_bond_yield`，复盘预热继续填国债，A 股资金页不再画）。银行间 + 月度 + 美债/美指一把钥匙 `macro_board`（`board` 600s），不进预热钟。人行社融 / 统计局 PMI 走已有 `GET /api/astock/pboc-sfin` · `/nbs-pmi`（钥匙 `astock_pboc` / `astock_nbs_pmi`，LPR/board 出齐再取），不并进 `macro_board`、不进预热。美元人民币不进第二份名单。CTFI 日更，钥匙 `ctfi`（`latest` / `img`）4h 上一笔。不进指数目录、不进行情观察。
+`/macro` 顶栏紧挨资讯。格子：LPR（中国货币网 1Y/5Y 折线，走 `lcChart`）| 银行间（DR007 取银银间 7 天定盘 FDR007 + FR007 + SHIBOR ON/1W/3M）| 汇率/美债（美元人民币订报价中心 `whUSDCNY`；美债 10Y FRED DGS10、美元指数东财 `100.UDI`）| 中债国债 + 政策性金融债曲线 | 月度 CPI/PPI/PMI/社融/M2 | 人行社融原表 | 统计局 PMI 原文 | 上海航运交易所 [CTFI](https://www.sse.net.cn/index/singleIndex?indexType=ctfi) 综合 + CT1/CT2（基期 2012-11-28=1000，涨跌按点数换算百分比）+ 官方走势图（`indexImg?name=ctfi`）。LPR/国债/政金债走已有 `GET /api/market/lpr` · `/bond-yield`（钥匙仍是 `lpr` / `cn_bond_yield`，复盘预热继续填国债，A 股资金页不再画）。银行间 + 月度 + 美债/美指一把钥匙 `macro_board`（`board` 600s），不进预热钟。人行社融 / 统计局 PMI 走已有 `GET /api/astock/pboc-sfin` · `/nbs-pmi`（钥匙 `astock_pboc` / `astock_nbs_pmi`，LPR/board 出齐再取），不并进 `macro_board`、不进预热。美元人民币不进第二份名单。CTFI 日更，钥匙 `ctfi`（`latest` / `img`）4h 上一笔。不进指数目录、不进行情观察。
 入口: `frontend/src/pages/MacroCockpit.tsx` + `frontend/src/components/macro/` + `backend/ctfi.py` + `backend/macro_board.py` + `backend/astock_research.py`；HTTP `GET /api/market/lpr` · `/bond-yield` · `/macro-board` · `/ctfi` · `/ctfi-img` · `/api/astock/pboc-sfin` · `/nbs-pmi`。
 _Avoid_: 塞进指数目录, 第二条报价轮询, 第二把 lpr/cn_bond_yield/macro_board 钥匙, 资金页再画一份, 挂回 A 股行情观察, 美债/美指进指数目录
 
@@ -148,7 +153,7 @@ _Avoid_: 第二条日历, 第二条报价轮询, 重叠持有期×252/horizon �
 
 K/分时（A 股轻量图、美股日K、期权日K/分时、套利价差）和复盘资金页 ETF 份额日线、宏观 LPR 折线走 `lightweight-charts`，入口 `frontend/src/lib/lcChart.ts`。十字右侧价签一律 `LcHoverTag`（白底黑字, 涨跌幅相对昨收/昨结红绿, 不标距今）。右轴最新价红绿块由 `ChgPriceAxisPrimitive` 画在刻度字之上, 邻近刻度让开。ECharts 只留给非时间序列（期限结构、国债曲线、相关热力图、回测）。T 表 IV 微笑/期限走 `createOptionsChart`，浮窗用 React 叠在 LC 上（深色能看清即可）。格子小走势仍是手写 SVG。
 
-报价中心、分时、快讯三个 hub 各自保留。`CockpitLayout` / `QuoteStockRow` 继续用。快讯新条全站右上角弹 3 分钟（Layout 订 `telegraphHub`，10 秒拉，切走标签页停，首屏不弹，最多 4 条叠，悬停先不撤，不另开轮询）。
+报价中心、分时、快讯三个 hub 各自保留。`CockpitLayout` / `QuoteStockRow` 继续用。快讯只在资讯页 `/event` 看，全站不再弹窗。
 
 东财 `push2` / `push2delay` 主机轮询只在东财挂了、有的格子活有的死时再动。
 
@@ -162,7 +167,7 @@ K/分时（A 股轻量图、美股日K、期权日K/分时、套利价差）和�
 - 复盘对照昨日档：`backend/tests/test_review_archive_diff.py`（`need_two_runs` 的 changes 是 null，空列表只属于 `unchanged`；不进预热）+ `frontend/tests/review-context.test.mjs`（复盘页挂 `ReviewArchiveDiffBar`，不另开 snapshot）
 - 衍生目录 / 期权驾驶舱导航：`backend/tests/test_deriv_catalog.py` + `frontend/tests/page-nav.test.mjs`（`/derivatives` 紧挨 `/a-share`，前后端同序同码）+ `frontend/tests/option-chart.test.mjs`
 - 套利目录 / 套利驾驶舱：`backend/tests/test_arb_catalog.py`（前后端同序同码；`sh000016` 不进指数目录）+ `test_ovlab.py` arb-board（复用 future-ts，不打 market）+ `frontend/tests/page-nav.test.mjs`（`/arb` 紧挨 `/derivatives`，无 CTP）+ `frontend/tests/arb-chart.test.mjs` + `frontend/tests/lc-chart.test.mjs`
-- 事件：`backend/tests/test_event_cal.py`（一把 `event_cal` 钥匙、不进预热钟）+ `frontend/tests/page-nav.test.mjs`（`/event` 紧挨 `/arb`）+ `frontend/tests/event-page.test.mjs`（快讯走 telegraphHub，日历走 `api.eventCalendar`）
+- 资讯：`backend/tests/test_event_cal.py`（一把 `event_cal` 钥匙、不进预热钟）+ `backend/tests/test_event_rank.py`（一把 `event_rank` 钥匙、四源解析、不进预热钟）+ `frontend/tests/page-nav.test.mjs`（`/event` 紧挨 `/arb`）+ `frontend/tests/event-page.test.mjs`（快讯走 telegraphHub，日历走 `api.eventCalendar`，热榜走 `api.eventRanks`）+ `frontend/tests/ai-watch-page.test.mjs`（`/ai-watch` 挂同一把 `event_rank/aihot`，`part=aihot`）
 - 短线侠：`backend/tests/test_dxx.py`（一把 `dxx` 钥匙、不进预热钟）+ `frontend/tests/page-nav.test.mjs`（`/dxx` 紧挨 `/macro`，`/macro` 紧挨 `/event`）+ `frontend/tests/dxx-page.test.mjs`（一板 `api.dxxBoard`，不进报价中心）
 - OpenVlab MQTT：`backend/tests/test_ovlab_mqtt.py`（sidecar 三条 topic / 解析 / 不写 `ovlab_flow_alert`；SSE `/mqtt/stream` 兜底）+ `frontend/tests/ovlab-mqtt.test.mjs`（网页 `mqtt.connect` / `wss://emqx.openvlab.cn/mqtt`）+ `frontend/tests/alert-panel.test.mjs`；live 连 broker 在 `test_live.py`
 - 同花顺行情：`backend/tests/test_ths_quote.py`（市场码归位、pct 现算、缓存上一笔）+ `frontend/tests/ths-cmd-index.test.mjs`（驾驶舱指数 tab 走 `/api/ths`，不进指数目录/报价中心）

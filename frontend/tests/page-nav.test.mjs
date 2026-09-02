@@ -39,6 +39,7 @@ test("/derivatives sits right after /a-share and is primary", () => {
   const arbLine = nav.split("\n").find((l) => l.includes('to: "/arb"'));
   assert.match(arbLine, /primary: true/);
   const eventLine = nav.split("\n").find((l) => l.includes('to: "/event"'));
+  assert.match(eventLine, /label: "资讯"/);
   assert.match(eventLine, /primary: true/);
   const dxxLine = nav.split("\n").find((l) => l.includes('to: "/dxx"'));
   assert.match(dxxLine, /primary: true/);

@@ -10,8 +10,10 @@ test("event page reuses telegraphHub and event calendar", () => {
   const page = readFileSync(join(root, "src/pages/EventCockpit.tsx"), "utf8");
   const api = readFileSync(join(root, "src/lib/api.ts"), "utf8");
   const hub = readFileSync(join(root, "src/lib/telegraphHub.ts"), "utf8");
-  assert.match(page, /NewsCockpitPanel/);
+  assert.match(page, /资讯页快照/);
+  assert.match(page, /NewsTriple/);
   assert.match(page, /peekTelegraphItems/);
+  assert.match(page, /FEED_SOURCES/);
   assert.match(page, /EventCalPanel/);
   assert.match(page, /api\.eventCalendar/);
   assert.ok(page.indexOf("event-cal") < page.indexOf("event-news"), "财经日历在左");
@@ -34,6 +36,49 @@ test("event page reuses telegraphHub and event calendar", () => {
   assert.doesNotMatch(page, /PmPanel/);
   assert.doesNotMatch(api, /polymarket/i);
   assert.match(hub, /export function peekTelegraphItems/);
+});
+
+test("event page hangs three public rank boards", () => {
+  const page = readFileSync(join(root, "src/pages/EventCockpit.tsx"), "utf8");
+  const api = readFileSync(join(root, "src/lib/api.ts"), "utf8");
+  const rank = readFileSync(join(root, "src/components/event/EventRankPanel.tsx"), "utf8");
+  assert.match(page, /api\.eventRanks/);
+  assert.match(page, /event-sopilot/);
+  assert.match(page, /event-hot/);
+  assert.match(page, /event-aihot/);
+  assert.doesNotMatch(page, /id: "event-newsnow"/);
+  assert.doesNotMatch(page, /id: "event-rebang"/);
+  assert.ok(page.indexOf("event-news") < page.indexOf("event-sopilot"), "热榜在第二行");
+  assert.ok(page.indexOf("event-hot") < page.indexOf("event-aihot"), "合成热榜在 AIHOT 前");
+  assert.match(api, /eventRanks/);
+  assert.match(api, /\/event\/ranks/);
+  assert.match(api, /aihot\?/);
+  assert.match(rank, /export function RankList/);
+  assert.match(rank, /export function pickTab/);
+  assert.match(rank, /export function mergeHotTabs/);
+  assert.match(rank, /export function RankBoard/);
+  assert.match(rank, /wrap \? "flex-wrap"/);
+  assert.match(page, /<RankBoard/);
+  const panel = readFileSync(join(root, "src/components/cockpit/Panel.tsx"), "utf8");
+  assert.match(panel, /h2 className="shrink-0/);
+  assert.doesNotMatch(rank, /lg:max-w-\[36vw\]/);
+  assert.match(page, /东方财富/);
+  assert.match(page, /X起爆/);
+  assert.match(page, /AIHOT/);
+  assert.match(page, /#1d9bf0/);
+  assert.match(page, /#c084fc/);
+  assert.match(page, /主题/);
+  assert.doesNotMatch(page, /telegraphHub.*ranks|clsTelegraph/);
+  assert.doesNotMatch(page, /useQuotes/);
+});
+
+test("mergeHotTabs keeps NewsNow first and aliases 金十数据", () => {
+  const rank = readFileSync(join(root, "src/components/event/EventRankPanel.tsx"), "utf8");
+  assert.match(rank, /NewsNow first, then REBANG uniques/);
+  assert.match(rank, /金十数据: "金十"/);
+  assert.match(rank, /HOT_DROP = new Set\(\["雪球"\]\)/);
+  assert.match(rank, /for \(const t of newsnow/);
+  assert.match(rank, /for \(const t of rebang/);
 });
 
 function labelCalDay(iso, today) {

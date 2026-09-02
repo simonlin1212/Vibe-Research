@@ -1,4 +1,5 @@
 import { AiGrid } from "@/components/ai-watch/AiGrid";
+import { AihotPanel } from "@/components/ai-watch/AihotPanel";
 import { OpenRouterPanel } from "@/components/ai-watch/OpenRouterPanel";
 import { EventPanel, ModelPricePanel, TtsiTrendPanel, ValueScatterPanel } from "@/components/ai-watch/ModelCostPanel";
 import { InfraRoiPanel } from "@/components/ai-watch/InfraRoiPanel";
@@ -20,6 +21,12 @@ const CELLS = [
   },
   { id: "price-table", component: ModelPricePanel, area: "lg:col-start-3 lg:row-start-3", mobileH: "h-[380px]" },
   { id: "value-scatter", component: ValueScatterPanel, area: "lg:col-start-3 lg:row-start-4", mobileH: "h-[380px]" },
+  {
+    id: "aihot",
+    component: AihotPanel,
+    area: "lg:col-start-1 lg:row-start-5 lg:col-span-3",
+    mobileH: "h-[52vh]",
+  },
 ];
 
 export function AiWatch() {

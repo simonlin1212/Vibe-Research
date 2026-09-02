@@ -43,19 +43,39 @@ function NewsRow({ it, isNew }: { it: ClsTelegraphItem; isNew: boolean }) {
   return (
     <article
       className={cn(
-        "border-l-2 px-2 py-1.5",
-        isNew ? "border-primary bg-primary/5" : "border-[#2a2a2a]",
+        "border-l-2 px-2.5 py-2 transition-colors hover:bg-white/[0.03]",
+        isNew ? "border-primary bg-primary/5" : "border-transparent",
       )}
     >
       <div className="flex items-center gap-1.5">
-        <span className="font-mono text-[12px] tabular-nums text-slate-500">
+        <span className="font-mono text-[12px] tabular-nums text-slate-400">
           {(it.time || "").slice(11, 16) || (it.time || "").slice(-8, -3) || "—"}
         </span>
         <TagPills title={it.title} extra={extra} isNew={isNew} cats={it.tags} />
       </div>
-      <p className="mt-0.5 text-[14px] font-semibold leading-6 text-slate-200">{it.title}</p>
+      <p className="mt-0.5 text-[14px] font-semibold leading-6 text-slate-100">{it.title}</p>
       {body && <p className="mt-0.5 line-clamp-2 text-[13px] leading-[1.55] text-slate-400">{body}</p>}
     </article>
+  );
+}
+
+export const NEWS_LANES: { src: FeedSource; label: string; accent: string }[] = [
+  { src: "cls", label: "财联社", accent: "#ff4d4d" },
+  { src: "lives", label: "新浪/见闻", accent: "#5b9cff" },
+  { src: "jin10", label: "金十", accent: "#ffcc00" },
+];
+
+export function NewsAutoBar({ auto, onAuto }: { auto: boolean; onAuto: (v: boolean) => void }) {
+  return (
+    <label className="flex cursor-pointer items-center gap-1 text-[12px] text-slate-400 hover:text-slate-200">
+      <input
+        type="checkbox"
+        checked={auto}
+        onChange={(e) => onAuto(e.target.checked)}
+        className="accent-primary"
+      />
+      自动滚动
+    </label>
   );
 }
 
@@ -74,11 +94,7 @@ export function NewsFeedBar({
   const count = feedOf(snap, source)?.count;
   return (
     <div className="flex items-center gap-1 text-[12px]">
-      {([
-        ["cls", "财联社"],
-        ["lives", "新浪/见闻"],
-        ["jin10", "金十"],
-      ] as const).map(([k, label]) => (
+      {NEWS_LANES.map(({ src: k, label }) => (
         <button
           key={k}
           type="button"
@@ -101,6 +117,49 @@ export function NewsFeedBar({
         />
         自动滚动{count != null ? ` · ${count}条` : ""}
       </label>
+    </div>
+  );
+}
+
+/** Three equal lanes. Same telegraph hub, no second poll. */
+export function NewsTriple({ auto }: { auto: boolean }) {
+  const snap = useTelegraph();
+  return (
+    <div className="grid h-full min-h-0 grid-cols-3">
+      {NEWS_LANES.map(({ src, label, accent }) => {
+        const n = feedOf(snap, src)?.count;
+        const neu = snap.fresh[src]?.size ?? 0;
+        return (
+          <div
+            key={src}
+            className="flex min-h-0 min-w-0 flex-col border-l border-[#2a2a2a] first:border-l-0"
+            style={{ boxShadow: `inset 2px 0 0 ${accent}` }}
+          >
+            <div
+              className="flex h-8 shrink-0 items-center gap-1.5 border-b border-[#2a2a2a] px-2.5"
+              style={{ background: `${accent}18` }}
+            >
+              <span className="truncate text-[13px] font-semibold tracking-wide" style={{ color: accent }}>
+                {label}
+              </span>
+              {neu > 0 ? (
+                <span
+                  className="shrink-0 rounded-sm px-1 text-[10px] font-semibold leading-4 text-black"
+                  style={{ background: accent }}
+                >
+                  +{neu}
+                </span>
+              ) : null}
+              {n != null ? (
+                <span className="ml-auto shrink-0 font-mono text-[11px] tabular-nums text-slate-500">{n}</span>
+              ) : null}
+            </div>
+            <div className="min-h-0 flex-1">
+              <NewsCockpitPanel source={src} auto={auto} />
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

@@ -41,7 +41,7 @@ def test_calendar_inject_fetch():
 
 
 def test_http_key_not_in_review_jobs():
-    src = inspect.getsource(event_routes._cal)
+    src = inspect.getsource(event_routes._cal) + inspect.getsource(event_routes._part)
     assert '"event_cal"' in src and "_cached" in src and "_serve" in src
     route = inspect.getsource(event_routes.event_calendar)
     assert '"timeline"' in route and "300" in route
