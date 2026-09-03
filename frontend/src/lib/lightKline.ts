@@ -201,7 +201,7 @@ export function loadLightKline(
           () => api.ashareLightKline(code, resolution, num),
           resolution === "1" && canDirectMinute(code) ? () => directKline(code) : undefined,
         );
-      cache.set(key, { at: Date.now(), data });
+      if (hasBars(data)) cache.set(key, { at: Date.now(), data });
       return data;
     } finally {
       pending.delete(key);

@@ -59,7 +59,9 @@ export function ashareMinuteFrame(bars: AShareLightBar[], days: 1 | 2 = 1, code 
   const want = new Set(tds);
   const kept = bars.filter((b) => want.has(tradingDayOf(b.datetime)));
   const { cats } = concatDaySlots(tds, ashareMinuteAxisKind(code));
-  return { cats, padded: padToSlots(kept, cats, (b) => b.datetime), days };
+  const padded = padToSlots(kept, cats, (b) => b.datetime);
+  if (!padded.some(Boolean)) return null;
+  return { cats, padded, days };
 }
 
 export function AShareLcPane({
@@ -108,10 +110,11 @@ export function AShareLcPane({
     paintedVol: Array<HistogramData | WhitespaceData> | null;
     paintedMa: Array<Array<LineData | WhitespaceData>> | null;
     chgAxis: { prim: ChgPriceAxisPrimitive | null };
+    sessionN: number;
   }>({
     kind: null, main: null, vol: null, mas: null,
     paintedTick: null, paintedPx: null, paintedVol: null, paintedMa: null,
-    chgAxis: { prim: null },
+    chgAxis: { prim: null }, sessionN: 0,
   });
   const refLine = useRef<IPriceLine | null>(null);
   const wmRef = useRef<ITextWatermarkPluginApi<Time> | null>(null);
@@ -136,7 +139,7 @@ export function AShareLcPane({
       bag.current = {
         kind: null, main: null, vol: null, mas: null,
         paintedTick: null, paintedPx: null, paintedVol: null, paintedMa: null,
-        chgAxis: { prim: null },
+        chgAxis: { prim: null }, sessionN: 0,
       };
       refLine.current = null;
       clearPaneWatermark(wmRef);
@@ -144,7 +147,7 @@ export function AShareLcPane({
       udRef.current = null;
     };
     if (bars.length === 0) {
-      if (loading) return;
+      if (loading || (code && bag.current.main)) return;
       try {
         setPaneWatermark(chart, wmRef, "");
         wipeBag();
@@ -270,7 +273,8 @@ export function AShareLcPane({
           "pct",
         );
       }
-      if (!lastOnly) showSession(chart, cats.length);
+      if (!lastOnly || bag.current.sessionN !== cats.length) showSession(chart, cats.length);
+      bag.current.sessionN = cats.length;
       setPaneWatermark(chart, wmRef, wmName ? [wmName, code] : code, 72);
     } catch {
       /* LC throws Value is null if wipe/resize races; keep the pane */

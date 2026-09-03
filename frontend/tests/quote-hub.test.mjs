@@ -69,8 +69,9 @@ test("chart last bar overlays quote hub and minutes keep polling", async () => {
   assert.match(chartSrc, /bypassCache: !opts\?\.quiet/);
   assert.match(klineSrc, /FUTURE_TTL_MS = 4_000/);
   assert.doesNotMatch(klineSrc, /quoteStamp\(q\.updated/);
-  assert.match(chartSrc, /overlayQuoteBar\(minute\.bars/);
-  assert.match(chartSrc, /overlayQuoteBar\(daily\.bars/);
+  assert.match(chartSrc, /barsForSelected\(selected, minute\.bars/);
+  assert.match(chartSrc, /barsForSelected\(selected, daily\.bars/);
+  assert.match(chartSrc, /overlayQuoteBar\(/);
   assert.match(chartSrc, /isOffshoreCode\(code\) \? HUB_POLL_FUTURES_MS : MINUTE_POLL_MS/);
   assert.match(chartSrc, /quiet: true/);
   assert.match(chartSrc, /if \(opts\?\.quiet\) return;/);

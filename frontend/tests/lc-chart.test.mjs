@@ -537,10 +537,34 @@ function seriesNameFor(meta, selected) {
     : "";
 }
 
+function barsForSelected(selected, bars, metaCode) {
+  if (!bars.length || !metaCode) return bars;
+  const a = metaCode.trim();
+  const b = selected.trim();
+  const same = klineCodeKey(a) === klineCodeKey(b) || a.toLowerCase() === b.toLowerCase();
+  return same ? bars : [];
+}
+
 test("seriesNameFor 换票不用上一只的名字", () => {
   assert.equal(seriesNameFor({ code: "600519", name: "贵州茅台" }, "000001"), "");
   assert.equal(seriesNameFor({ code: "000001", name: "上证指数" }, "sh000001"), "上证指数");
   assert.equal(seriesNameFor({ code: "600519", name: "贵州茅台" }, "600519"), "贵州茅台");
+});
+
+test("换票时上一只分时点不套到新轴上", () => {
+  const pane = readFileSync(join(root, "src/components/ashare/AShareLcPane.tsx"), "utf8");
+  const chart = readFileSync(join(root, "src/pages/AShareLightChart.tsx"), "utf8");
+  const kline = readFileSync(join(root, "src/lib/lightKline.ts"), "utf8");
+  assert.match(chart, /export function barsForSelected/);
+  assert.match(chart, /barsForSelected\(selected, minute\.bars/);
+  assert.match(pane, /if \(!padded\.some\(Boolean\)\) return null/);
+  assert.match(pane, /loading \|\| \(code && bag\.current\.main\)/);
+  assert.match(pane, /sessionN !== cats\.length/);
+  assert.match(kline, /if \(hasBars\(data\)\) cache\.set/);
+  const leftover = [{ datetime: "2026-09-03 09:31:00", close: 10 }];
+  assert.deepEqual(barsForSelected("jpN225", leftover, "sh600519"), []);
+  assert.equal(barsForSelected("jpN225", leftover, "jpN225").length, 1);
+  assert.equal(barsForSelected("600519", leftover, "sh600519").length, 1);
 });
 
 test("formatAxisPct 分时右轴写涨跌幅", () => {

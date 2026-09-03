@@ -164,17 +164,31 @@ function klineCodeKey(code: string): string {
   return code.trim().toLowerCase().replace(/^(sh|sz|bj)/, "");
 }
 
+function sameKlineCode(got: string | undefined, selected: string): boolean {
+  const a = (got || "").trim();
+  const b = (selected || "").trim();
+  if (!a || !b) return false;
+  return klineCodeKey(a) === klineCodeKey(b) || a.toLowerCase() === b.toLowerCase();
+}
+
 /** Ignore a leftover name from the previous ticker. */
 export function seriesNameFor(
   meta: { code?: string; name?: string } | null | undefined,
   selected: string,
 ): string {
   const name = (meta?.name || "").trim();
-  const got = (meta?.code || "").trim();
-  if (!name || !got || !selected) return "";
-  return klineCodeKey(got) === klineCodeKey(selected) || got.toLowerCase() === selected.toLowerCase()
-    ? name
-    : "";
+  if (!name || !sameKlineCode(meta?.code, selected)) return "";
+  return name;
+}
+
+/** Drop the previous ticker's bars so a new axis (日经 08:00) does not pad them to whitespace. */
+export function barsForSelected(
+  selected: string,
+  bars: AShareLightBar[],
+  metaCode?: string,
+): AShareLightBar[] {
+  if (!bars.length || !metaCode) return bars;
+  return sameKlineCode(metaCode, selected) ? bars : [];
 }
 
 function useAShareSeries(code: string, res: "1" | "5" | "1D", num: number, poll = false) {
@@ -210,6 +224,13 @@ function useAShareSeries(code: string, res: "1" | "5" | "1D", num: number, poll 
         },
       });
       if (!snap) return;
+      if ((snap.bars?.length ?? 0) < 2) {
+        if (opts?.quiet) return;
+        setBars([]);
+        setMeta(snap.meta);
+        setErr(null);
+        return;
+      }
       setBars(snap.bars);
       setMeta((prev) => ({
         ...snap.meta,
@@ -367,12 +388,22 @@ export function AShareLightChart({
   const qSel = selected ? quotes[selected] : undefined;
   const quoteTime = qSel && !qSel.fromStore ? qSel.time : undefined;
   const minBars = useMemo(
-    () => overlayQuoteBar(minute.bars, qSel, "minute", liveQuote),
-    [minute.bars, qSel, liveQuote],
+    () => overlayQuoteBar(
+      barsForSelected(selected, minute.bars, minute.meta?.code),
+      qSel,
+      "minute",
+      liveQuote,
+    ),
+    [selected, minute.bars, minute.meta?.code, qSel, liveQuote],
   );
   const dayBars = useMemo(
-    () => overlayQuoteBar(daily.bars, qSel, "daily", liveQuote),
-    [daily.bars, qSel, liveQuote],
+    () => overlayQuoteBar(
+      barsForSelected(selected, daily.bars, daily.meta?.code),
+      qSel,
+      "daily",
+      liveQuote,
+    ),
+    [selected, daily.bars, daily.meta?.code, qSel, liveQuote],
   );
   const wmName = seriesNameFor(minute.meta, selected)
     || seriesNameFor(daily.meta, selected)
