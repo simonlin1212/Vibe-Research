@@ -1,6 +1,6 @@
 /** Futures/option minute axis: X spans the full session, prints stay left at open. */
 
-export type DerivAxisKind = "etf" | "hk" | "cmd" | "cmd23" | "cmdDay";
+export type DerivAxisKind = "etf" | "hk" | "jp" | "kr" | "cmd" | "cmd23" | "cmdDay";
 
 const INDEX_ROOTS = new Set(["IF", "IH", "IM", "IO", "HO", "MO"]);
 /** GFEX 白盘: no 21:00. Other day-only cmds use has_night_trading=0 from 行情观察. */
@@ -185,6 +185,16 @@ export function derivMinuteSlots(td: string, kind: DerivAxisKind): string[] {
       ...expandIncl(td, 13 * 60, 16 * 60),
     ];
   }
+  // Eastmoney Beijing stamp = JST/KST - 1h. Nikkei 08:00-10:30 + 11:30-14:30; KOSPI 08:00-14:30.
+  if (kind === "jp") {
+    return [
+      ...expandIncl(td, 8 * 60, 10 * 60 + 30),
+      ...expandIncl(td, 11 * 60 + 30, 14 * 60 + 30),
+    ];
+  }
+  if (kind === "kr") {
+    return expandIncl(td, 8 * 60, 14 * 60 + 30);
+  }
   if (kind === "cmdDay") {
     return [
       ...expandIncl(td, 9 * 60, 10 * 60 + 15),
@@ -260,6 +270,8 @@ export function concatDaySlots(
 export function derivSessionSpan(kind: DerivAxisKind): number {
   if (kind === "etf") return 240;
   if (kind === "hk") return 330;
+  if (kind === "jp") return 330;
+  if (kind === "kr") return 390;
   if (kind === "cmdDay") return 225;
   if (kind === "cmd23") return 346;
   return 555;
@@ -279,6 +291,14 @@ export function derivSessionIdx(t: string, kind: DerivAxisKind): number {
     let e = m - open;
     if (m >= 13 * 60) e -= 60;
     return Math.max(0, Math.min(e, 330));
+  }
+  if (kind === "jp") {
+    let e = m - 8 * 60;
+    if (m >= 11 * 60 + 30) e -= 60;
+    return Math.max(0, Math.min(e, 330));
+  }
+  if (kind === "kr") {
+    return Math.max(0, Math.min(m - 8 * 60, 390));
   }
   const day = (clock: number): number => {
     if (clock < 9 * 60) return 0;

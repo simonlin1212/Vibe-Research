@@ -47,7 +47,10 @@ export function minuteHasFlow(bars: AShareLightBar[]): boolean {
 }
 
 export function ashareMinuteAxisKind(code: string): DerivAxisKind {
-  return /^hk/i.test(code) ? "hk" : "etf";
+  if (/^hk/i.test(code)) return "hk";
+  if (/^jp/i.test(code)) return "jp";
+  if (/^ks/i.test(code)) return "kr";
+  return "etf";
 }
 
 export function ashareMinuteFrame(bars: AShareLightBar[], days: 1 | 2 = 1, code = "") {

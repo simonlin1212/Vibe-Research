@@ -123,6 +123,8 @@ test("四张 K/分时卡走 LC, 不直接 echarts.init", () => {
   assert.match(pane, /barOpenForVol/);
   assert.match(pane, /concatDaySlots/);
   assert.match(pane, /ashareMinuteAxisKind/);
+  assert.match(pane, /\^jp/);
+  assert.match(pane, /\^ks/);
   assert.match(pane, /ashareMinuteFrame\(bars, days, code\)/);
   assert.match(pane, /isFuturesCode\(code\)/);
   assert.match(pane, /tradingDaysOf/);
