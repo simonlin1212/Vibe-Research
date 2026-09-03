@@ -182,11 +182,11 @@ export function loadLightKline(
 ): Promise<AShareLightKline> {
   const ttl = isFuturesCode(code) && resolution !== "1D" ? FUTURE_TTL_MS : TTL_MS;
   const key = `${code}:${resolution}:${num}`;
+  const inflight = pending.get(key);
+  if (inflight) return inflight;
   if (!opts?.bypassCache) {
     const hit = cache.get(key);
     if (hit && Date.now() - hit.at < ttl) return Promise.resolve(hit.data);
-    const inflight = pending.get(key);
-    if (inflight) return inflight;
   }
   const p = (async () => {
     await acquire();

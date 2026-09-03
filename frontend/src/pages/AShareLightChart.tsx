@@ -200,7 +200,7 @@ function useAShareSeries(code: string, res: "1" | "5" | "1D", num: number, poll 
   const [err, setErr] = useState<string | null>(null);
   const gate = useRef(createSeriesGate());
 
-  const load = useCallback(async (opts?: { quiet?: boolean }) => {
+  const load = useCallback(async (opts?: { quiet?: boolean; refresh?: boolean }) => {
     const mine = gate.current.begin();
     if (!code) {
       if (!gate.current.take(mine, true)) return;
@@ -213,7 +213,7 @@ function useAShareSeries(code: string, res: "1" | "5" | "1D", num: number, poll 
     if (!opts?.quiet) setLoading(true);
     if (!opts?.quiet) setErr(null);
     try {
-      const data = await loadLightKline(code, res, num, { bypassCache: !opts?.quiet });
+      const data = await loadLightKline(code, res, num, { bypassCache: Boolean(opts?.refresh) });
       const snap = gate.current.take(mine, {
         bars: data.bars ?? [],
         meta: {
@@ -241,8 +241,8 @@ function useAShareSeries(code: string, res: "1" | "5" | "1D", num: number, poll 
       setErr(null);
     } catch (e) {
       if (!gate.current.take(mine, true)) return;
-      // Quiet refresh keeps last-good. Do not banner over a chart that already painted.
-      if (opts?.quiet) return;
+      // Quiet / fast switch keeps last-good. Banner only on the refresh button.
+      if (!opts?.refresh) return;
       setBars([]);
       setMeta(null);
       setErr(e instanceof ApiError ? e.message : "K 线加载失败");
@@ -505,7 +505,7 @@ export function AShareLightChart({
             bare
             extra={minuteExtra}
             quoteTime={quoteTime}
-            onRefresh={() => { void minute.reload(); }}
+            onRefresh={() => { void minute.reload({ refresh: true }); }}
           />
           <AShareLcPane
             title={wmName || "日K"}
@@ -520,7 +520,7 @@ export function AShareLightChart({
             visible
             bare
             quoteTime={quoteTime}
-            onRefresh={() => { void daily.reload(); }}
+            onRefresh={() => { void daily.reload({ refresh: true }); }}
           />
         </div>
       );
@@ -542,7 +542,7 @@ export function AShareLightChart({
           bare
           extra={minuteExtra}
           quoteTime={quoteTime}
-          onRefresh={() => { void minute.reload(); }}
+          onRefresh={() => { void minute.reload({ refresh: true }); }}
         />
       );
     }
@@ -561,7 +561,7 @@ export function AShareLightChart({
           visible
           bare
           quoteTime={quoteTime}
-          onRefresh={() => { void daily.reload(); }}
+          onRefresh={() => { void daily.reload({ refresh: true }); }}
         />
       );
     }
@@ -807,7 +807,7 @@ export function AShareLightChart({
               days={minuteDays}
               extra={minuteExtra}
               quoteTime={quoteTime}
-              onRefresh={() => { void minute.reload(); }}
+              onRefresh={() => { void minute.reload({ refresh: true }); }}
             />
             <AShareLcPane
               title="日K"
@@ -821,7 +821,7 @@ export function AShareLightChart({
               emptyHint="先从左侧表格点一只"
               visible={showKline}
               quoteTime={quoteTime}
-              onRefresh={() => { void daily.reload(); }}
+              onRefresh={() => { void daily.reload({ refresh: true }); }}
             />
           </div>
         </div>

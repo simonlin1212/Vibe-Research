@@ -66,7 +66,10 @@ test("chart last bar overlays quote hub and minutes keep polling", async () => {
   assert.match(klineSrc, /q\.fromStore/);
   assert.match(quoteSrc, /fromStore: true/);
   assert.match(quoteSrc, /old\.fromStore/);
-  assert.match(chartSrc, /bypassCache: !opts\?\.quiet/);
+  assert.match(chartSrc, /bypassCache: Boolean\(opts\?\.refresh\)/);
+  assert.match(chartSrc, /reload\(\{ refresh: true \}\)/);
+  assert.match(chartSrc, /if \(!opts\?\.refresh\) return;/);
+  assert.match(klineSrc, /if \(inflight\) return inflight;/);
   assert.match(klineSrc, /FUTURE_TTL_MS = 4_000/);
   assert.doesNotMatch(klineSrc, /quoteStamp\(q\.updated/);
   assert.match(chartSrc, /barsForSelected\(selected, minute\.bars/);
