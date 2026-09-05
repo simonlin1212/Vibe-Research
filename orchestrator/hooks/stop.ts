@@ -58,17 +58,38 @@ async function main(): Promise<void> {
     appendHookLog(runDir, { ts: ts(), hook: "stop", stage, attempt: ctx.attempt, decision: "allow", stop_hook_active: !!input.stop_hook_active });
     return;
   }
-  const priorBlocks = readHookLog(runDir).filter((e) => e.hook === "stop" && e.decision === "block" && e.stage === stage && e.attempt === ctx.attempt).length;
-  if (priorBlocks < MAX_STOP_BLOCKS) {
-    const reason = `【Stop 钩子】本阶段(${stage})还不能收工(第 ${priorBlocks + 1}/${MAX_STOP_BLOCKS} 次提醒),请先修好再结束本轮:\n- ${problems.join("\n- ")}`.slice(0, 1800);
+  const log = readHookLog(runDir);
+  const priorBlocks = log.filter((e) => e.hook === "stop" && e.decision === "block" && e.stage === stage && e.attempt === ctx.attempt);
+  // 推进感知:若上一次拦截之后 calcs/ 有新文件落盘 ⇒ agent 在持续产出中间计算(合规工作流:
+  // 攒 N 轮 calc 才写 stage 文件),不是空转,拦截计数从"有推进的那个 block"重新起算;
+  // 无推进的连续拦截才累加,空转 MAX_STOP_BLOCKS 次仍不合格才终止本轮。
+  // (2026-09-05 600519 run: financials 阶段模型 3-5 轮 calc 全做对,但 stage 文件是最后一步,
+  //  写文件前已被 2 次"缺产物"拦截终止本轮,文件在后续轮才补写落盘,编排器又不回头复核 ⇒ 永久 failed)
+  const newCalcsSince = (sinceTs: string | undefined): number => {
+    if (!sinceTs) return 0;
+    const calcDir = path.join(runDir, "calcs");
+    if (!fs.existsSync(calcDir)) return 0;
+    let n = 0;
+    const since = Date.parse(sinceTs);
+    for (const f of fs.readdirSync(calcDir)) {
+      try { if (fs.statSync(path.join(calcDir, f)).mtimeMs > since) n++; } catch { /* 并发删除,忽略 */ }
+    }
+    return n;
+  };
+  let prior = priorBlocks.length;
+  for (let i = 1; i < priorBlocks.length; i++) {
+    if (newCalcsSince(priorBlocks[i - 1].ts) > 0) prior = priorBlocks.length - i; // 最后一次"有推进的 block"之后的空转次数
+  }
+  if (prior < MAX_STOP_BLOCKS) {
+    const reason = `【Stop 钩子】本阶段(${stage})还不能收工(第 ${prior + 1}/${MAX_STOP_BLOCKS} 次提醒),请先修好再结束本轮:\n- ${problems.join("\n- ")}`.slice(0, 1800);
     appendHookLog(runDir, { ts: ts(), hook: "stop", stage, attempt: ctx.attempt, decision: "block", reason, stop_hook_active: !!input.stop_hook_active });
     process.stdout.write(JSON.stringify({ decision: "block", reason }));
     return;
   }
   // 拦够次数仍不合格:终止本轮,留标记给编排器(这轮按失败处理并补跑),不算正常收工
-  const marker: StopFailedMarker = { stage, attempt: ctx.attempt, problems: problems.slice(0, 8), blocks: priorBlocks, ts: ts() };
+  const marker: StopFailedMarker = { stage, attempt: ctx.attempt, problems: problems.slice(0, 8), blocks: priorBlocks.length, ts: ts() };
   writeJson(path.join(runDir, STOP_FAILED_REL), marker);
-  const stopReason = `【Stop 钩子】已提醒 ${priorBlocks} 次仍不合格,终止本轮交编排器补跑:${problems.slice(0, 3).join("; ")}`.slice(0, 1000);
+  const stopReason = `【Stop 钩子】已提醒 ${priorBlocks.length} 次仍不合格,终止本轮交编排器补跑:${problems.slice(0, 3).join("; ")}`.slice(0, 1000);
   appendHookLog(runDir, { ts: ts(), hook: "stop", stage, attempt: ctx.attempt, decision: "stop", reason: stopReason, stop_hook_active: !!input.stop_hook_active });
   process.stdout.write(JSON.stringify({ continue: false, stopReason, systemMessage: stopReason }));
 }

@@ -1,6 +1,7 @@
 /**
  * hooks v0(Phase 0 第 5 步,执行层):把纪律从"提示 + 事后校验"再往前推一层——
- *  - Stop 钩子:每个 turn 收工前检查本阶段产物是否齐全 / 过阶段校验,缺则 block(agent 在同一 turn 内继续补,最多 MAX_STOP_BLOCKS 次),仍不合格则 continue:false 终止本轮并留标记(编排器判该 turn 失败并补跑)
+ *  - Stop 钩子:每个 turn 收工前检查本阶段产物是否齐全 / 过阶段校验,缺则 block(agent 在同一 turn 内继续补,连续 MAX_STOP_BLOCKS 次**无推进**空转后终止本轮);
+ *    "推进" = 两次拦截之间 calcs/ 有新文件落盘(攒 N 轮 calc 才写 stage 文件是合规工作流,不占空转额度)
  *  - PreToolUse 钩子:agent 每条 shell / apply_patch 调用执行前做行为检查(自跑取数脚本 / 读禁区 / 写受保护产物 / 联网),命中即 block
  * 零 fork:钩子是 Codex 0.149 原生 lifecycle hooks(feature "hooks" 默认开启),配置写在**产品自己的 CODEX_HOME**(hooks.json),
  * 非托管钩子必须在同一 CODEX_HOME 的 config.toml 里登记 trusted_hash 才会执行——这里按 Codex 源码复刻其哈希算法(codex-rs/hooks/src/engine/discovery.rs hook_hash +
@@ -20,8 +21,12 @@ export const HOOK_CONTEXT_REL = path.join(".vibe", "hook-context.json");
 export const HOOK_LOG_REL = path.join(".vibe", "hooks.log");
 /** Stop 钩子多次拦截仍不合格时写的终止标记(编排器据此把该 turn 判为失败,进入补跑) */
 export const STOP_FAILED_REL = path.join(".vibe", "stop-failed.json");
-/** 同一 (stage, attempt) 内 Stop 最多 block 的次数(给 agent 两次当场修的机会),之后终止本轮 */
-export const MAX_STOP_BLOCKS = 2;
+/**
+ * 同一 (stage, attempt) 内 Stop 最多连续**空转** block 的次数,之后终止本轮。
+ * 6 次给"攒 N 轮 calc 才写 stage 文件"的合规工作流留足预算(配合 stop.ts 的推进感知:
+ * calcs/ 有新落盘的拦截不占额度);2 次是 2026-09-05 600519 run 误杀 financials 事故的直接诱因。
+ */
+export const MAX_STOP_BLOCKS = 6;
 export interface StopFailedMarker { stage: string; attempt: number; problems: string[]; blocks: number; ts: string }
 export function readStopFailed(runDir: string): StopFailedMarker | null { return readJsonIfExists<StopFailedMarker>(path.join(runDir, STOP_FAILED_REL)); }
 export function clearStopFailed(runDir: string): void { const p = path.join(runDir, STOP_FAILED_REL); if (fs.existsSync(p)) fs.rmSync(p); }

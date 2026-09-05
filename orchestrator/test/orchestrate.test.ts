@@ -612,6 +612,44 @@ test("Stop 钩子终止标记 → 该 turn 视为失败 → 补跑;补跑成功�
   assert.equal(r.status, "complete");
 });
 
+test("阶段终复核(恢复路径):收工预算烧尽被判 failed 的阶段,文件被后续轮补写落盘 → 认领为 complete;含行为违规错误的阶段不恢复", async () => {
+  // 场景 A(2026-09-05 600519 真实事故):financials 的轮次里模型在写 stage 文件前被 Stop 终止,
+  //   文件在**后续阶段(estimates)的轮次**里才补写落盘;主循环不再回头看 financials ⇒ 终复核认领。
+  const repo = tmpRepo();
+  const cfg = makeConfig({ symbol: "300308", market: "SZ", repoRoot: repo, runId: "t9", python: "false", maxRetries: 0 });
+  const lateWrite: Behaviour = (stage, attempt, c) => {
+    if (stage === "financials") {
+      writeJson(path.join(c.runDir, ".vibe", "stop-failed.json"), { stage, attempt, problems: ["缺产物:stages/financials.json"], blocks: 6, ts: "x" });
+      return; // 本轮不写 financials 产物
+    }
+    goodAgent(stage, attempt, c);
+    if (stage === "estimates") goodAgent("financials", attempt, c); // 补写:financials 的合法文件此刻才落盘
+  };
+  const runner = new FakeRunner(lateWrite, cfg);
+  const r = await runResearch(cfg, deps(runner, fakeFetch()));
+  const fin = r.manifest.stages.find((s) => s.stage === "financials")!;
+  assert.equal(fin.status, "complete", `financials 应被终复核认领,实际 ${fin.status}:${fin.errors.join(" | ")}`);
+  assert.ok(fin.validator_ok);
+  assert.ok(runner.logs.some((l) => l.type === "stage.recovered"), "应有 stage.recovered 事件");
+  assert.equal(r.status, "complete", "六阶段全部认领后运行应为 complete");
+  // 场景 B(安全边界):失败原因含行为违规(篡改 events.jsonl)的阶段,即使产物后来齐全也不恢复
+  const repo2 = tmpRepo();
+  const cfg2 = makeConfig({ symbol: "300308", market: "SZ", repoRoot: repo2, runId: "t9b", python: "false", maxRetries: 0 });
+  const tamperAndLate: Behaviour = (stage, attempt, c) => {
+    if (stage === "financials") {
+      fs.appendFileSync(path.join(c.runDir, "events.jsonl"), JSON.stringify({ type: "forged" }) + "\n");
+      writeJson(path.join(c.runDir, ".vibe", "stop-failed.json"), { stage, attempt, problems: ["缺产物:stages/financials.json"], blocks: 6, ts: "x" });
+      return;
+    }
+    goodAgent(stage, attempt, c);
+    if (stage === "estimates") goodAgent("financials", attempt, c);
+  };
+  const r2 = await runResearch(cfg2, deps(new FakeRunner(tamperAndLate, cfg2), fakeFetch()));
+  const fin2 = r2.manifest.stages.find((s) => s.stage === "financials")!;
+  assert.equal(fin2.status, "failed", "行为违规阶段不得被恢复");
+  assert.ok(r2.status === "failed");
+});
+
 test("最终校验失败 → 状态降级为 failed(不得宣称完成)", async () => {
   const repo = tmpRepo();
   const cfg = makeConfig({ symbol: "300308", market: "SZ", repoRoot: repo, runId: "t6", python: "false", maxRetries: 0 });
