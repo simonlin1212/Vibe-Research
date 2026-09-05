@@ -42,27 +42,16 @@ export function numbersOf(ids: string[], evById: Map<string, EvidenceItem>, calc
  *     不是 37.397700293773134。把两者混进同一个池,就等于把"照抄原始浮点"这条纪律废掉。
  */
 /**
- * **inputs + output.details** 里的数值 —— 可按指定容差绑定的"中间量"池。
+ * **inputs + output.details** 里的数值 —— 允许整数绑定的"中间量"池。
  *
- * 🔴 排除顶层及嵌套结果形对象的 `value`:否则 display 是 "37.00 倍" 时,报告写 "37 倍"
+ * 🔴 关键是**排除 `output.value` 本身**:否则 display 是 "37.00 倍" 时,报告写 "37 倍"
  * 会绕过逐字照抄(Codex fidelity-r2 P1)。
  * ⚠️ 也不能收窄到只剩 inputs:四锚这类结果的锚点(30)住在 `output.details.anchors` 里、
  * inputs 是空的,只认 inputs 会把"30 倍锚"这种**正当写法**误拦(实测被测试抓到)。
  */
 export function intermediateNumbersOf(ids: string[], calcById: Map<string, CalcRecord>): number[] {
   const nums = inputNumbersOf(ids, calcById);
-  const leaves = (v: unknown, depth = 0): void => {
-    if (depth > 4) return;
-    if (typeof v === "number" && Number.isFinite(v)) nums.push(v);
-    else if (Array.isArray(v)) v.forEach((x) => leaves(x, depth + 1));
-    else if (v && typeof v === "object") {
-      // 与 resultProjection 使用同一形状判据；情景子结果不是可豁免的中间量。
-      const isResult = "status" in v && "value" in v && "unit" in v;
-      for (const [key, value] of Object.entries(v)) {
-        if (key !== "display" && !(isResult && key === "value")) leaves(value, depth + 1);
-      }
-    }
-  };
+  const leaves = (v: unknown, depth = 0) => { if (depth > 4) return; if (typeof v === "number" && Number.isFinite(v)) nums.push(v); else if (Array.isArray(v)) v.forEach((x) => leaves(x, depth + 1)); else if (v && typeof v === "object") Object.values(v).forEach((x) => leaves(x, depth + 1)); };
   for (const id of ids) {
     const o = calcById.get(id)?.output;
     if (o && typeof o === "object") leaves((o as Record<string, unknown>).details);
@@ -239,10 +228,10 @@ export function stripSpeedLabels(s: string, lex: Lexicon = currentLexicon()): st
     const before = str.slice(Math.max(0, off - 12), off);
     const after = str.slice(off + m.length, off + m.length + 12);
     if (lex.moneyBefore.test(before) || lex.moneyAfter.test(after)) return m;
-    return lex.categoryLabelContext.test(before) || lex.categoryLabelContext.test(after) ? " ".repeat(m.length) : m;
+    return lex.categoryLabelContext.test(before) || lex.categoryLabelContext.test(after) ? " " : m;
   });
 }
-export function claimTokens(line: string, symbol?: string, lex: Lexicon = currentLexicon()): { n: number; raw: string; index: number }[] {
+export function claimTokens(line: string, symbol?: string, lex: Lexicon = currentLexicon()): { n: number; raw: string }[] {
   // 先剥离 id、日期、年份 / FY、6 位代码、字母前缀代码(C39)、序号 / 计数 / ×N / 季度标记 / 情景锚点记号(30x);年份与代码只在独立数字时剥离,不能咬进 19826269128.43 这类长数字
   // 先剥 URL(链接里的数字不是主张)与速率标签(1.6T / 800G / 3.2T / 400Gbps 是产品类别名,不是数字主张);
   // 但金额语境不剥:"$1.6T" / "1.6T 美元" / "800G 元" 前有货币符号或后接金额 / 百分比单位时仍是数字主张(Codex 审查 voice-r1)
@@ -251,25 +240,21 @@ export function claimTokens(line: string, symbol?: string, lex: Lexicon = curren
   // 联邦公报文号 2026-11571 / 公告编号 2026-001 是编号不是数字(年份剥掉后会留下 -11571 负数 —— Codex policy-r1)
   // 先把"日期 + 时刻"当整体剥掉(报告里发布时间的写法:2026-08-24 20:45 / 2026-08-24T20:45:00);
   // **裸时刻不剥** —— 否则"配比 35:65"这种真主张会被漏掉(Codex headlines-r2)
-  // 所有被忽略的片段都用**等长空白**遮掉，让 match.index 始终对应原始行。
-  // 缩成单个空格会破坏位置映射，随后在原文里判断正负号 / 方向词时可能落到 ev-id 的数字上。
-  const mask = (m: string) => " ".repeat(m.length);
-  const sourceLine = line;
-  line = line.replace(/\d{4}-\d{2}-\d{2}[\sT]{0,3}\d{1,2}:\d{2}(?::\d{2})?/g, mask);
-  let s = stripSpeedLabels(line.replace(/https?:\/\/[^\s)\]]+/g, mask).replace(/(HTTP|状态码|status)\s?[1-5]\d{2}(?!\d)/gi, mask).replace(/(?<![\d.])(19|20)\d{2}-\d{3,6}(?![\d.-])/g, mask).replace(/(?<![\d.])1260H\b/g, mask).replace(/(?<![\w.])[\w-]+(?:\.[\w-]+)*\.(?:com|cn|net|org|io|co|hk|tw|jp|kr|de|uk|info|biz|tv|me|ai|app)(?:\.[a-z]{2})?(?![\w.])/gi, mask)).replace(/(ev-[0-9a-f]{6,}|calc-[0-9a-f]{16})(?![0-9a-zA-Z_])/g, mask).replace(/\d{4}-\d{2}-\d{2}/g, mask).replace(/\d{4}Q[1-4]|\d{4}H[12]/g, mask)
-    .replace(/FY\s?\d{4}/g, mask).replace(/(?<![\d.])(19|20)\d{2}(?![\d.])\s*[年]?/g, mask)// 主体编号默认剥掉,**但后面紧跟单位就是真数字**(踩坑实例见 finance/lexicon.ts)
+  line = line.replace(/\d{4}-\d{2}-\d{2}[\sT]{0,3}\d{1,2}:\d{2}(?::\d{2})?/g, " ");
+  let s = stripSpeedLabels(line.replace(/https?:\/\/[^\s)\]]+/g, " ").replace(/(HTTP|状态码|status)\s?[1-5]\d{2}(?!\d)/gi, " ").replace(/(?<![\d.])(19|20)\d{2}-\d{3,6}(?![\d.-])/g, " ").replace(/(?<![\d.])1260H\b/g, " ").replace(/(?<![\w.])[\w-]+(?:\.[\w-]+)*\.(?:com|cn|net|org|io|co|hk|tw|jp|kr|de|uk|info|biz|tv|me|ai|app)(?:\.[a-z]{2})?(?![\w.])/gi, " ")).replace(/(ev-[0-9a-f]{6,}|calc-[0-9a-f]{16})(?![0-9a-zA-Z_])/g, " ").replace(/\d{4}-\d{2}-\d{2}/g, " ").replace(/\d{4}Q[1-4]|\d{4}H[12]/g, " ")
+    .replace(/FY\s?\d{4}/g, " ").replace(/(?<![\d.])(19|20)\d{2}(?![\d.])\s*[年]?/g, " ")// 主体编号默认剥掉,**但后面紧跟单位就是真数字**(踩坑实例见 finance/lexicon.ts)
     // 主体编号剥离的条件由 Plugin 的 subjectCodePatterns 给出,或**等于本次运行的主体编号**。
     // 单位白名单永远补不全(辆 / 平方米 / 千瓦…—— Codex commodity-r3),所以裸的、又不是本次主体编号的数字一律当真主张交给绑定校验
     ;
-  for (const re of lex.subjectCodePatterns) s = s.replace(re, mask);
+  for (const re of lex.subjectCodePatterns) s = s.replace(re, " ");
   s = s
-    .replace(/(?<![\d.])[A-Za-z]\d+(?![\d.])/g, mask)
-    .replace(/第\s*\d+\s*[次条行名]|\d+\s*[次条行个家名项]\b|×\s*\d+|\d+\s*季度?|Q\d|(?<![\d.])\d+(?:\.\d+)?x\b/g, mask)
+    .replace(/(?<![\d.])[A-Za-z]\d+(?![\d.])/g, " ")
+    .replace(/第\s*\d+\s*[次条行名]|\d+\s*[次条行个家名项]\b|×\s*\d+|\d+\s*季度?|Q\d|(?<![\d.])\d+(?:\.\d+)?x\b/g, " ")
     // 时间**窗口标签**不是数字主张(窗口长度 ≠ 数据点)—— 具体词表由 Plugin 提供,踩坑记录见 finance/lexicon.ts
     // 只有**后接窗口词**才算窗口标签;"回款周期约 30 天" / "交付周期约 45 日" 是真主张,不能剥(Codex commodity-r2)
-    .replace(lex.windowLabelPattern, mask);
-  if (lex.subjectCodeIsSixDigits && symbol && /^\d{6}$/.test(symbol)) s = s.replace(new RegExp(`(?<![\\d.])${symbol}(?![\\d.])`, "g"), mask);  // 本次主体编号在正文里裸写也当编号
-  const out: { n: number; raw: string; index: number }[] = [];
+    .replace(lex.windowLabelPattern, " ");
+  if (lex.subjectCodeIsSixDigits && symbol && /^\d{6}$/.test(symbol)) s = s.replace(new RegExp(`(?<![\\d.])${symbol}(?![\\d.])`, "g"), " ");  // 本次主体编号在正文里裸写也当编号
+  const out: { n: number; raw: string }[] = [];
   for (const m of s.matchAll(/-?\d[\d,]*\.?\d*(?:e[+-]?\d+)?/gi)) {
     const raw = m[0]; const n = Number(raw.replace(/,/g, "")); if (!Number.isFinite(n)) continue;
     const after = s.slice((m.index ?? 0) + raw.length, (m.index ?? 0) + raw.length + 3);
@@ -277,7 +262,7 @@ export function claimTokens(line: string, symbol?: string, lex: Lexicon = curren
     // ≤20 的小整数只在**纯整数写法**时视为计数跳过("近 5 年" / "第 2 批");带小数点的是 calc 0.3.2 display 写法("2.00 年" / "0.00 年"),必须绑定证据。
     // "期" 进白名单:quarterize 的期数 display 就是整数("11 期"),必须绑定;"年" 不进(叙述里"近 5 年"太常见,交给 judgeDisplayFidelity 的叙述豁免规则处理)。
     if (Number.isInteger(n) && Math.abs(n) <= 20 && !/e/i.test(raw) && !/\.\d/.test(raw) && !/^\s*(%|倍|元|亿|万|x|X|pp|百分点|期)/.test(after)) continue;  // "1." 列表编号不算小数
-    out.push({ n, raw: raw + (/^\s*(%|倍|元|亿|万|百分点|年|期)/.exec(after)?.[0]?.trim() ?? ""), index: m.index ?? sourceLine.indexOf(raw) });
+    out.push({ n, raw: raw + (/^\s*(%|倍|元|亿|万|百分点|年|期)/.exec(after)?.[0]?.trim() ?? "") });
   }
   return out;
 }
@@ -367,38 +352,6 @@ export interface FidelityResult {
   total: number;
   exact: number;
   violations: string[];
-  /** 给补跑 Agent 的结构化定位信息；字符串 violations 保留给既有调用方与日志。 */
-  violationDetails: FidelityViolationDetail[];
-  evidenceViolationDetails: FidelityViolationDetail[];
-}
-
-export interface FidelityViolationDetail {
-  section: string;
-  token: string;
-  line: string;
-  citedIds: string[];
-}
-
-/**
- * 把逐 token 报错压成逐行修复清单：既不会只露出前三个问题，也不会让同一长行重复几十次。
- * Agent 可据同行 id 回读 evidence / calc，决定补齐来源 id、照抄 display，或删掉无展示值的数字。
- */
-export function summarizeFidelityViolations(items: FidelityViolationDetail[], maxLines = Number.POSITIVE_INFINITY): string {
-  const grouped = new Map<string, { section: string; line: string; tokens: string[]; ids: string[] }>();
-  for (const item of items) {
-    const key = `${item.section}\u0000${item.line}`;
-    const group = grouped.get(key) ?? { section: item.section, line: item.line, tokens: [], ids: [] };
-    if (!group.tokens.includes(item.token)) group.tokens.push(item.token);
-    for (const id of item.citedIds) if (!group.ids.includes(id)) group.ids.push(id);
-    grouped.set(key, group);
-  }
-  const groups = [...grouped.values()];
-  const shown = groups.slice(0, maxLines).map((group) => {
-    const snippet = group.line.replace(/\s+/g, " ").trim().slice(0, 220);
-    return `[${group.section}] 错误数字=${group.tokens.join(",")}；同行 id=${group.ids.join(",") || "无"}；原句=${snippet}`;
-  });
-  if (groups.length > maxLines) shown.push(`另有 ${groups.length - maxLines} 行未展开`);
-  return shown.join(" | ");
 }
 
 /**
@@ -408,8 +361,7 @@ export function summarizeFidelityViolations(items: FidelityViolationDetail[], ma
  */
 export function checkNumberFidelity(report: string, evById: Map<string, EvidenceItem>,
                                     calcById: Map<string, CalcRecord>, symbol?: string,
-                                    quoted: string[] = [], lex: Lexicon = currentLexicon(),
-                                    excludedSections: readonly string[] = []): FidelityResult {
+                                    quoted: string[] = [], lex: Lexicon = currentLexicon()): FidelityResult {
   // `quoted` = 可**逐字引用**的历史文本(知识档案召回内容、knowledge_conflicts 的 claim)。
   // 报告写"旧前瞻 CAGR 59.09% 不再适用,本次为 58.85%"时,59.09% 是对档案的**引用**,
   // 本次运行的证据里当然没有它 —— 不把这类纳入可绑定池,就会把"如实标注新旧差异"这个**正确行为**判成违规。
@@ -418,10 +370,8 @@ export function checkNumberFidelity(report: string, evById: Map<string, Evidence
   let total = 0, exact = 0, anyDisplay = false, shouldHaveDisplay = 0;
   const violations: string[] = [];        // display 纪律相关(引用了 calc 的行)—— 受 applicable 门控
   const evidenceViolations: string[] = []; // 纯 evidence 行 —— **与 display 无关,始终上报**
-  const violationDetails: FidelityViolationDetail[] = [];
-  const evidenceViolationDetails: FidelityViolationDetail[] = [];
   for (const [sec, lines] of Object.entries(secs)) {
-    if (sec === "_head" || excludedSections.includes(sec)) continue;
+    if (sec === "_head" || sec === "数据缺口") continue;
     for (const line of lines) {
       const ids = [...line.matchAll(/(?<![0-9a-zA-Z_-])(ev-[0-9a-f]{6,}|calc-[0-9a-f]{16})(?![0-9a-zA-Z_])/g)].map((m) => m[1]);
       const calcIds = ids.filter((id) => calcById.has(id));
@@ -467,15 +417,16 @@ export function checkNumberFidelity(report: string, evById: Map<string, Evidence
         const n = normDisp(raw);
         return [...displays].some((x) => x === n || (x.startsWith(n) && !/^[\d.]/.test(x.slice(n.length))));
       };
+      let cursor = 0;
       for (const t of claimTokens(line, symbol, lex)) {
         const unit = /[^0-9.,e+-]+$/.exec(t.raw)?.[0] ?? "";
         const num = t.raw.slice(0, t.raw.length - unit.length);
         const decimal = /\.\d/.test(num);
         if (!decimal && !unit) continue;                                   // 纯整数计数,豁免
-        // claimTokens 用等长空白遮掉 id / 日期 / URL 后保留了原始位置。
-        // 不能再用 line.indexOf:同行前面的 `ev-1f...` 会把真实的 `1%` 错定位到 id 内部，
-        // 继而把 id 的连字符误当负号，导致公告标题里明明有 1% 却被误判为无证据。
-        const idx = t.index;
+        // 从游标往后找:同一行出现两次相同数字时,`indexOf` 永远取第一次,
+        // 于是"约 30 次,合计 30 次"里第二个 30 会借第一个前面的"约"蒙混过去(fidelity-r1 P2)
+        const idx = line.indexOf(num, cursor);
+        if (idx >= 0) cursor = idx + num.length;
         const before = idx >= 0 ? line.slice(Math.max(0, idx - 6), idx) : "";
         if (!decimal && PROSE_BEFORE.test(before)) continue;               // "近 5 年" / "连续 3 期":叙述,豁免
         total++;
@@ -498,21 +449,25 @@ export function checkNumberFidelity(report: string, evById: Map<string, Evidence
         //    加了符号边界后若不给这条路径补 `-token`,正当写法反而被拦(这是 r3 修复引入的,r4 抓到)。
         if (quotedText && (quotedIncludes(quotedText, raw) || quotedIncludes(quotedText, String(val))
             || (signed && (quotedIncludes(quotedText, `-${t.raw}`) || quotedIncludes(quotedText, String(-t.n)))))) { exact++; continue; }
-        // PR #42: 输入和 details 中间量可舍入、换算单位；不纳入 output.value。
-        // 小数用紧容差，不能把 27.30 改写为 27.35；主结果仍必须照抄 display。
-        // 年/期不走此豁免，避免把倍数锚误绑成年数。
+        // 可绑 calc 的**输入 / 中间量(output.details)**,带量纲缩放(元→亿、小数→%),
+        // 不能绑 output.value。年 / 期 单位除外:"消化 30 年"里的 30 是锚(倍)不是年数,放行等于放过一个真错误。
+        // 🔴 历史(1e-9 死匹配、只认 inputs)会误杀三种**可溯源**的合法写法:
+        //   ① 引用 details 里的副统计量(percentile_rank 的 min/median/max,
+        //      如「近五年最低分位 17.66 倍 [calc-percentile_rank]」);
+        //   ② 量纲换算(inputs 是 27239985194.41 元,报告写「272.40 亿」);
+        //   ③ 小数→百分比(details 是 0.1952,报告写「19.52%」)。
+        // 2026-09 一次真实 run 5/5 次成稿全灭的根因之一。
+        // 防"照抄输出原始浮点"的纪律由**池排除 output.value** 承担(intermediateNumbersOf
+        // 只收 inputs + details),与匹配宽松度无关 —— 原始浮点 37.397700293773134 不在池里。
+        // ⚠️ 容差按整数/小数分档(上游 review):2e-3 相对容差是为整数锚(30 倍、1504 亿)定的,
+        //    套到小数上会把「改数字」放过(numberBound(27.35,[27.30])→true)。上三类合法写法
+        //    靠 numberBound 内「四舍五入到两位」那一条命中,小数分支用紧容差 1e-6 即可全放行,
+        //    同时「27.35 vs 27.30」这类真改写仍被拦。
         if (!/^(年|期)$/.test(unit) && numberBound(val, intermediateNumbersOf(calcIds, calcById), decimal ? 1e-6 : 2e-3)) { exact++; continue; }
         // 🔴 两类违规必须分开:`applicable`(本次有没有 display)只能决定**display 纪律**适不适用,
         //    决定不了"引了一个真实 ev-id 却写了别的数"要不要报 —— 那与 display 无关。
         //    合在一起的后果:旧 calc 运行 / 纯取数运行里,事实表写错数字完全不会被报出来(Codex fidelity-r2 P1)。
-        const detail = { section: sec, token: raw, line, citedIds: ids };
-        if (calcIds.length) {
-          violations.push(`[${sec}] ${t.raw} ← ${line.slice(0, 80)}`);
-          violationDetails.push(detail);
-        } else {
-          evidenceViolations.push(`[${sec}] ${t.raw} ← ${line.slice(0, 80)}`);
-          evidenceViolationDetails.push(detail);
-        }
+        (calcIds.length ? violations : evidenceViolations).push(`[${sec}] ${t.raw} ← ${line.slice(0, 80)}`);
       }
     }
   }
@@ -520,8 +475,7 @@ export function checkNumberFidelity(report: string, evById: Map<string, Evidence
   //    ① 报告根本没引用带结果的 calc(旧运行 / 纯取数运行)→ 确实不适用;
   //    ② calc 版本本该写 display 却没写 → 那是 calc 侧的缺陷,
   //       此时静默跳过等于把整条数字忠实度防线关掉,而外面看不出来。⇒ 用 `missingDisplay` 报出来。
-  return { applicable: anyDisplay, total, exact, violations, evidenceViolations, violationDetails,
-    evidenceViolationDetails, missingDisplay: shouldHaveDisplay > 0 };
+  return { applicable: anyDisplay, total, exact, violations, evidenceViolations, missingDisplay: shouldHaveDisplay > 0 };
 }
 
 
