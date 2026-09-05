@@ -69,7 +69,15 @@ export function loadFetch(runDir: string): Record<string, FetchEnvelope> {
 }
 
 export function loadCalcs(runDir: string): { file: string; record: CalcRecord | null }[] {
-  return listFiles(path.join(runDir, "calcs"), ".json").map((f) => ({ file: f, record: readJsonIfExists<CalcRecord>(f) }));
+  return listFiles(path.join(runDir, "calcs"), ".json")
+    .filter((f) => {
+      // agent 会往 calcs/ 里写临时参数文件(args_*/sq_* 之类,绕过 shell 长参数),
+      // 它们没有 calculation_id —— 不是计算记录,收进 run.calcs 会让下游
+      // validateStage 读 record.output 时崩(2026-09-05 茅台 run:TypeError 判死整个 run)。
+      const r = readJsonIfExists<CalcRecord>(f);
+      return r != null && typeof (r as unknown as { calculation_id?: unknown }).calculation_id === "string";
+    })
+    .map((f) => ({ file: f, record: readJsonIfExists<CalcRecord>(f) }));
 }
 
 /** 合并证据:按 id 去重;同 id 不同 value 记 id 冲突(完整性错误) */

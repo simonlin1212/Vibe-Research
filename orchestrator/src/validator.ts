@@ -325,6 +325,10 @@ export function validateStage(stage: Stage, run: RunView): ValidationResult {
       if (r.ref_type === "evidence" && !run.evidenceIds.has(r.ref_id)) errors.push(`${path.basename(c.file)} 引用了不存在的 evidence ${r.ref_id}`);
       if (r.ref_type === "calculation" && !run.calcIds.has(r.ref_id)) errors.push(`${path.basename(c.file)} 引用了不存在的 calculation ${r.ref_id}`);
     }
+    // output 可能缺失(半成品 / 非标准记录):缺失不是"无 inputs_refs",不该判错,
+    // 更不能让整个 validateStage 抛 TypeError 把 run 判死(2026-09-05 茅台 run 事故)。
+    // loadCalcs 已在源头按 calculation_id 过滤参数文件,这里是第二道防线。
+    if (!c.record.output) continue;
     if (c.record.output.status === "ok" && (c.record.inputs_refs ?? []).length === 0)
       errors.push(`${path.basename(c.file)} 没有 inputs_refs:每个计算必须引用其输入 evidence / calculation id`);
   }
