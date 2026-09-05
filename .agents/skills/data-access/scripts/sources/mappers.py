@@ -323,6 +323,13 @@ def em_dividend(result: list, ctx: dict) -> dict:
 def em_stock_news(result: list, ctx: dict) -> dict:
     if not result:
         return empty("东财个股新闻为空")
+    # akshare 等 SDK 源不经 _http 捕获,ctx["raw_ref"] 为 None → 证据缺 raw_ref(违反契约,
+    # 2026-09-05 茅台 run:10 条新闻证据 raw_ref=None 拖挂 risk/report)。HTTP 源(原 JSONP 兜底)
+    # 已有 raw_ref,不覆盖;SDK 源显式落盘结构化结果作 extracted,绑给每条证据(同 iwencai 先例)。
+    if not ctx.get("raw_ref"):
+        ref = extracted(ctx, result)
+        for it in result:
+            it.setdefault("_raw", ref)
     evs = text_items(ctx, result, field="news_title", title_key="title", date_key="time", key_of=lambda r: str(r.get("url") or r.get("title"))[:160], limit=int(ctx["args"].get("limit", 30)),
                      extra_keys=("source", "url", "content"))
     return out(evs, extra={"count": len(result)})
