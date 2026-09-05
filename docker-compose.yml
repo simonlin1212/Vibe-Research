@@ -1,0 +1,33 @@
+# Vibe-Research v1.0 Docker Compose
+#
+# 快速启动：
+#   docker compose up -d
+#
+# 复用主机已有的 AI 订阅登录态（可选）：
+#   取消下方 volumes 注释，即可复用主机的 Claude/Codex 凭据
+#   前提：主机上已运行过 claude 或 codex 并完成登录
+
+services:
+  vibe-research:
+    image: ghcr.io/simonlin1212/vibe-research:latest
+    container_name: vibe-research
+    restart: unless-stopped
+    ports:
+      - "5899:80"
+    environment:
+      - VRA_DATA_ROOT=/data
+    volumes:
+      - vibe-data:/data
+      # ── 复用主机登录态（取消注释即可） ──
+      # - ${HOME}/.claude:/data/claude-home    # Claude Code 登录态
+      # - ${HOME}/.codex:/data/codex-home      # Codex 登录态
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  vibe-data:
+    driver: local
