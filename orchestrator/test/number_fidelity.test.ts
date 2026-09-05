@@ -128,6 +128,32 @@ test("整数 calc 输出也不能绕过 display,但 details 里的中间量仍�
   assert.deepEqual(checkNumberFidelity(rep(`景气延续 30 倍锚 [${CID}]`), evMap([]), c2).violations, []);
 });
 
+test("小数用紧容差(上游 review 反例):details 里是 27.30,报告写 27.35 = 改了数字,必须拦", () => {
+  // 真实 percentile_rank 形状:value=分位(10.66)、details.min=最低 PE(27.30)。
+  // 2e-3 相对容差(整数档)套小数会让 numberBound(27.35,[27.30])→true 放过改写;
+  // 小数档 1e-6 下 0.05 的差远大于容差,必须判违规。
+  const c = calcMap([{ id: CID, output: { status: "ok", value: 10.66, unit: "%", display: "10.66%",
+                                           details: { min: 27.30, median: 28.96, max: 54.97 } } }]);
+  assert.equal(checkNumberFidelity(rep(`| 近五年最低 | 27.35 倍 | ${CID} |`), evMap([]), c).violations.length, 1);
+  // 照抄 details 里的 27.30(两位)是正当引用,放行
+  assert.deepEqual(checkNumberFidelity(rep(`| 近五年最低 | 27.30 倍 | ${CID} |`), evMap([]), c).violations, []);
+});
+
+test("三类可溯源合法写法在 1e-6 紧容差下仍放行(details 副统计量 / 元→亿 / 小数→%)", () => {
+  const c = calcMap([{ id: CID, output: { status: "ok", value: 10.66, unit: "%", display: "10.66%",
+                                           details: { min: 17.661621 } } }]);
+  // ① details 副统计量:17.66 vs 17.661621(四舍五入到两位命中)
+  assert.deepEqual(checkNumberFidelity(rep(`近五年最低 17.66 倍 [${CID}]`), evMap([]), c).violations, []);
+  // ② 量纲换算:272.40 亿 vs inputs 27239985194.41 元(×1e-8 后取两位)
+  const c2 = calcMap([{ id: CID, output: { status: "ok", value: 11, unit: "期", display: "11 期" },
+                        inputs: { cumulative: [{ value: 27239985194.41 }] } }]);
+  assert.deepEqual(checkNumberFidelity(rep(`单季扣非 272.40 亿元 [${CID}]`), evMap([]), c2).violations, []);
+  // ③ 小数→百分比:19.52% vs details.range_over_mean 0.1952(×100 后取两位)
+  const c3 = calcMap([{ id: CID, output: { status: "ok", value: 1.21, unit: "倍", display: "1.21 倍",
+                                           details: { range_over_mean: 0.19524189261031363 } } }]);
+  assert.deepEqual(checkNumberFidelity(rep(`一致预期分歧 19.52% [${CID}]`), evMap([]), c3).violations, []);
+});
+
 test("无符号 token 不许绑到带负号的文本:方向不能反", () => {
   const ev = evMap([["ev-dddddddddddd", "同比 -1.92%"]]);
   const calcs = calcMap([{ id: CID, output: { status: "ok", value: 1, unit: "倍", display: "1.00 倍" } }]);

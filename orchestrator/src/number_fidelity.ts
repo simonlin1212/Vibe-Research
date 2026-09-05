@@ -67,8 +67,8 @@ export function inputNumbersOf(ids: string[], calcById: Map<string, CalcRecord>)
 }
 
 const SCALES = [1, 1e4, 1e8, 100, 0.01, 1e-4, 1e-8];
-export function numberBound(token: number, pool: number[]): boolean {
-  return pool.some((v) => SCALES.some((s) => { const w = v * s; if (!Number.isFinite(w)) return false; const tol = Math.max(Math.abs(token) * 2e-3, 5e-3); return Math.abs(w - token) <= tol || Math.abs(Math.round(w * 100) / 100 - token) <= tol; }));
+export function numberBound(token: number, pool: number[], relTol = 2e-3): boolean {
+  return pool.some((v) => SCALES.some((s) => { const w = v * s; if (!Number.isFinite(w)) return false; const tol = Math.max(Math.abs(token) * relTol, relTol * 2.5); return Math.abs(w - token) <= tol || Math.abs(Math.round(w * 100) / 100 - token) <= tol; }));
 }
 /** 一行里需要证据支撑的数字:排除日期 / 年份 / FY / 代码 / id 内数字 / 序号 / ×倍数记号 / 小整数计数 */
 
@@ -449,14 +449,21 @@ export function checkNumberFidelity(report: string, evById: Map<string, Evidence
         //    加了符号边界后若不给这条路径补 `-token`,正当写法反而被拦(这是 r3 修复引入的,r4 抓到)。
         if (quotedText && (quotedIncludes(quotedText, raw) || quotedIncludes(quotedText, String(val))
             || (signed && (quotedIncludes(quotedText, `-${t.raw}`) || quotedIncludes(quotedText, String(-t.n)))))) { exact++; continue; }
-        // 整数:只能绑 calc 的**输入 / 中间量**("30 倍锚"这类),**不能绑 output.value** ——
-        // 否则 display 是 "37.00 倍" 时,报告写 "37 倍" 会绕过逐字照抄(Codex fidelity-r2 P1)。
-        // 年 / 期 单位除外:"消化 30 年"里的 30 是锚(倍)不是年数,放行等于放过一个真错误。
-        if (!decimal && !/^(年|期)$/.test(unit) && numberBound(val, intermediateNumbersOf(calcIds, calcById))) { exact++; continue; }
-        // 小数:**只能绑 calc 的输入,不能绑输出**(见 inputNumbersOf 的说明),且必须精确命中不走量纲缩放。
-        // 这样"表格里并列输入"能过,而"照抄输出原始浮点 37.397700293773134"仍然违规。
-        if (decimal && !/^(年|期)$/.test(unit)
-            && inputNumbersOf(calcIds, calcById).some((v) => Math.abs(v - val) <= Math.max(Math.abs(val) * 1e-9, 1e-9))) { exact++; continue; }
+        // 可绑 calc 的**输入 / 中间量(output.details)**,带量纲缩放(元→亿、小数→%),
+        // 不能绑 output.value。年 / 期 单位除外:"消化 30 年"里的 30 是锚(倍)不是年数,放行等于放过一个真错误。
+        // 🔴 历史(1e-9 死匹配、只认 inputs)会误杀三种**可溯源**的合法写法:
+        //   ① 引用 details 里的副统计量(percentile_rank 的 min/median/max,
+        //      如「近五年最低分位 17.66 倍 [calc-percentile_rank]」);
+        //   ② 量纲换算(inputs 是 27239985194.41 元,报告写「272.40 亿」);
+        //   ③ 小数→百分比(details 是 0.1952,报告写「19.52%」)。
+        // 2026-09 一次真实 run 5/5 次成稿全灭的根因之一。
+        // 防"照抄输出原始浮点"的纪律由**池排除 output.value** 承担(intermediateNumbersOf
+        // 只收 inputs + details),与匹配宽松度无关 —— 原始浮点 37.397700293773134 不在池里。
+        // ⚠️ 容差按整数/小数分档(上游 review):2e-3 相对容差是为整数锚(30 倍、1504 亿)定的,
+        //    套到小数上会把「改数字」放过(numberBound(27.35,[27.30])→true)。上三类合法写法
+        //    靠 numberBound 内「四舍五入到两位」那一条命中,小数分支用紧容差 1e-6 即可全放行,
+        //    同时「27.35 vs 27.30」这类真改写仍被拦。
+        if (!/^(年|期)$/.test(unit) && numberBound(val, intermediateNumbersOf(calcIds, calcById), decimal ? 1e-6 : 2e-3)) { exact++; continue; }
         // 🔴 两类违规必须分开:`applicable`(本次有没有 display)只能决定**display 纪律**适不适用,
         //    决定不了"引了一个真实 ev-id 却写了别的数"要不要报 —— 那与 display 无关。
         //    合在一起的后果:旧 calc 运行 / 纯取数运行里,事实表写错数字完全不会被报出来(Codex fidelity-r2 P1)。
