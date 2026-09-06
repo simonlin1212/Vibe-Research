@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 
 import "../src/finance/register.ts";   // 测试文件也是入口:插件要先注册(writeReport 要读 reportStage)
 import { RUN_TOOLS, RunToolsError, callRunTool, runToolsAsFunctionSpecs, type RunToolsContext } from "../src/run_tools.ts";
+import { calcRecordSchema } from "../src/schemas.ts";
 
 /**
  * **工具 registry 的一致性棘轮**(双引擎方案 v2 第 3 步)。
@@ -70,6 +71,32 @@ test("callRunTool 按 registry 的 schema 校验参数(谁也别想绕开这次�
   // 参数合法则放行到实现层(这里因为路径不在白名单里被实现层拒 —— 说明确实走过了 schema 这一关)
   assert.throws(() => callRunTool(fakeCtx, "read_run_file", { path: "../../etc/passwd" }),
     (e: unknown) => e instanceof RunToolsError && e.code === "path_not_allowed");
+});
+
+test("calculate 引用格式必须在访问运行目录或启动计算器前校验", () => {
+  const base = { function: "ratio", args: { numerator: 1, denominator: 4 }, output_file: "01_ratio.json" };
+  for (const field of ["evidence_ids", "calculation_ids"] as const) {
+    const valid = field === "evidence_ids" ? "ev-abcdef" : "calc-0123456789abcdef";
+    const wrongKind = field === "evidence_ids" ? "calc-0123456789abcdef" : "ev-abcdef";
+    for (const invalid of ["", "19_tech.json", "--help", " ev-abcdef", "ev-ABCDEf", "calc-0123456789abcde", wrongKind]) {
+      assert.throws(() => callRunTool(fakeCtx, "calculate", { ...base, [field]: [valid, invalid] }),
+        (e: unknown) => e instanceof RunToolsError && e.code === "bad_arguments" && e.message.includes(field),
+        `${field} 中的 ${JSON.stringify(invalid)} 应在触碰文件系统前被拒绝`);
+    }
+  }
+  for (const refs of [{}, { evidence_ids: [], calculation_ids: [] },
+    { evidence_ids: ["ev-abcdef", "ev-0123456789ab"], calculation_ids: ["calc-0123456789abcdef"] }]) {
+    assert.throws(() => callRunTool(fakeCtx, "calculate", { ...base, ...refs }),
+      (e: unknown) => e instanceof RunToolsError && e.code === "turn_context_missing",
+      "合法或省略的引用应通过参数校验，才进入运行上下文检查；这里不声明引用已经存在");
+  }
+  const specs = runToolsAsFunctionSpecs().find(s => s.name === "calculate")!;
+  const properties = specs.parameters.properties as Record<string, { items: { pattern: string } }>;
+  for (const variant of calcRecordSchema.properties.inputs_refs.items.oneOf) {
+    const field = variant.properties.ref_type.const === "evidence" ? "evidence_ids" : "calculation_ids";
+    assert.equal(properties[field].items.pattern, variant.properties.ref_id.pattern,
+      "MCP/直连共用的输入 schema 必须与落盘计算契约同一口径");
+  }
 });
 
 test("🔴 calculate 的 function=list 要被拒,并把可用函数清单告诉模型", () => {

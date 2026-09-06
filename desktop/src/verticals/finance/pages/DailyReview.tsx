@@ -33,6 +33,8 @@ export function DailyReview() {
   const [emotion, setEmotion] = useState<ShortTermEmotion | null>(null);
   const [turnover, setTurnover] = useState<TurnoverTop | null>(null);
   const [globalIdx, setGlobalIdx] = useState<GlobalIndex[]>([]);
+  const [globalErr, setGlobalErr] = useState<string | null>(null);
+  const [globalDone, setGlobalDone] = useState(false);
   // 关注股票（自选，存本地）
   const [watchCodes, setWatchCodes] = useState<string[]>(loadWatch);
   const [watchQuotes, setWatchQuotes] = useState<Record<string, Quote>>({});
@@ -46,7 +48,12 @@ export function DailyReview() {
 
   const loadIndices = () => {
     api.indices().then(setIndices).catch(() => setIdxErr(true));
-    api.globalIndices().then(setGlobalIdx).catch(() => {});
+    setGlobalDone(false);
+    setGlobalErr(null);
+    setGlobalIdx([]);
+    api.globalIndices().then(setGlobalIdx)
+      .catch((e) => setGlobalErr(e instanceof Error ? e.message : "全球指数获取失败"))
+      .finally(() => setGlobalDone(true));
     api.emotion().then(setEmotion).catch(() => {}).finally(() => setEmoDone(true));
     api.turnoverTop().then(setTurnover).catch(() => {}).finally(() => setToDone(true));
 
@@ -123,7 +130,7 @@ export function DailyReview() {
     setReviewLoading(true);
     setReview("");
     const prompt =
-      `以下是这一屏的全部客观数据（含业务日与各块读法护栏）：\n${dataSummary}\n\n` +
+      "请根据这一屏的客观数据（含业务日与各块读法护栏）进行分析。\n" +
       "请用中文做当天复盘：整体涨跌、指数表现、情绪与资金面值得注意的点。\n" +
       "🔴 硬要求：① 标了【缺口】的块**不要就它下任何结论**，如实说这块没取到；" +
       "② 引用数字时带上它的读法护栏（【读法·xx】那几行），不要把口径丢掉；" +
@@ -182,7 +189,9 @@ export function DailyReview() {
       : "【A股指数】未取到");
     // 拿不到价的那条**不写进去** —— 让模型看到 null 比不给还糟
     const gi = globalIdx.filter((i) => i.price !== null && i.change_pct !== null);
-    if (gi.length) lines.push(`【海外指数】${gi.map((i) => `${i.name} ${i.price}（${i.change_pct! > 0 ? "+" : ""}${i.change_pct}%）`).join("；")}`);
+    lines.push(gi.length
+      ? `【海外指数】${gi.map((i) => `${i.name} ${i.price}（${i.change_pct! > 0 ? "+" : ""}${i.change_pct}%）`).join("；")}`
+      : `【海外指数】${globalErr ?? (globalDone ? "未取得可用数据" : "仍在加载")}；没有可引用的数据，不就此下结论。`);
     if (sentCells.length) lines.push(`【市场情绪】${sentCells.map((c) => `${c.k} ${c.v}`).join("；")}`);
     if (emotion) lines.push(`【短线情绪】${JSON.stringify(emotion).slice(0, 400)}`);
     const validSectors = sectors.filter((x) => x.net !== null);
@@ -273,12 +282,15 @@ export function DailyReview() {
       </div>
 
       {/* 1b. 全球市场（隔夜外围脸色：A 股常看美股 / 港股） */}
-      {globalIdx.length > 0 && (
+      {(
         <>
           <div className="mb-3 flex items-center gap-2">
             <h3 className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground"><Globe className="h-4 w-4" /> 全球市场</h3>
             <span className="text-[11px] text-muted-foreground/50">隔夜外围 · A 股常看美股 / 港股脸色</span>
           </div>
+          {globalIdx.length === 0 && <p role="status" className="mb-4 text-sm text-muted-foreground">
+            {globalErr ?? (globalDone ? "全球指数未取得可用数据，不代表市场没有变化。" : "全球指数加载中…")}
+          </p>}
           <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-5">
             {globalIdx.map((g) => (
               <GlassCard key={g.key} className="p-3">

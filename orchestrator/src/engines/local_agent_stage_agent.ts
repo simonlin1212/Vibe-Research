@@ -13,6 +13,7 @@ type Complete = (agent: LocalAgentId, options: RunLocalAgentOptions) => Promise<
 const FATAL_LOCAL_AGENT_ERRORS = new Set([
   "agent_not_installed", "agent_not_authenticated", "agent_probe_failed",
   "agent_cli_too_old", "unsupported_cli", "agent_bad_timeout", "agent_quota",
+  "agent_shutdown_failed",
 ]);
 
 export interface LocalAgentStageAgentOptions {
@@ -85,7 +86,8 @@ export class LocalAgentStageAgent implements AgentRunner {
     if (this.#options.observer) { try { this.#options.observer(event); } catch { /* 观察者不影响研究 */ } }
   }
 
-  async runTurn(stage: Stage, attempt: number, prompt: string, outputSchema?: unknown): Promise<TurnOutcome> {
+  async runTurn(stage: Stage, attempt: number, prompt: string, outputSchema?: unknown, signal?: AbortSignal): Promise<TurnOutcome> {
+    signal?.throwIfAborted();
     const started = Date.now();
     const before = writableSnapshot(this.#options.runDir);
     let finalResponse = "";
@@ -101,6 +103,7 @@ export class LocalAgentStageAgent implements AgentRunner {
         outputSchema: undefined,
         env: this.#options.env,
         timeoutMs: this.#options.timeoutMs,
+        signal,
         controlledMcp: {
           serverName: SERVER_NAME,
           command: process.execPath,

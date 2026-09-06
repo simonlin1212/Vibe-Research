@@ -20,13 +20,13 @@ export default {
         info: "hsl(var(--info))",
       },
       fontFamily: {
-        sans: ["Inter", "system-ui", "sans-serif"],
-        mono: ["JetBrains Mono", "ui-monospace", "monospace"],
+        sans: ["-apple-system", "BlinkMacSystemFont", "PingFang SC", "Microsoft YaHei", "sans-serif"],
+        mono: ["SFMono-Regular", "Consolas", "ui-monospace", "monospace"],
       },
-      borderRadius: { lg: "var(--radius)", md: "calc(var(--radius) - 4px)", sm: "calc(var(--radius) - 8px)" },
+      borderRadius: { lg: "var(--radius)", md: "6px", sm: "4px" },
       boxShadow: {
-        glass: "0 12px 30px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.06)",
-        glow: "0 0 0 1px hsl(var(--primary) / .25), 0 0 24px hsl(var(--primary) / .18)",
+        glass: "0 8px 28px rgba(0,0,0,.07), inset 0 1px 0 rgba(255,255,255,.035)",
+        glow: "0 0 0 1px hsl(var(--primary) / .25)",
       },
     },
   },

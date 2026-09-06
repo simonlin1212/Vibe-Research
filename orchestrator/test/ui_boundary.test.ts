@@ -118,7 +118,10 @@ test("根路径是极简功能首页,首屏可直接与 Agent 交流", () => {
   assert.match(layoutSrc, /to:\s*"\/",\s*icon:\s*Home,\s*label:\s*"首页"/);
   assert.match(layoutSrc, /to:\s*"\/settings",\s*icon:\s*Settings,\s*label:\s*"接入 AI"/);
   assert.match(homeSrc, /<FinanceHomeAgent\s*\/>/);
-  assert.match(homeSrc, /本地金融研究 Agent/);
+  // V2 标题已由用户确认；这里守护接入状态，而不是锁死旧版宣传标题。
+  assert.match(homeSrc, /<h1\b[^>]*>研究，从全局开始。<\/h1>/);
+  assert.match(homeSrc, /agentEnabled\s*=\s*runtime\.config\?\.executionMode\s*!==\s*"direct"/);
+  assert.match(homeSrc, /agentEnabled\s*\?\s*"Vibe Research Agent 已开启"\s*:\s*"模型直连模式"/);
   assert.match(homeSrc, /to="\/settings"/);
   assert.ok(!/Codex Harness 研究流程|全部功能，一页直达|先看清今天发生了什么/.test(homeSrc),
     "首页仍保留上一版的大段说明");
@@ -133,7 +136,7 @@ test("根路径是极简功能首页,首屏可直接与 Agent 交流", () => {
   assert.equal((homeSrc.match(/title:\s*"个股研究"/g) ?? []).length, 1, "首页只保留一个个股研究");
 });
 
-test("个股研究只有一个入口，旧地址跳转且归档只展示名称与代码", () => {
+test("个股研究只有一个入口，旧地址跳转且归档保留名称代码与状态时间", () => {
   const routerSrc = fs.readFileSync(path.join(FINANCE, "router.tsx"), "utf8");
   const layoutSrc = fs.readFileSync(path.join(FINANCE, "components", "layout", "Layout.tsx"), "utf8");
   const researchSrc = fs.readFileSync(path.join(FINANCE, "pages", "Research.tsx"), "utf8");
@@ -146,10 +149,12 @@ test("个股研究只有一个入口，旧地址跳转且归档只展示名称�
   assert.match(researchSrc, /startResearch\(\{[\s\S]{0,400}symbol:\s*code,[\s\S]{0,400}endpoints:\s*scope,/, "A 股代码必须传到真实研究入口");
   assert.ok(!/港股或美股标的跑完整|A 股 \/ 港股 \/ 美股代码/.test(researchSrc), "界面不能承诺尚未接通的港美完整研究");
   const archive = researchSrc.slice(researchSrc.indexOf("<h3 className=\"mb-3 font-semibold\">研究归档"));
-  assert.match(archive, /r\.name\s*\?\?\s*"个股"/);
-  assert.match(archive, /r\.symbol\s*\?\?\s*"—"/);
-  assert.ok(!/r\.status|r\.finished_at|r\.started_at|<span[^>]*>\s*\{r\.run_id\}\s*<\/span>/.test(archive),
-    "归档行又把运行号、状态或日期渲染给用户了");
+  // 2026-09-06 Simon 确认补充状态和时间；不改变原导航与研究入口。
+  assert.match(archive, /<ResearchRunItem key=\{r\.run_id\} run=\{r\}/);
+  const item = fs.readFileSync(path.join(FINANCE, "components", "ResearchRunItem.tsx"), "utf8");
+  assert.match(item, /run\.name\s*\?\?\s*"个股"/);
+  assert.match(item, /run\.symbol\s*\?\?\s*"—"/);
+  assert.match(item, /run\.status/); assert.match(item, /run\.started_at/);
 });
 
 test("首页 Agent 是可发送的真实对话区,不是装饰输入框", () => {

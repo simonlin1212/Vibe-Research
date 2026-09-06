@@ -6,6 +6,32 @@ import test from "node:test";
 
 import { batchSummaryMarkdown, collectRun, runBatch } from "../src/batch.ts";
 import { alertsMarkdown, diffEvidence, pickRuns, runAlerts } from "../src/alerts.ts";
+import { evidenceAlerts, ServiceError } from "../src/service.ts";
+
+test("观测日行情跨日对齐，财务资料期和不同来源仍严格分开", () => {
+  const quote = (period: string, value: number, source = "tencent") => ({ id: `ev-${period}-${source}`, field: "price", period, value, source, unit: "元" });
+  const diffs = diffEvidence([quote("2026-09-03", 10)], [quote("2026-09-04", 11)]);
+  assert.equal(diffs.length, 1);
+  assert.equal(diffs[0].kind, "changed");
+  assert.equal(diffs[0].base?.period, "2026-09-03");
+  assert.equal(diffs[0].next?.period, "2026-09-04");
+  assert.match(alertsMarkdown("X", "a", "b", diffs), /2026-09-03 → 2026-09-04/);
+  assert.deepEqual(diffEvidence([quote("2026-09-03", 10)], [quote("2026-09-04", 10)]), []);
+  assert.deepEqual(diffEvidence([quote("2026-09-03", 10)], [quote("2026-09-04", 11, "eastmoney")]).map(d=>d.kind).sort(), ["added", "removed"]);
+  const fin = (period: string) => ({ ...quote(period, 10), field: "revenue_cum" });
+  assert.deepEqual(diffEvidence([fin("2025-12-31")], [fin("2026-06-30")]).map(d=>d.kind).sort(), ["added", "removed"]);
+});
+
+test("观测序列只比较各次最新值，但旧日矛盾或不同口径不能被隐藏", () => {
+  const e = (period: string, value: number) => ({ id: `ev-${period}-${value}`, field: "price", period, value, source: "tencent", unit: "元" });
+  const diff = diffEvidence([e("2026-09-03", 10), e("2026-09-02", 8)], [e("2026-09-04", 11), e("2026-09-03", 10)]);
+  assert.equal(diff.length, 1);
+  assert.equal(diff[0].base?.value, 10);
+  assert.equal(diff[0].next?.value, 11);
+  assert.throws(() => diffEvidence([e("2026-09-03", 10), e("2026-09-02", 8), e("2026-09-02", 9)], []), /同源同键/);
+  assert.equal(diffEvidence([e("2026-09-03", 10)], [{ ...e("2026-09-04", 11), adjustment: "qfq" }]).length, 2);
+  assert.equal(diffEvidence([e("2026-02-30", 10)], [e("2026-03-01", 11)]).length, 2, "不猜畸形日期");
+});
 import { writeJson } from "../src/fsutil.ts";
 
 
@@ -43,6 +69,29 @@ test("batch:汇总只转录各运行产物;runner 注入不真跑;非法代码�
   const it = collectRun(path.join(repo, ".local", "runs", "a2"), "300308", "a2", 0, 1000);
   assert.equal(it.standard_columns?.pe_deducted_x4, "calc-1111111111111111");
   assert.ok(batchSummaryMarkdown("x", [it]).includes("calc-1111111111111111"));
+});
+
+test("HTTP 变化提醒沿用当前数据根且只读，不读取或覆盖默认用户档案", (t) => {
+  const repo = repoWithRuns();
+  const isolated = fs.mkdtempSync(path.join(os.tmpdir(), "vra-alert-isolated-"));
+  t.after(() => { fs.rmSync(repo, { recursive: true, force: true }); fs.rmSync(isolated, { recursive: true, force: true }); });
+  const ctx = { repoRoot: repo, dataRoot: isolated, python: "python3", node: process.execPath, providerEnvKey: null };
+  assert.throws(() => evidenceAlerts(ctx, { symbol: "300308" }), e => e instanceof ServiceError && e.code === "need_two_runs");
+  assert.ok(!fs.existsSync(path.join(repo, ".local", "alerts")));
+  fs.cpSync(path.join(repo, ".local", "runs"), path.join(isolated, "runs"), { recursive: true });
+  const evidence = [{ id: "ev-isolated", field: "price", value: "ISOLATED_CANARY", unit: "元", period: "p", source: "test" }];
+  writeJson(path.join(isolated, "runs", "a2", "evidence.json"), evidence);
+  const result = evidenceAlerts(ctx, { symbol: "300308", market: "SZ" });
+  assert.ok(JSON.stringify(result).includes("ISOLATED_CANARY"));
+  assert.ok(!fs.existsSync(path.join(repo, ".local", "alerts")));
+  assert.ok(!fs.existsSync(path.join(isolated, "alerts")), "GET 不应写入比较归档");
+  assert.throws(() => evidenceAlerts(ctx, { symbol: "300308", base: "../outside", next: "a2" }), /非法 run-id/);
+  fs.unlinkSync(path.join(isolated, "runs", "a2", "evidence.json"));
+  fs.symlinkSync(path.join(repo, ".local", "runs", "a2", "evidence.json"), path.join(isolated, "runs", "a2", "evidence.json"));
+  assert.throws(() => evidenceAlerts(ctx, { symbol: "300308" }), /符号链接/);
+  fs.unlinkSync(path.join(isolated, "runs", "a2", "manifest.json"));
+  fs.symlinkSync(path.join(repo, ".local", "runs", "a2", "manifest.json"), path.join(isolated, "runs", "a2", "manifest.json"));
+  assert.throws(() => evidenceAlerts(ctx, { symbol: "300308" }), /符号链接/);
 });
 
 test("alerts:按事实键对齐两次运行;只列两值;默认取同标的最近两次;输出落 .local/alerts", () => {

@@ -7,6 +7,7 @@ import { Disclaimer } from "@/components/ui/Disclaimer";
 import { api, ApiError, type PortfolioData } from "@/lib/api";
 import { normalizeMarketSymbol } from "@/lib/marketSymbol";
 import { cn } from "@/lib/utils";
+import { PositionImport } from "@/components/PositionImport";
 
 const REFRESH_MS = 30 * 60 * 1000; // 每半小时自动刷新
 // 🔴 容 null:行情拉不到时这些是 null,显示「—」而不是 0 —— 0 会看着像"正好不赚不亏"
@@ -125,7 +126,7 @@ export function Portfolio() {
 
       <div className="mb-4 flex items-start gap-2 rounded-lg border border-success/25 bg-success/5 p-3 text-xs text-muted-foreground">
         <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-success" />
-        <span>持仓<b className="text-foreground">只存在你本地</b>，不上传、不进仓库。行情每半小时自动刷新，也可手动刷新。本产品不提供标的、不给建议，只帮你把自己的账理清楚。</span>
+        <span>持仓台账<b className="text-foreground">保存在本地</b>，不进仓库。使用截图／表格转写时，所选文件内容会发送给已连接的 AI；行情查询会发送标的代码。行情每半小时自动刷新，也可手动刷新。本产品不提供标的、不给建议，只帮你把自己的账理清楚。</span>
       </div>
 
       {/* 汇总 */}
@@ -160,6 +161,9 @@ export function Portfolio() {
       )}
 
       {/* 录入 */}
+      <PositionImport existingCodes={holdings.map(h => h.code)} onFill={values => {
+        setCode(values.symbol); setShares(values.shares); setCost(values.cost);
+      }} />
       <GlassCard className="mb-4">
         <h3 className="mb-3 text-sm font-semibold">添加持仓</h3>
         <div className="flex flex-wrap items-end gap-2">

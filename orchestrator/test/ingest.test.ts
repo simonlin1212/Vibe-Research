@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import "../src/finance/register.ts"; // 测试文件也是入口:插件要先注册
 import { IngestError, MAX_FILES, ingestFiles } from "../src/ingest.ts";
 import { listRecords, upsertRecord } from "../src/ledger.ts";
+import { readIngestFile, type IngestReadContext } from "../src/ingest_tools.ts";
 
 // ⚠️ fileURLToPath 而不是 new URL(...).pathname —— 仓库路径含中文时 pathname 是百分号编码的
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -50,6 +51,119 @@ const OK_REPLY = JSON.stringify({
     { source_file: "01_a.csv", fields: { symbol: "300308", shares: 100, cost: 846 }, uncertain: ["cost:截图模糊"] },
   ],
   warnings: ["第二张图看不清"],
+});
+
+for (const agent of ["claude", "codebuddy"] as const) {
+  test(`${agent} 转写只经上传白名单 MCP，保持出处且不自动写台账`, async (t) => {
+    const root = tmp();
+    t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+    const out = await ingestFiles({ repoRoot: REPO, dataRoot: root, llm: { provider: `cli-${agent}` },
+      localAgentRunner: async (actual, opts) => {
+        assert.equal(actual, agent);
+        if (agent === "codebuddy") {
+          assert.equal(opts.outputSchema, undefined, "WorkBuddy 工具轮不同时启用 CLI schema 模式");
+          assert.match(opts.userPrompt, /JSON Schema/);
+          assert.match(opts.userPrompt, /source_file/);
+        } else assert.ok(opts.outputSchema);
+        assert.deepEqual(opts.controlledMcp?.allowedTools, ["mcp__vra_ingest__read_ingest_file"]);
+        const env = opts.controlledMcp!.env;
+        const ctx: IngestReadContext = { dir: env.VRA_INGEST_DIR!, files: JSON.parse(env.VRA_INGEST_FILES!) };
+        const result = readIngestFile(ctx, { name: "01_a.csv" });
+        assert.match((result.content[0] as { text: string }).text, /300308/);
+        return OK_REPLY;
+      },
+    }, { kind: "position", files: [{ name: "a.csv", content_base64: b64("代码,数量\n300308,100") }] },
+    () => { throw new Error("不得暗中切换 Codex"); });
+    assert.equal(out.drafts[0]!.source_file, "a.csv");
+    assert.deepEqual(listRecords(root, "position"), []);
+  });
+}
+
+test("本机 Agent 未读取全部资料时不能返回看似完整的草稿，失败清理原件", async (t) => {
+  const root = tmp();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  await assert.rejects(() => ingestFiles({ repoRoot: REPO, dataRoot: root, llm: { provider: "cli-claude" },
+    localAgentRunner: async () => OK_REPLY,
+  }, { kind: "position", files: [{ name: "a.csv", content_base64: b64("x") }] }), /完整读取/);
+  assert.deepEqual(fs.readdirSync(path.join(root, "import")), []);
+});
+
+test("WorkBuddy 图片走原生附件，混合文本仍须读完白名单工具", async (t) => {
+  const root = tmp();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  for (const mixed of [false, true]) {
+    const out = await ingestFiles({ repoRoot: REPO, dataRoot: root, llm: { provider: "cli-codebuddy" },
+      localAgentRunner: async (agent, opts) => {
+        assert.equal(agent, "codebuddy");
+        assert.equal(opts.userImages?.[0]?.data, PNG);
+        assert.equal(opts.userImages?.[0]?.name, "01_表格.png");
+        assert.match(opts.systemPrompt, /原生附件/);
+        if (mixed) {
+          const env = opts.controlledMcp!.env;
+          const ctx = { dir: env.VRA_INGEST_DIR!, files: JSON.parse(env.VRA_INGEST_FILES!) } as IngestReadContext;
+          assert.equal(ctx.files.length, 1);
+          assert.equal(ctx.files[0]?.kind, "text");
+          readIngestFile(ctx, { name: ctx.files[0]!.name });
+        } else assert.equal(opts.controlledMcp, undefined, "纯图片不启动 MCP 或开放工具");
+        return JSON.stringify({ drafts: [{ source_file: "01_表格.png", fields: { symbol: "600519", shares: 300, cost: 123.45 }, uncertain: [] }], warnings: [] });
+      },
+    }, { kind: "position", files: [{ name: "表格.png", content_base64: PNG }, ...(mixed ? [{ name: "notes.txt", content_base64: b64("说明") }] : [])] });
+    assert.equal(out.drafts[0]?.source_file, "表格.png");
+    assert.deepEqual(listRecords(root, "position"), []);
+  }
+});
+
+test("本机 Agent 首轮漏读资料时只补跑一次同源受控读取，再校验草稿", async (t) => {
+  const dataRoot = tmp();
+  t.after(() => fs.rmSync(dataRoot, { recursive: true, force: true }));
+  let calls = 0;
+  const result = await ingestFiles({ repoRoot: REPO, dataRoot, llm: { provider: "cli-codebuddy" },
+    localAgentRunner: async (agent, opts) => {
+      assert.equal(agent, "codebuddy");
+      calls++;
+      if (calls === 2) {
+        assert.match(opts.userPrompt, /尚未完整读取/);
+        const ctx = { dir: opts.controlledMcp!.env.VRA_INGEST_DIR,
+          files: JSON.parse(opts.controlledMcp!.env.VRA_INGEST_FILES) } as IngestReadContext;
+        for (const file of ctx.files) readIngestFile(ctx, { name: file.name });
+      }
+      return JSON.stringify({ drafts: [], summary: "空测试表", warnings: [] });
+    },
+  }, { kind: "position", files: [{ name: "a.csv", content_base64: b64("symbol,shares,cost") }] });
+  assert.equal(calls, 2);
+  assert.equal(result.drafts.length, 0);
+});
+
+test("两次新调用不能各读一半资料后拼成完整回执", async (t) => {
+  const root = tmp();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  let calls = 0;
+  await assert.rejects(() => ingestFiles({ repoRoot: REPO, dataRoot: root, llm: { provider: "cli-codebuddy" },
+    localAgentRunner: async (_agent, opts) => {
+      const env = opts.controlledMcp!.env;
+      const ctx = { dir: env.VRA_INGEST_DIR!, files: JSON.parse(env.VRA_INGEST_FILES!) } as IngestReadContext;
+      readIngestFile(ctx, { name: ctx.files[calls++]!.name });
+      return JSON.stringify({ drafts: [], warnings: [] });
+    },
+  }, { kind: "position", files: ["a.txt", "b.txt"].map(name => ({ name, content_base64: b64("text") })) }), /完整读取/);
+  assert.equal(calls, 2);
+});
+
+for (const damage of ["original", "receipt"]) test(`资料完整性损坏立即失败不重试：${damage}`, async (t) => {
+  const root = tmp();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  let calls = 0;
+  await assert.rejects(() => ingestFiles({ repoRoot: REPO, dataRoot: root, llm: { provider: "cli-codebuddy" },
+    localAgentRunner: async (_agent, opts) => {
+      calls++;
+      const env = opts.controlledMcp!.env;
+      const files = JSON.parse(env.VRA_INGEST_FILES!);
+      // Leave the first file unread; damage in the later file must win over retry.
+      fs.writeFileSync(path.join(env.VRA_INGEST_DIR!, damage === "original" ? files[1].name : ".read-receipts.json"), "corrupt");
+      return JSON.stringify({ drafts: [], warnings: [] });
+    },
+  }, { kind: "position", files: ["a.txt", "b.txt"].map(name => ({ name, content_base64: b64("text") })) }));
+  assert.equal(calls, 1);
 });
 
 test("转写线程与对话同样的硬约束:只读沙箱 / 不联网 / 不联网搜索", async () => {

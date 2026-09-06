@@ -9,10 +9,10 @@
 
 <p align="center">
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-yellow"></a>
-  <img alt="Version" src="https://img.shields.io/badge/version-v1.0.3-F35D2B">
+  <img alt="Version" src="https://img.shields.io/badge/version-v1.0.4-F35D2B">
   <img alt="UI" src="https://img.shields.io/badge/UI-React%20%2B%20Vite-646cff">
-  <img alt="Orchestrator tests" src="https://img.shields.io/badge/orchestrator-708%20checks-passing">
-  <img alt="Desktop tests" src="https://img.shields.io/badge/desktop-34%20tests-passing">
+  <img alt="Orchestrator tests" src="https://img.shields.io/badge/orchestrator-797%20passed-passing">
+  <img alt="Desktop tests" src="https://img.shields.io/badge/desktop-54%20tests-passing">
   <img alt="Codex Harness" src="https://img.shields.io/badge/runtime-Codex%20Harness-black">
 </p>
 
@@ -42,6 +42,8 @@
 
 ## 这是什么
 
+此开发分支已同步 v1.0.4 基线及后继 Issue/PR 修复，另含尚未发布的双引擎改动；版本徽章不代表开发分支已发布。
+
 Vibe Research 是一个**本地金融研究工作台**。第一次打开时只需要决定 AI 从哪里来：使用已经登录的
 Codex / Claude Code / WorkBuddy（CodeBuddy）订阅，或者填写自己的模型 API。连接成功后，Vibe Research Agent 默认开启，普通
 使用者不需要再理解 Harness、脚本或路由模式。
@@ -51,7 +53,8 @@ Agent 模式会在本机维持上下文、调用工具、推进任务、处理�
 本机 Claude Code Agent 承载；WorkBuddy / CodeBuddy 账号由腾讯官方 CodeBuddy Code CLI 承载。Vibe Research 在这些运行时之上统一叠加金融数据、研究 SOP、确定性计算、
 证据校验和合规边界。
 
-Claude Code 与 WorkBuddy / CodeBuddy Agent 除了对话和有界材料任务，也能运行完整 A 股六阶段研究。
+Claude Code 与 WorkBuddy / CodeBuddy Agent 除了对话和有界材料任务，也已接通辩论、Agent 回测、
+截图／表格资料转写和完整 A 股六阶段研究。
 研究阶段关闭它们的内建工具，只开放 Vibe Research 的五个受控 MCP 工具；不会暗中换成 Codex。
 
 API 用户还可以在设置里关闭 Agent，改成模型直连。这个开关只对通过直连能力验证的 provider 开放：
@@ -73,7 +76,7 @@ Qwen Code 与 DeepSeek CLI 当前仍需各自的 API key，也归入 API 接入�
 
 | 模块 | 当前能力 |
 |---|---|
-| 首页 Agent | 打开首页即可对话；可直接提出公司、行业、复盘或研究任务 |
+| 首页 Agent | 普通对话，以及今日复盘、公司研究、已有研报三个受控入口；进入页面后确认执行 |
 | 每日复盘 | 汇总市场、热点、涨停原因和当日线索 |
 | 资讯雷达 | Investment News 标题翻译、公开新闻、A 股公告和事件概率 |
 | 产业信号 | GPU 租金、月频产业数据、原材料、招聘和数据日历 |
@@ -82,7 +85,7 @@ Qwen Code 与 DeepSeek CLI 当前仍需各自的 API key，也归入 API 接入�
 | 我的研报 | 本地保存 PDF、DOCX、TXT、MD、CSV；抽取、检索、引用、下载和删除 |
 | 回测 | 只提供 Agent 对话入口；信息不足时补问，齐备后调用真实回测工具 |
 | 多空辩论 | 多方、空方、反驳与中立主持共用同一份真实资料包 |
-| 自选股与持仓 | 支持 A 股、美股和港股代码识别、本地保存与行情刷新 |
+| 自选股与持仓 | A 股、美股和港股代码识别、本地保存与行情刷新；截图／表格生成草稿，人工核对后填写并确认保存 |
 | 研究记录 | 保存研究、回测和辩论报告，可搜索、按时间查看和删除 |
 | 接入 AI | 第一步连接订阅或模型 API；第二张卡显示 Agent 开关，默认开启并全站生效 |
 
@@ -99,6 +102,10 @@ Qwen Code 与 DeepSeek CLI 当前仍需各自的 API key，也归入 API 接入�
 
 任何关键数据拿不到，状态都会变成 `incomplete` 或 `failed`，不会用旧值或猜测填空。
 
+研究运行中可请求中止，刷新页面后也能继续查看状态；此前已完成的阶段会保留。
+发出请求不代表后台已停止，页面会区分停止请求、停止确认与无法确认的失败状态。
+持仓导入只生成草稿，不自动写入台账；选定的图片或表格内容会发送给当前 AI 来源，提交前请移除无关敏感信息。
+
 ## 快速开始
 
 ### 环境要求
@@ -109,7 +116,7 @@ Qwen Code 与 DeepSeek CLI 当前仍需各自的 API key，也归入 API 接入�
 | Node.js | ≥ 22.18，推荐 24 LTS |
 | Python | ≥ 3.11，推荐并已验证 3.12 |
 | Agent 引擎 | Codex Harness 随依赖安装，已验证 0.149.0；用户无需另装全局 Codex |
-| 模型 | ChatGPT / Claude.ai 订阅登录，或支持 Responses API 的模型服务 |
+| 模型 | Codex / Claude Code / WorkBuddy 订阅登录，或兼容所选执行方式的模型 API |
 
 > Node 必须是启用了 TypeScript 支持的构建（nodejs.org 官方安装包、nvm / fnm / Volta 装的都是）：`node -p process.features.typescript` 应输出 `strip` 或 `transform`。部分 Linux 发行版仓库打包的 Node 编译时关闭了这一项，启动或跑测试会报 `ERR_UNKNOWN_FILE_EXTENSION ".ts"` / `ERR_NO_TYPESCRIPT`，请换官方构建。`npm test` 前会先做这项检查并给出同样的提示。
 
@@ -244,11 +251,19 @@ ChatGPT / Claude.ai / WorkBuddy 订阅 · OpenAI · DeepSeek · Qwen · GLM · K
   也不承诺加密，只建议在可信个人电脑使用。key 随请求交给本机后端，但不进入仓库、后端配置、运行账本
   或日志；共享电脑用完请主动清除。
 
-内置 provider 模板：OpenAI、DeepSeek、Qwen、GLM、Kimi、MiMo。Agent 引擎只支持 Responses API；
+内置 provider 模板：OpenAI、DeepSeek、Qwen、GLM、Kimi、MiMo，以及未实测的 `selfhosted` 自托管占位模板。Agent 引擎只支持 Responses API；
 直连通道使用 provider 模板中单独声明并验证的协议。模板存在不等于已经通过兼容矩阵，界面会区分
 “已实测”和“有模板、未实测”，未验证时不会开放直连开关。
 
 详细说明见 [docs/model-access.md](docs/model-access.md) 和 [providers/README.md](providers/README.md)。
+
+局域网访问为可选功能，默认关闭。从仓库根启动：`VRA_LAN=1 bash scripts/start`；Windows PowerShell
+先设置 `$env:VRA_LAN="1"`，再运行 `scripts/start.ps1`。只开放前端，后端仍绑定回环；
+也可在后端已启动时运行 `VRA_LAN=1 npm run dev --prefix desktop`。
+**仅限受信任局域网**：这是单用户工作台共享，不是账号隔离；网络内能访问端口的人可操作该工作台。
+HTTP 传输不加密，API key 和研究资料可能在网络上明文传输。不要暴露公网或在不可信网络开启。
+代理先校验浏览器同源，再归一化 Origin；远程模型地址仍须 HTTPS，本机模型可用回环 HTTP。
+详见 [模型接入与局域网边界](docs/model-access.md#3-自托管模型与局域网访问)。
 
 ## 数据与市场
 
@@ -301,12 +316,15 @@ npm run build --prefix desktop
 .venv/bin/python -m pytest .agents/skills/data-access/scripts/tests -q
 ```
 
-当前验证基线：
+当前未提交开发版的本机验证：
 
-- orchestrator：**708 项**（本机 707 通过 + 1 项 Windows ACL 专项按平台跳过），Core 行业词 **0**，TypeScript 类型检查通过。
-- desktop：**34/34**，TypeScript 类型检查与 Vite 生产构建通过。
-- Python（计算库、回测、数据脚本）：**577/577**。
-- 当前未发布改动经 Codex 独立复审，末轮为 `No actionable P1/P2 findings`。
+- orchestrator：串行 **798 项**（797 通过、1 项 Windows ACL 专项按平台跳过），类型检查通过。
+- desktop：**54/54**，类型检查与生产构建通过，主包体积警告保留。
+- Python（计算库、回测、数据脚本）：最近 M14 检查点 **699/699**；本次上游同步未修改 Python、未重跑。
+- 最新上游修复适配、两轮独立复审与测试范围，见 [上游 Issue 同步验收](docs/上游Issue同步验收_2026-09-05.md)。
+- 增量修复分批通过实际 Codex 独立复审；这不是整仓无遗漏或发布就绪证明。
+- 真实跨来源业务、干净安装、117 端点诊断和修后 full 实跑的成功与失败范围，见
+  [M12 业务验收](docs/跨来源业务验收_M12_2026-09-05.md) 与 [M14 本机验收](docs/完整版本机验收_M14_2026-09-05.md)。
 
 项目约定：每个环节完成后先测试，再做 Codex 独立审计、逐条核实、修复和复审；审计完成前不把
 该环节称为“建成”，也不提交或推送。
@@ -318,7 +336,8 @@ npm run build --prefix desktop
 - MiMo API 已完成从空配置到真实业务报告的端到端验证；其他第三方模型仍需使用者自己的 key，
   没有真实跑过兼容矩阵的模板不会标成“已实测”。
 - Windows 11 原生支持已接入：PowerShell 初始化/启动脚本、Windows 路径与进程处理、受控研究工具链，
-  并纳入 `windows-latest` / `macos-latest` / `ubuntu-latest` CI。Windows 10 仅按 Codex 上游能力尽力兼容。
+  CI 配置包含 `windows-latest` / `macos-latest` / `ubuntu-latest`；本次未提交改动未运行远端 CI，
+  也未在 Windows 实机验收。Windows 10 仅按 Codex 上游能力尽力兼容。
 
 ## 更新日志
 

@@ -12,6 +12,7 @@ import {
   backend, friendlyAgentError, type ResearchTaskRequest, type TaskRouteDecision,
 } from "@/lib/backend";
 import { cn } from "@/lib/utils";
+import { newAnalysisSession } from "@/lib/analysisSession";
 
 const fmtSize = (b: number) =>
   b < 1024 ? `${b}B` : b < 1048576 ? `${(b / 1024).toFixed(0)}KB` : `${(b / 1048576).toFixed(1)}MB`;
@@ -54,6 +55,8 @@ export function MyReports() {
   const [routeDecision, setRouteDecision] = useState<TaskRouteDecision | null>(null);
   const [taskAnswer, setTaskAnswer] = useState("");
   const [taskNotice, setTaskNotice] = useState("");
+  const [deepRunId, setDeepRunId] = useState<string | null>(null);
+  const [cancelPending, setCancelPending] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const taskAbortRef = useRef<AbortController | null>(null);
 
@@ -135,7 +138,7 @@ export function MyReports() {
     // 界面只交“材料 + 目标”；是有界定位还是完整深研，由服务端路由器判定。
     const task: ResearchTaskRequest = {
       schemaVersion: 1,
-      id: `report-${crypto.randomUUID()}`,
+      id: newAnalysisSession("report"),
       kind: "locate_passages",
       requestedMode: "auto",
       objective: goal,
@@ -149,6 +152,7 @@ export function MyReports() {
     setTaskError("");
     setTaskAnswer("");
     setTaskNotice("");
+    setDeepRunId(null); setCancelPending(false);
     setRouteDecision(null);
     try {
       // 先只路由，让系统选择理由可见；AI 来源随请求发送，只用于绑定不可逆路由指纹，
@@ -179,6 +183,7 @@ export function MyReports() {
       let taskEvents = result.events;
       const started = result.events.find((event) => event.type === "started");
       if (result.status === "running" && routed.route.target === "deep" && started) {
+        setDeepRunId(started.runId);
         setTaskNotice("完整六阶段研究已启动。当前页面会持续更新；即使离开页面，研究仍会在本机继续运行，并进入「个股研究」的历史记录。");
         while (!controller.signal.aborted && taskStatus === "running") {
           await waitFor(2_000, controller.signal);
@@ -204,7 +209,23 @@ export function MyReports() {
       if (taskAbortRef.current === controller) {
         taskAbortRef.current = null;
         setTaskBusy(false);
+        setDeepRunId(null); setCancelPending(false);
       }
+    }
+  };
+
+  const cancelDeep = async () => {
+    if (!deepRunId || cancelPending) return;
+    const controller = taskAbortRef.current;
+    setCancelPending(true);
+    try {
+      const status = await backend.cancelResearch(deepRunId);
+      if (taskAbortRef.current !== controller) return;
+      setTaskNotice(status.finished_at ? "研究已结束，正在读取最终状态。" : status.status === "finalizing"
+        ? "研究已进入归档收尾，不能再取消，正在等待最终状态。"
+        : "已请求取消，等待后台确认停止；已经取到的数据会保留。");
+    } catch (e) {
+      if (taskAbortRef.current === controller) { setCancelPending(false); setTaskError(friendlyAgentError(e)); }
     }
   };
 
@@ -262,6 +283,10 @@ export function MyReports() {
             {taskBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
             {taskBusy ? "正在判断并处理…" : "开始任务"}
           </button>
+          {taskBusy && deepRunId && <button type="button" onClick={() => void cancelDeep()} disabled={cancelPending}
+            className="rounded-xl border border-border px-4 py-2 text-sm disabled:opacity-50">
+            {cancelPending ? "正在取消…" : "取消研究"}
+          </button>}
         </div>
 
         {routeDecision && <div className="mt-4 rounded-xl border border-primary/20 bg-primary/5 p-3">
@@ -272,7 +297,7 @@ export function MyReports() {
         </div>}
         {taskNotice && <div className="mt-3 rounded-xl border border-warning/30 bg-warning/[0.06] p-3 text-sm text-foreground/80">{taskNotice}</div>}
         {taskError && <div className="mt-3 rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{taskError}</div>}
-        {taskAnswer && <div className="mt-3 rounded-xl border border-border/70 bg-background/50 p-4">
+        {taskAnswer && <div className="research-paper mt-4 rounded border border-border">
           <p className="mb-3 text-xs font-semibold text-muted-foreground">任务结果</p>
           <div className="prose prose-sm dark:prose-invert max-w-none prose-blockquote:border-primary/40 prose-blockquote:text-foreground/85">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{taskAnswer}</ReactMarkdown>

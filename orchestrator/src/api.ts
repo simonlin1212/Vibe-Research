@@ -11,6 +11,7 @@
 import fs from "node:fs";
 import { productVersion } from "./version.ts";
 import http from "node:http";
+import { cancelResearch } from "./service.ts";
 import path from "node:path";
 
 import crypto from "node:crypto";
@@ -140,8 +141,9 @@ function uiRun(ctx: ServiceContext, id: string): string | null {
   const st = researchStatus(ctx, id);
   if (!st.exists) return null;
   const rep = getReport(ctx, id);
+  const reportText = rep.report ?? (rep.availability === "unvalidated" ? "报告尚未通过最终校验，正文暂不可用。本地草稿保留供排查。" : "这次运行尚无报告文件。");
   const stages = st.stages.map((s) => `<li>${esc(s.stage)} <span class="tag ${esc(s.status)}">${esc(s.status)}</span> × ${s.attempts}</li>`).join("");
-  return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>Vibe Research · ${esc(id)}</title><style>${UI_CSS}</style></head><body><header><h1>${esc(st.run_id)} · <span class="tag ${esc(st.status)}">${esc(st.status)}</span></h1><div><a style="color:#9cf" href="/ui">← 运行列表</a> · 证据 ${st.evidence_count ?? "-"} · 计算 ${st.calculation_count ?? "-"} · ${st.viewer ? `<a style="color:#9cf" href="/runs/${esc(id)}/viewer">打开证据查看器</a>` : "无查看器"}</div></header><main><h2>阶段</h2><ul>${stages}</ul><h2>report.md</h2><pre>${esc(rep.report ?? "(无报告)")}</pre></main></body></html>`;
+  return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>Vibe Research · ${esc(id)}</title><style>${UI_CSS}</style></head><body><header><h1>${esc(st.run_id)} · <span class="tag ${esc(st.status)}">${esc(st.status)}</span></h1><div><a style="color:#9cf" href="/ui">← 运行列表</a> · 证据 ${st.evidence_count ?? "-"} · 计算 ${st.calculation_count ?? "-"} · ${st.viewer && rep.availability === "ready" ? `<a style="color:#9cf" href="/runs/${esc(id)}/viewer">打开证据查看器</a>` : "查看器尚不可用"}</div></header><main><h2>阶段</h2><ul>${stages}</ul><h2>report.md</h2><pre>${esc(reportText)}</pre></main></body></html>`;
 }
 
 /** 把浏览器主动停止 / 连接中断变成模型调用的 AbortSignal，避免页面停了后台仍继续计费。 */
@@ -222,20 +224,24 @@ export function createApiServer(ctx: ServiceContext, opts: { token: string; cook
         });
       }
       if (req.method === "POST" && url.pathname === "/debate") {
-        const b = (await readBody(req)) as { symbol?: string; session?: string; depth?: string; llm?: unknown; executionMode?: unknown };
-        return send(res, 200, await debateStart(ctx, {
-          symbol: String(b?.symbol ?? ""),
-          ...(b?.session ? { session: b.session } : {}),
-          ...(b?.depth ? { depth: String(b.depth) } : {}),
-          ...(b?.executionMode !== undefined ? { executionMode: b.executionMode } : {}),
-          ...(b?.llm !== undefined ? { llm: b.llm } : {}),
-        }));
+        return await withRequestAbort(req, res, async (signal) => {
+          const b = (await readBody(req)) as { symbol?: string; session?: string; depth?: string; llm?: unknown; executionMode?: unknown };
+          return send(res, 200, await debateStart(ctx, {
+            symbol: String(b?.symbol ?? ""),
+            ...(b?.session ? { session: b.session } : {}),
+            ...(b?.depth ? { depth: String(b.depth) } : {}),
+            ...(b?.executionMode !== undefined ? { executionMode: b.executionMode } : {}),
+            ...(b?.llm !== undefined ? { llm: b.llm } : {}),
+          }, signal));
+        });
       }
       if (req.method === "POST" && parts[0] === "debate" && parts[1] && parts[2] === "advance") {
-        const b = await readBody(req);
-        return send(res, 200, await debateAdvance(ctx, { id: parts[1],
-          ...(b.executionMode !== undefined ? { executionMode: b.executionMode } : {}),
-          ...(b.llm !== undefined ? { llm: b.llm } : {}) }));
+        return await withRequestAbort(req, res, async (signal) => {
+          const b = await readBody(req);
+          return send(res, 200, await debateAdvance(ctx, { id: parts[1],
+            ...(b.executionMode !== undefined ? { executionMode: b.executionMode } : {}),
+            ...(b.llm !== undefined ? { llm: b.llm } : {}) }, signal));
+        });
       }
       if (req.method === "POST" && url.pathname === "/fetch") { const b = await readBody(req); return send(res, 200, await fetchEndpoint(ctx, b as never)); }
       // 统一任务入口：客户端只提交高层 task；路由器自行决定 deterministic / Quick / Deep。
@@ -282,8 +288,10 @@ export function createApiServer(ctx: ServiceContext, opts: { token: string; cook
       // 资料导入:上传截图 / 文本 → agent 转写成台账**草稿**(不直接落库,见 ingest.ts)。
       // base64 会把体积放大约 1/3,再留些余量给 JSON 外壳
       if (req.method === "POST" && url.pathname === "/import") {
-        const b = await readBody(req, Math.ceil(IMPORT_MAX_TOTAL_BYTES * 1.4));
-        return send(res, 200, await ingestFiles(ctx, b as never));
+        return await withRequestAbort(req, res, async (signal) => {
+          const b = await readBody(req, Math.ceil(IMPORT_MAX_TOTAL_BYTES * 1.4));
+          return send(res, 200, await ingestFiles(ctx, b as never, signal));
+        });
       }
       // 用户资料:上传后先提取正文并建立本地索引，成功才出现在列表。
       if (req.method === "GET" && url.pathname === "/reports") return send(res, 200, reportsList(ctx));
@@ -300,6 +308,11 @@ export function createApiServer(ctx: ServiceContext, opts: { token: string; cook
         return found ? sendFile(res, found.path, found.report.name, reportMime(found.report.ext)) : send(res, 404, { error: "no_such_report" });
       }
       if (req.method === "POST" && url.pathname === "/research") { const b = await readBody(req); return send(res, 202, startResearch(ctx, b as never)); }
+      if (req.method === "POST" && url.pathname === "/research/cancel") {
+        const b = await readBody(req);
+        if (Object.keys(b).some((key) => key !== "run_id")) throw new ServiceError("bad_request", "取消只接受研究编号");
+        return send(res, 200, cancelResearch(ctx, b.run_id));
+      }
       if (req.method === "GET" && url.pathname === "/runs") return send(res, 200, listRuns(ctx, q.limit ? Number(q.limit) : undefined));
       // 「昨天以来变了什么」:对齐同一对象最近两次研究。**不足两次会报 need_two_runs**,
       // 调用方据此区分"没变化"与"还没有可比较的第二次"——这两件事完全不同(见 service.evidenceAlerts)。

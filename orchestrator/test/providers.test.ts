@@ -34,7 +34,7 @@ test("providers:产品模板全部通过 schema;openai 为 responses 原生;国�
       assert.equal(profile.wire_api, "responses", `${id} 不能再用 chat 协议(引擎已移除)`);
       assert.equal(profile.requires_openai_auth, false);
       assert.deepEqual(profile.auth_modes, ["api_key"]);
-      assert.ok(profile.base_url!.startsWith("https://"));
+      assert.ok(profile.base_url!.startsWith(id === "selfhosted" ? "http://localhost:" : "https://"));
     }
   }
   assert.throws(() => loadProviderProfile(REPO, path.join(REPO, ".local"), "nope"), /未知 provider/);
@@ -57,6 +57,25 @@ test("providers:带占位符的模板不能直接用 —— 选用时当场拒,�
       `${id} 应在选用时因占位符被拒`,
     );
   }
+});
+
+test("#34 selfhosted 覆盖流程保留未验证与远程 HTTPS 边界", () => {
+  const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), "vra-selfhosted-"));
+  try {
+    assert.throws(() => loadProviderProfile(REPO, dataRoot, "selfhosted"), /占位符/);
+    const tpl = JSON.parse(fs.readFileSync(path.join(REPO, "providers/selfhosted.json"), "utf8"));
+    assert.equal(tpl.matrix.status, "unverified");
+    assert.equal(tpl.default_model, null);
+    fs.mkdirSync(path.join(dataRoot, "providers"));
+    fs.writeFileSync(path.join(dataRoot, "providers/selfhosted.json"), JSON.stringify({ ...tpl,
+      base_url: "http://127.0.0.1:11434/v1", default_model: "test-model" }));
+    const profile = loadProviderProfile(REPO, dataRoot, "selfhosted").profile;
+    assert.equal(profile.base_url, "http://127.0.0.1:11434/v1");
+    assert.equal(profile.default_model, "test-model");
+    assert.throws(() => validateProfile({ ...profile, base_url: "http://192.168.1.10:8000/v1" }, "t"), /HTTPS/);
+    assert.throws(() => validateProfile({ ...profile, base_url: "ftp://example.com/v1" }, "t"), /schema/);
+    assert.doesNotThrow(() => validateProfile({ ...profile, base_url: "https://model.example.com/v1" }, "t"));
+  } finally { fs.rmSync(dataRoot, { recursive: true, force: true }); }
 });
 
 test("providers:validateProfile 拒绝密钥值 / 非 openai requires_openai_auth / openai 自定义 base_url / 非法 env_key", () => {

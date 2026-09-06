@@ -8,7 +8,7 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 
 import { atomicWrite, readJsonIfExists, restrictPrivateFile } from "../fsutil.ts";
-import { getReport, researchStatus, safePath, startResearch, type RunStatus, type ServiceContext,
+import { getReport, researchStatus, safePath, startResearch, ServiceError, type RunStatus, type ServiceContext,
   type StartResult } from "../service.ts";
 import { isTrustedRouteDecision, type ExecutionEngine, type ExecutionResumeRef, type RouteDecision,
   type AgentEngineFamily, type TaskEvent } from "../task_router.ts";
@@ -108,6 +108,9 @@ function event(runId: string, taskId: string, sequence: number, type: TaskEvent[
 
 function safeStartMessage(error: unknown): string {
   if (error instanceof DeepExecutionError) return error.message;
+  if (error instanceof ServiceError && error.code === "invalid_task_context") {
+    return "Deep 任务关注点或圈选资料格式无效，请检查输入后重新创建研究";
+  }
   return "Deep 长流程未能启动，请检查本地 Agent 连接与研究配置";
 }
 
@@ -204,7 +207,7 @@ export class CodexDeepEngine implements ExecutionEngine {
     // manifest 在运行刚开始时就带占位 exit_code=2；它不是终态信号。
     // finished_at 才由既有编排器在最终收口时写入，运行中必须继续轮询。
     if (status.finished_at === null) return;
-    if (status.report) {
+    if (status.report && status.status !== "cancelled") {
       const artifact = this.#backend.report(run.runId);
       yield event(run.runId, binding.task_id, 8, "artifact", {
         artifactType: "deep_research_report", format: "document", report: artifact.report,
@@ -215,7 +218,9 @@ export class CodexDeepEngine implements ExecutionEngine {
     // 六阶段可能以 incomplete / stale 等非成功状态结束；只有 complete + exit 0 才能向统一入口报告完成。
     const terminalType: TaskEvent["type"] = status.status === "complete" && status.exit_code === 0 ? "completed" : "failed";
     yield event(run.runId, binding.task_id, 9, terminalType, {
-      ...(terminalType === "failed" ? { code: "deep_research_failed", message: "Deep 六阶段研究未完整通过最终校验" } : {}),
+      ...(terminalType === "failed" ? status.status === "cancelled"
+        ? { code: "research_cancelled", message: "研究已取消，未完成的报告没有归档" }
+        : { code: "deep_research_failed", message: "Deep 六阶段研究未完整通过最终校验" } : {}),
       researchStatus: status.status, exitCode: status.exit_code, finishedAt: status.finished_at,
       routeFingerprint: binding.route_fingerprint,
     });

@@ -12,6 +12,7 @@
  *    随请求发给本机后端、用完即弃(见 llmStore.ts 与「接入 AI」页)。
  */
 import { readAiRuntime, type ExecutionMode } from "./llmStore.ts";
+import type { ImportResult } from "./importPositions.ts";
 
 export class ApiError extends Error {
   readonly status: number;
@@ -42,7 +43,7 @@ const SAFE_AGENT_MESSAGE_CODES = new Set([
   "agent_quota", "agent_not_installed", "agent_busy", "agent_timeout", "agent_output_too_large",
   "agent_bad_output", "agent_failed", "agent_empty_output", "agent_cancelled", "agent_start_failed",
   "tool_context_too_large", "bad_agent_output", "guided_output_blocked", "bad_tool_args", "bad_tool",
-  "bad_agent_state", "not_found", "tool_failed", "debate_source_changed",
+  "bad_agent_state", "not_found", "tool_failed", "debate_source_changed", "debate_exists", "debate_busy",
   "invalid_task_request", "invalid_task", "invalid_material_resolution", "material_resolution_failed",
   "operation_not_available", "quick_not_eligible", "quick_provider_unsupported", "route_changed", "cancelled",
   "ai_not_configured", "agent_required", "agent_runtime_unsupported", "direct_provider_unsupported", "bad_execution_mode",
@@ -239,6 +240,11 @@ async function ensureSelectedLocalAgentReady(llm: unknown): Promise<void> {
 }
 
 export const backend = {
+  importPositions: (files: { name: string; content_base64: string }[], signal?: AbortSignal) => {
+    const runtime = requestRuntime();
+    return call<ImportResult>("/import", { method: "POST", signal,
+      body: JSON.stringify({ kind: "position", files, llm: runtime.llm, executionMode: runtime.executionMode }) });
+  },
   health: () => call<{ ok: boolean; version: string }>("/health"),
   product: () => call<ProductInfo>("/product"),
   localAgents: () => call<LocalAgentStatus[]>("/local-agents"),
@@ -385,15 +391,15 @@ export const backend = {
       signal,
     });
   },
-  debateStart: (symbol: string, depth?: string) => {
+  debateStart: (symbol: string, depth?: string, signal?: AbortSignal) => {
     const runtime = requestRuntime();
     if (runtime.executionMode === "direct") throw new ApiError("多空辩论需要 Agent，请先开启 Vibe Research Agent", 409, "agent_required");
-    return call<DebateState>("/debate", { method: "POST", body: JSON.stringify({ symbol, ...(depth ? { depth } : {}), executionMode: runtime.executionMode, llm: runtime.llm }) });
+    return call<DebateState>("/debate", { method: "POST", body: JSON.stringify({ symbol, ...(depth ? { depth } : {}), executionMode: runtime.executionMode, llm: runtime.llm }), signal });
   },
-  debateAdvance: (id: string) => {
+  debateAdvance: (id: string, signal?: AbortSignal) => {
     const runtime = requestRuntime();
     if (runtime.executionMode === "direct") throw new ApiError("多空辩论需要 Agent，请先开启 Vibe Research Agent", 409, "agent_required");
-    return call<DebateState>(`/debate/${encodeURIComponent(id)}/advance`, { method: "POST", body: JSON.stringify({ executionMode: runtime.executionMode, llm: runtime.llm }) });
+    return call<DebateState>(`/debate/${encodeURIComponent(id)}/advance`, { method: "POST", body: JSON.stringify({ executionMode: runtime.executionMode, llm: runtime.llm }), signal });
   },
 
   /** 端点观测序列(跨运行累积)。⚠️ 只在**完整研究运行**时追加,手动点看板不写 —— 稀疏是正常的 */
@@ -437,6 +443,7 @@ export const backend = {
   },
 
   researchStatus: (id: string) => call<ResearchStatus>(`/runs/${encodeURIComponent(id)}/status`),
+  cancelResearch: (id: string) => call<ResearchStatus>("/research/cancel", { method: "POST", body: JSON.stringify({ run_id: id }) }),
 
   /**
    * 「昨天以来变了什么」：对齐同一标的最近两次研究。
@@ -450,7 +457,7 @@ export const backend = {
 
   runs: (limit = 50) => call<RunListItem[]>(`/runs?limit=${limit}`),
   report: (id: string) =>
-    call<{ run_id: string; report: string | null; appendix: string | null }>(`/runs/${encodeURIComponent(id)}/report`),
+    call<{ run_id: string; report: string | null; appendix: string | null; availability: "ready" | "unvalidated" | "missing"; run_status: string | null }>(`/runs/${encodeURIComponent(id)}/report`),
 };
 
 export interface LedgerRecord {
@@ -512,7 +519,7 @@ export interface DebateNumberAudit {
 export interface DebateStage {
   id: string;
   label: string;
-  status: "pending" | "running" | "done" | "failed";
+  status: "pending" | "running" | "done" | "failed" | "cancelled";
   text: string;
   error?: string;
   audit?: DebateNumberAudit;
@@ -525,7 +532,7 @@ export interface DebateState {
   stages: DebateStage[];
   /** 跑完了。**不代表跑成了** —— 看 outcome */
   done: boolean;
-  outcome: "running" | "completed" | "completed_with_errors" | "failed";
+  outcome: "running" | "completed" | "completed_with_errors" | "failed" | "cancelled";
 }
 export interface ThermoObservation {
   run_id: string; run_date: string; as_of: string; fetched_at: string;
@@ -587,6 +594,7 @@ export interface ResearchStatus {
   calculation_count: number | null;
   finished_at: string | null;
   last_events?: unknown[];
+  failure?: { code: string; message: string; action: string; retryable: boolean } | null;
   report?: boolean;
   viewer?: boolean;
 }
@@ -605,7 +613,7 @@ export interface RunListItem {
   run_id: string;
   status: string | null;
   symbol: string | null;
-  /** 归档列表只展示「公司名称 + 代码」；名称来自这次研究已落盘的证据，不在前端猜。 */
+  /** 名称来自这次研究已落盘的证据，不在前端猜；归档另展示状态与开始时间。 */
   name: string | null;
   /** 同代码不同市场不算时间序列 —— 比较两次运行要带上它 */
   market: string | null;

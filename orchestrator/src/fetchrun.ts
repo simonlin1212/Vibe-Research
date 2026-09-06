@@ -3,7 +3,7 @@
  * 权威账本保存在编排器内存(Ledger 对象),同时落盘 fetch/_ledger.json 仅供审计;validator 只信内存账本。
  * 每个脚本执行前后快照 raw/ 目录,新增文件的 sha256 记入账本,使 raw/ 同样受认证。支持故障注入(Scenario)。
  */
-import { spawnSync } from "node:child_process";
+import { runResearchProcess } from "./research_process.ts";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -46,7 +46,7 @@ export function saveLedger(runDir: string, ledger: Ledger): void {
 }
 
 export interface FetchExecutor {
-  (cfg: RunConfig, stage: string, scripts: string[], log: (type: string, payload: Record<string, unknown>) => void, ledger: Ledger): Ledger;
+  (cfg: RunConfig, stage: string, scripts: string[], log: (type: string, payload: Record<string, unknown>) => void, ledger: Ledger, signal?: AbortSignal): Ledger | Promise<Ledger>;
 }
 
 function failedEnvelope(cfg: RunConfig, script: string, reason: string, injected?: string) {
@@ -140,9 +140,10 @@ export function applyVoiceInjection(cfg: Pick<RunConfig, "symbol" | "market">, s
  * ⚠️ 也别拿它跟 `service.fetchEndpoint` 比:那条是**看板按需取数**、彼此独立、已是真并发
  *    (实测同时在途 5);这条是**研究运行**的取数,产物要进证据账本。两者约束不同。
  */
-export const runFetchScripts: FetchExecutor = (cfg, stage, scripts, log, ledger) => {
+export const runFetchScripts: FetchExecutor = async (cfg, stage, scripts, log, ledger, signal) => {
   const scenario: Scenario = cfg.scenario ?? {};
   for (const script of scripts) {
+    signal?.throwIfAborted();
     if (ledger[script]) continue; // 本次运行已由编排器执行
     const file = path.join(cfg.runDir, "fetch", `${script}.json`);
     const argv = fetchArgv(cfg.endpoints?.[script], script, { scriptsDir: path.join(cfg.repoRoot, cfg.scriptsRel), symbol: cfg.symbol, runDir: cfg.runDir });
@@ -158,7 +159,18 @@ export const runFetchScripts: FetchExecutor = (cfg, stage, scripts, log, ledger)
       const injectTimeout = scenario.timeout_scripts?.includes(script) ?? false;
       const timeout = injectTimeout ? 300 : cfg.fetchTimeoutMs;
       const realArgv = injectTimeout ? ["-c", "import time; time.sleep(30)"] : argv;
-      const p = spawnSync(cfg.python, realArgv, { cwd: cfg.repoRoot, env: fetchEnv(), encoding: "utf8", timeout, maxBuffer: 64 * 1024 * 1024 });
+      let p;
+      try { p = await runResearchProcess(cfg.python, realArgv, { cwd: cfg.repoRoot, env: fetchEnv(), timeout, signal }); }
+      catch (e) {
+        // Preserve partial raw ownership; cancellation is not an upstream gap.
+        writeJson(file, failedEnvelope(cfg, script, "研究已中止，取数未完成"));
+        ledger[script] = { script, argv, exit_code: null, duration_ms: Date.now() - t0, status: "error",
+          file: `fetch/${script}.json`, sha256: sha256File(file), raw_files: newRawFiles(before, rawSnapshot(cfg.runDir)),
+          started_at: started, finished_at: nowIso(), stage };
+        saveLedger(cfg.runDir, ledger);
+        log("fetch.cancelled", { script });
+        throw e;
+      }
       const dur = Date.now() - t0;
       const injected = scenario.timeout_scripts?.includes(script) ? "timeout_scripts" : undefined;
       if (p.error && (p.error as NodeJS.ErrnoException).code === "ETIMEDOUT") {
@@ -181,7 +193,9 @@ export const runFetchScripts: FetchExecutor = (cfg, stage, scripts, log, ledger)
     entry.raw_files = newRawFiles(before, rawSnapshot(cfg.runDir));
     ledger[script] = entry;
     log("fetch.executed", { script, status: entry.status, exit_code: entry.exit_code, duration_ms: entry.duration_ms, sha256: entry.sha256, raw_files: Object.keys(entry.raw_files).length, injected: entry.injected ?? null });
+    saveLedger(cfg.runDir, ledger);
   }
+  signal?.throwIfAborted();
   // 温度计历史比较(第 13 层时间维度):本阶段带 history_fields 的信封取完后,从用户数据区序列(或 scenario 注入)确定性生成 thermo_history 信封 + raw
   currentPlugin().transformFetch?.(cfg, stage, ledger, log);
   // 动态冲突注入:在已取到的真实证据里找该 field 的最新一条,克隆其完整事实键(symbol/market/field/period/unit/adjustment/record_key),只改 id / source / value

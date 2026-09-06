@@ -6,17 +6,19 @@
  */
 import { spawn, spawnSync } from "node:child_process";
 import crypto from "node:crypto";
+import { readResearchControl, reserveResearch, updateResearchControl, requestResearchCancellation, researchDecision, ResearchControlError } from "./research_control.ts";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { FETCH_ENV_KEYS, RUN_ID_RE, stages as packStages, fetchEnv } from "./config.ts";
+import { researchFailure } from "./research_failure.ts";
 import { runAlerts, type AlertDiff } from "./alerts.ts";
 import { NOFOLLOW_FLAG, nowIso, readJsonIfExists } from "./fsutil.ts";
 import { ChatError, applyGate, chatSend as chatSendCore, llmProbe as llmProbeCore, parseHeadlineTranslationReply, prepareHeadlineTranslation, translateHeadlines as translateHeadlinesCore, type ChatTurnResult, type HeadlineTranslationResult, type LlmProbeResult } from "./chat.ts";
 import { DirectTransportError, chatCompletion } from "./engines/direct_transport.ts";
 import { assertExecutionMode, resolveDirectProvider, resolveRuntimeProvider, resolveSelectedRuntime, runtimeSourceFingerprint, RuntimeProviderError, templateMatrix, type LlmOverride } from "./runtime_provider.ts";
-import { DebateError, advanceDebate, startDebate, type DebateState } from "./debate.ts";
+import { DebateError, MAX_DEBATE_MESSAGE, DEBATE_TURN_TIMEOUT_MS, advanceDebate, startDebate, type DebateState } from "./debate.ts";
 import { IngestError, MAX_TOTAL_BYTES, ingestFiles as ingestFilesCore, type IngestFileInput, type IngestResult } from "./ingest.ts";
 import { LedgerError, kinds as ledgerKindDefs, labels as ledgerLabelDefs, listRecordsChecked, listRecords as listRecordsOf, removeRecord as removeLedgerRecord, upsertRecord as upsertLedgerRecord, type LedgerIssue, type LedgerRecord } from "./ledger.ts";
 import { recallKnowledge, type KnowledgeRecall } from "./knowledge.ts";
@@ -25,7 +27,7 @@ import { REGISTRY_REL, buildStagePlan, fetchArgv, loadRegistry, type EndpointDef
 import { productVersion } from "./version.ts";
 import { DEFAULT_CONSISTENCY, readSnapshot, snapshotKey, snapshotUsable, writeSnapshot, type Consistency } from "./snapshot.ts";
 import { currentPlugin } from "./plugin.ts";
-import { ReportLibraryError, addReport, listReports as listStoredReports, removeReport, reportCitationErrors, reportCitations, reportContext, reportFile, reportRecallPlan, type ReportRecord } from "./report_library.ts";
+import { ReportLibraryError, addReport, listReports as listStoredReports, removeReport, reportCitationErrors, reportCitations, reportContextAsync, reportFile, reportRecallPlan, type ReportRecord } from "./report_library.ts";
 import { GuidedToolError, guidedToolTurn as guidedToolTurnCore, type GuidedToolReply } from "./guided_tool.ts";
 import { LocalAgentError, probeClaude, probeCodeBuddy, probeCodex, startCodexLogin, type LocalAgentStatus } from "./local_agent_runtime.ts";
 import { sdkCodexVersion } from "./runner.ts";
@@ -146,7 +148,7 @@ const rel = (ctx: Pick<ServiceContext, "dataRoot">, p: string) => path.relative(
 export function researchEnv(ctx: Pick<ServiceContext, "providerEnvKey">, env: NodeJS.ProcessEnv = process.env): Record<string, string> {
   const out: Record<string, string> = {};
   for (const k of FETCH_ENV_KEYS) if (env[k] !== undefined) out[k] = env[k] as string;
-  const requestScoped = new Set(["VRA_TASK_OBJECTIVE", "VRA_TASK_REPORT_IDS", "VRA_TASK_REPORT_REVISIONS"]);
+  const requestScoped = new Set(["VRA_TASK_OBJECTIVE", "VRA_TASK_REPORT_IDS", "VRA_TASK_REPORT_REVISIONS", "VRA_RESEARCH_CONTROL_TOKEN"]);
   for (const [k, v] of Object.entries(env)) if (k.startsWith("VRA_") && !requestScoped.has(k) && v !== undefined) out[k] = v;
   if (ctx.providerEnvKey && env[ctx.providerEnvKey]) out[ctx.providerEnvKey] = env[ctx.providerEnvKey] as string;
   return out;
@@ -460,7 +462,7 @@ export function startResearch(ctx: ServiceContext, req: { symbol: string; compan
       );
     }
   }
-  const runId = req.run_id !== undefined ? assertRunId(req.run_id) : `${new Date().toISOString().replace(/[-:T]/g, "").slice(0, 15)}-${symbol}-svc`;
+  const runId = req.run_id !== undefined ? assertRunId(req.run_id) : `${new Date().toISOString().replace(/[-:T]/g, "").slice(0, 15)}-${symbol}-${crypto.randomUUID().slice(0, 8)}`;
   const runDir = safePath(ctx, "runs", runId);
   fs.mkdirSync(safePath(ctx, "logs"), { recursive: true });
   const log = safePath(ctx, "logs", `${runId}.log`);  // 最终文件也经 safePath(已存在且为链接 → 拒绝)
@@ -490,6 +492,7 @@ export function startResearch(ctx: ServiceContext, req: { symbol: string; compan
     throw new ServiceError("invalid_task_context", "Deep 资料版本范围无效");
   }
   const childEnv = researchEnv(ctx);
+  childEnv.VRA_DATA_ROOT = path.resolve(ctx.dataRoot);
   if (runtimeLlm) {
     let runtime: ReturnType<typeof resolveRuntimeProvider>;
     try { runtime = resolveRuntimeProvider(ctx.repoRoot, ctx.dataRoot, runtimeLlm, childEnv); }
@@ -508,16 +511,31 @@ export function startResearch(ctx: ServiceContext, req: { symbol: string; compan
   if (reportIds.length) childEnv.VRA_TASK_REPORT_IDS = reportIds.join(",");
   if (reportIds.length) childEnv.VRA_TASK_REPORT_REVISIONS = JSON.stringify(reportRevisions);
   const out = fs.openSync(log, fs.constants.O_WRONLY | fs.constants.O_APPEND | fs.constants.O_CREAT | NOFOLLOW_FLAG, 0o600);
+  let control: ReturnType<typeof reserveResearch> | undefined;
   try {
+    if (fs.existsSync(runDir) && fs.readdirSync(runDir).length) throw new ServiceError("run_exists", "研究编号已使用，请创建新的研究");
+    control = reserveResearch(ctx.dataRoot, runId);
+    fs.mkdirSync(runDir, { recursive: true });
+    childEnv.VRA_RESEARCH_CONTROL_TOKEN = control.token;
     const child = spawn(ctx.node, argv, { cwd: ctx.repoRoot, detached: true, windowsHide: true, stdio: ["ignore", out, out], env: childEnv });
+    const failed = () => {
+      try { updateResearchControl(ctx.dataRoot, runId, control!.token, "failed"); }
+      catch (e) { console.error(`[research] 无法记录进程退出:${redact(String(e), 160)}`); }
+    };
+    child.once("error", failed);
+    child.once("close", failed);
     child.unref();
     return { run_id: runId, run_dir: rel(ctx, runDir), log: rel(ctx, log), pid: child.pid };
+  } catch (e) {
+    if (control) updateResearchControl(ctx.dataRoot, runId, control.token, "failed");
+    if (e instanceof ResearchControlError) throw new ServiceError(e.code, e.message);
+    throw e;
   } finally {
     fs.closeSync(out);
   }
 }
 
-export interface RunStatus { run_id: string; exists: boolean; status: string | null; exit_code: number | null; stages: { stage: string; status: string; attempts: number }[]; evidence_count: number | null; calculation_count: number | null; finished_at: string | null; last_events: Record<string, unknown>[]; report: boolean; viewer: string | null }
+export interface RunStatus { run_id: string; exists: boolean; status: string | null; exit_code: number | null; stages: { stage: string; status: string; attempts: number }[]; evidence_count: number | null; calculation_count: number | null; finished_at: string | null; last_events: Record<string, unknown>[]; report: boolean; viewer: string | null; failure?: ReturnType<typeof researchFailure> }
 
 function runDirOf(ctx: ServiceContext, runId: unknown): { id: string; dir: string } {
   const id = assertRunId(runId);
@@ -526,7 +544,10 @@ function runDirOf(ctx: ServiceContext, runId: unknown): { id: string; dir: strin
 
 export function researchStatus(ctx: ServiceContext, runId: string, lastEvents = 8): RunStatus {
   const { id, dir: runDir } = runDirOf(ctx, runId);
-  if (!fs.existsSync(runDir)) return { run_id: id, exists: false, status: null, exit_code: null, stages: [], evidence_count: null, calculation_count: null, finished_at: null, last_events: [], report: false, viewer: null };
+  const control = readResearchControl(ctx.dataRoot, id);
+  const decision = control && !control.finished_at ? researchDecision(ctx.dataRoot, id) : null;
+  const controlStatus = control?.finished_at ? control.state : decision === "cancel" ? "cancelling" : decision === "finalize" ? "finalizing" : control ? "running" : null;
+  if (!fs.existsSync(runDir)) return { run_id: id, exists: !!control, status: controlStatus, exit_code: control?.finished_at ? 3 : null, stages: [], evidence_count: null, calculation_count: null, finished_at: control?.finished_at ?? null, last_events: [], report: false, viewer: null };
   const m = readJsonIfExists<Record<string, unknown>>(safePath(ctx, "runs", id, "manifest.json"));
   const evPath = safePath(ctx, "runs", id, "events.jsonl");
   let events: Record<string, unknown>[] = [];
@@ -537,20 +558,53 @@ export function researchStatus(ctx: ServiceContext, runId: string, lastEvents = 
   }
   const stages = ((m?.stages as { stage: string; status: string; attempts: number }[] | undefined) ?? []).map((s) => ({ stage: s.stage, status: s.status, attempts: s.attempts }));
   const viewer = fs.existsSync(safePath(ctx, "runs", id, "viewer.html")) ? `runs/${id}/viewer.html` : null;
-  return { run_id: id, exists: true, status: (m?.status as string) ?? null, exit_code: (m?.exit_code as number) ?? null, stages, evidence_count: (m?.evidence_count as number) ?? null, calculation_count: (m?.calculation_count as number) ?? null,
-    finished_at: (m?.finished_at as string) ?? null, last_events: events, report: fs.existsSync(safePath(ctx, "runs", id, "report.md")), viewer };
+  const status = m?.finished_at ? (m.cancelled ? "cancelled" : String(m.status)) : controlStatus ?? (m?.status as string) ?? null;
+  return { run_id: id, exists: true, status, exit_code: m?.finished_at ? (m.exit_code as number) : control?.finished_at ? 3 : null, stages, evidence_count: (m?.evidence_count as number) ?? null, calculation_count: (m?.calculation_count as number) ?? null,
+    finished_at: (m?.finished_at as string) ?? control?.finished_at ?? null, last_events: events, report: fs.existsSync(safePath(ctx, "runs", id, "report.md")), viewer,
+    failure: status === "failed" ? researchFailure(m?.failure_code) : null };
+}
+
+export function cancelResearch(ctx: ServiceContext, runId: unknown): RunStatus {
+  const id = assertRunId(runId);
+  const status = researchStatus(ctx, id);
+  if (status.finished_at) return status;
+  try { requestResearchCancellation(ctx.dataRoot, id); }
+  catch (e) { if (e instanceof ResearchControlError) throw new ServiceError(e.code, e.message); throw e; }
+  return researchStatus(ctx, id);
 }
 
 export function readRunFile(ctx: ServiceContext, runId: string, name: "manifest.json" | "report.md" | "report_appendix.md" | "viewer.html"): string | null {
   const { id } = runDirOf(ctx, runId);
   const p = safePath(ctx, "runs", id, name);
   if (!fs.existsSync(p) || !fs.lstatSync(p).isFile()) return null;
+  // The viewer embeds the report too. Keep rejected drafts on disk for diagnosis,
+  // but never expose them through any public report-reading entry point.
+  if (name !== "manifest.json" && !reportCompletion(ctx, id).ready) return null;
   return fs.readFileSync(p, "utf8");
 }
 
-export function getReport(ctx: ServiceContext, runId: string): { run_id: string; report: string | null; appendix: string | null } {
+/** Trust the orchestrator's terminal record, not the mere existence of a draft.
+ * Legacy manifests may omit gate/final_errors. This is not a tamper-proof seal.
+ */
+function reportCompletion(ctx: ServiceContext, id: string): { ready: boolean; status: string | null } {
+  const m = readJsonIfExists<Record<string, unknown>>(safePath(ctx, "runs", id, "manifest.json"));
+  const status = m?.cancelled ? "cancelled" : typeof m?.status === "string" ? m.status : null;
+  const gate = m?.gate as { ok?: unknown } | undefined;
+  const ready = typeof m?.finished_at === "string" && Number.isFinite(Date.parse(m.finished_at)) &&
+    ((status === "complete" && m.exit_code === 0) || (status === "incomplete" && m.exit_code === 2)) &&
+    (m.gate === undefined || gate?.ok === true) &&
+    (m.final_errors === undefined || (Array.isArray(m.final_errors) && m.final_errors.length === 0));
+  return { ready, status };
+}
+
+export function getReport(ctx: ServiceContext, runId: string): { run_id: string; report: string | null; appendix: string | null; availability: "ready" | "unvalidated" | "missing"; run_status: string | null } {
   const { id } = runDirOf(ctx, runId);
-  return { run_id: id, report: readRunFile(ctx, id, "report.md"), appendix: readRunFile(ctx, id, "report_appendix.md") };
+  const completion = reportCompletion(ctx, id);
+  const p = safePath(ctx, "runs", id, "report.md");
+  const exists = fs.existsSync(p) && fs.lstatSync(p).isFile();
+  const report = exists && completion.ready ? readRunFile(ctx, id, "report.md") : null;
+  return { run_id: id, report, appendix: report !== null ? readRunFile(ctx, id, "report_appendix.md") : null,
+    availability: report !== null ? "ready" : exists ? "unvalidated" : "missing", run_status: completion.status };
 }
 
 export function getEvidence(ctx: ServiceContext, runId: string, filter: { field?: string; source?: string; q?: string; limit?: number } = {}): { run_id: string; total: number; items: Record<string, unknown>[] } {
@@ -604,6 +658,8 @@ export function evidenceAlerts(
       ...(req.base ? { base: req.base } : {}),
       ...(req.next ? { next: req.next } : {}),
       repoRoot: ctx.repoRoot,
+      dataRoot: ctx.dataRoot,
+      persist: false,
     });
     return { symbol, base: r.base, next: r.next, diffs: r.diffs };
   } catch (e) {
@@ -642,16 +698,24 @@ export function listRuns(ctx: ServiceContext, limit = 50): { run_id: string; sta
     try { const mp = safePath(ctx, "runs", d, "manifest.json"); if (fs.existsSync(mp) && fs.lstatSync(mp).isFile()) m = readJsonIfExists<Record<string, unknown>>(mp); } catch { m = null; }  // manifest 是链接 → 当作不可读
     // 阶段明细读不出来时给 null,**不给 0** —— 0 会被读成"一个阶段都没跑",而真相是"不知道"
     const st = Array.isArray(m?.stages) ? (m.stages as { status?: unknown }[]) : null;
+    let controlStatus: string | null = null;
+    let controlFinished: string | null = null;
+    try {
+      const control = readResearchControl(ctx.dataRoot, d);
+      const decision = control && !control.finished_at ? researchDecision(ctx.dataRoot, d) : null;
+      controlStatus = control ? (control.finished_at ? control.state : decision === "cancel" ? "cancelling" : decision === "finalize" ? "finalizing" : "running") : null;
+      controlFinished = control?.finished_at ?? null;
+    } catch { controlStatus = "unknown"; }
     return {
       run_id: d,
-      status: (m?.status as string) ?? null,
+      status: m?.finished_at ? (m.cancelled ? "cancelled" : String(m.status)) : controlStatus ?? (m?.status as string) ?? null,
       symbol: (m?.symbol as string) ?? null,
       name: runCompanyName(ctx, d),
       // 🔴 市场要一起给：同一代码不同市场**不是时间序列**，比较两次运行必须同市场
       //    （alerts 那条链路会为此报错）。前端猜不出来，只能由这里下发。
       market: (m?.market as string) ?? null,
       started_at: (m?.started_at as string) ?? null,
-      finished_at: (m?.finished_at as string) ?? null,
+      finished_at: (m?.finished_at as string) ?? controlFinished,
       stages_done: st ? st.filter((s) => s?.status === "complete").length : null,
       stages_total: st ? st.length : null,
       test_scenario: m?.test_scenario === true,
@@ -979,13 +1043,14 @@ export function startCodexSubscriptionLogin(
  * ⚠️ 单个端点取失败**不中止**:记进 gaps 一起交给双方("这些没取到,别当它们不存在")。
  *    全部失败才拒开(见 debate.startDebate)。
  */
-export async function debateStart(ctx: ServiceContext, req: { symbol: string; session?: string; depth?: string; llm?: unknown; executionMode?: unknown }): Promise<DebateState> {
+export async function debateStart(ctx: ServiceContext, req: { symbol: string; session?: string; depth?: string; llm?: unknown; executionMode?: unknown }, signal?: AbortSignal): Promise<DebateState> {
+  if (signal?.aborted) throw new ServiceError("cancelled", "辩论请求已取消");
   let mode: "agent" | "direct";
   try { mode = assertExecutionMode(req.executionMode); }
   catch (error) { throw new ServiceError(error instanceof RuntimeProviderError ? error.code : "bad_execution_mode", error instanceof Error ? error.message : String(error)); }
   if (mode === "direct") throw new ServiceError("agent_required", "多空辩论需要 Agent，请先开启 Vibe Research Agent");
   const llm = checkLlmShape(req.llm);
-  assertCodexAgentRuntime(ctx, llm);
+  assertAgentRuntime(ctx, llm);
   const sourceFingerprint = sourceFingerprintOf(ctx, llm);
   const def = currentPlugin().debate;
   if (!def) throw new ServiceError("not_supported", "这个垂类没有声明辩论");
@@ -998,16 +1063,19 @@ export async function debateStart(ctx: ServiceContext, req: { symbol: string; se
   const envelopes: { script?: string; evidence?: unknown[] }[] = [];
   const gaps: string[] = [];
   for (const ep of def.dossierEndpoints) {
+    if (signal?.aborted) throw new ServiceError("cancelled", "辩论请求已取消");
     try {
-      const r = await fetchEndpoint(ctx, { endpoint: ep, symbol, consistency: { mode: "fresh" } });
+      const r = await fetchEndpoint(ctx, { endpoint: ep, symbol, consistency: { mode: "fresh" }, signal });
       envelopes.push(r.envelope as { script?: string; evidence?: unknown[] });
       const env = r.envelope as { status?: unknown; degraded?: unknown };
       if (env.status !== "ok") gaps.push(`${ep}:${String(env.status)}${env.degraded ? ` — ${String(env.degraded)}` : ""}`);
     } catch (e) {
+      if (signal?.aborted) throw new ServiceError("cancelled", "辩论请求已取消");
       gaps.push(`${ep}:取数失败 — ${redact(e instanceof Error ? e.message : String(e), 120)}`);
     }
   }
   try {
+    if (signal?.aborted) throw new ServiceError("cancelled", "辩论请求已取消");
     return startDebate({ id, symbol, envelopes, gaps, sourceFingerprint, ...(req.depth ? { depth: req.depth } : {}) });
   } catch (e) {
     if (e instanceof DebateError) throw new ServiceError(e.code, e.message);
@@ -1016,20 +1084,20 @@ export async function debateStart(ctx: ServiceContext, req: { symbol: string; se
 }
 
 /** 跑下一个待跑的阶段(一次一个,界面据此逐段显示) */
-export async function debateAdvance(ctx: ServiceContext, req: { id: string; llm?: unknown; executionMode?: unknown }): Promise<DebateState> {
+export async function debateAdvance(ctx: ServiceContext, req: { id: string; llm?: unknown; executionMode?: unknown }, signal?: AbortSignal): Promise<DebateState> {
   let mode: "agent" | "direct";
   try { mode = assertExecutionMode(req.executionMode); }
   catch (error) { throw new ServiceError(error instanceof RuntimeProviderError ? error.code : "bad_execution_mode", error instanceof Error ? error.message : String(error)); }
   if (mode === "direct") throw new ServiceError("agent_required", "多空辩论需要 Agent，请先开启 Vibe Research Agent");
   const llm = checkLlmShape(req.llm);
-  assertCodexAgentRuntime(ctx, llm);
+  assertAgentRuntime(ctx, llm);
   const sourceFingerprint = sourceFingerprintOf(ctx, llm);
   try {
     return await advanceDebate(
-      { repoRoot: ctx.repoRoot, dataRoot: ctx.dataRoot, python: ctx.python },
+      { repoRoot: ctx.repoRoot, dataRoot: ctx.dataRoot, python: ctx.python, signal },
       { id: String(req.id), sourceFingerprint },
-      llm ? async (message, session) => (await chatSendCore(
-        { repoRoot: ctx.repoRoot, dataRoot: ctx.dataRoot, python: ctx.python, persistent: false },
+      llm ? async (message, session, signal) => (await chatSendCore(
+        { repoRoot: ctx.repoRoot, dataRoot: ctx.dataRoot, python: ctx.python, persistent: false, maxMessage: MAX_DEBATE_MESSAGE, timeoutMs: DEBATE_TURN_TIMEOUT_MS, signal },
         { message, session, llm },
       )).reply : undefined,
     );
@@ -1161,14 +1229,8 @@ function selectedRuntimeOf(ctx: ServiceContext, llm?: LlmOverride) {
   }
 }
 
-/** 外部本机 Agent 只开放对话与有界材料任务；会取数、读文件或跑工具的入口必须先挡在副作用外。 */
-function assertCodexAgentRuntime(ctx: ServiceContext, llm?: LlmOverride): void {
-  const runtime = selectedRuntimeOf(ctx, llm);
-  if (runtime.runtime !== "codex") {
-    const name = runtime.agent === "codebuddy" ? "WorkBuddy / CodeBuddy Agent" : "Claude Code Agent";
-    throw new ServiceError("agent_runtime_unsupported", `当前 ${name} 支持对话和有界材料任务；多空辩论、资料转写与工具任务请改用 Codex 或 API Agent`);
-  }
-}
+/** Validate source before side effects. Actual execution must retain this source; no fallback. */
+function assertAgentRuntime(ctx: ServiceContext, llm?: LlmOverride): void { selectedRuntimeOf(ctx, llm); }
 
 function sourceFingerprintOf(ctx: ServiceContext, llm?: LlmOverride): string {
   try {
@@ -1200,12 +1262,12 @@ export async function chatSend(
     const reports = plan
       // 明确选中了几份就给几份的位置与字数:「比较这六份报告」选中六份却只注入五份、或 12k 字上限在第六份处停住,
       //   模型会把不完整的比较当成功交出去(Codex r17 / r18 P2)。仍放不下时在上下文末尾明说,让回答带上「比较不完整」。
-      ? reportContext(ctx.dataRoot, plan.query, {
+      ? await reportContextAsync(ctx.dataRoot, plan.query, {
         limit: Math.max(5, plan.reportIds?.length ?? 0),
         ...(plan.reportIds ? { reportIds: plan.reportIds, maxChars: Math.min(40_000, Math.max(12_000, plan.reportIds.length * 4_000)) } : {}),
         // 「所有报告」= 计划已圈定全库:选中的不再按相关性过滤,打 0 分的也注入(Codex r24 P1)
         ...(plan.wantsAll ? { mustInclude: true } : {}),
-      })
+      }, signal)
       : null;
     // 不完整的几种情形都要明说:字数上限中途停住(truncated);选中份数超过检索的 20 份硬上限 / 有几份没进来
     //   —— 后者 truncated 仍是 false,只看它会把「看了 20 份」当成「看全了 25 份」(Codex r19 / r24)。
@@ -1394,18 +1456,18 @@ export async function llmProbe(ctx: ServiceContext, req: { llm?: LlmOverride }, 
 
 export { MAX_TOTAL_BYTES as IMPORT_MAX_TOTAL_BYTES };
 
-export async function ingestFiles(ctx: ServiceContext, req: { kind: string; files: IngestFileInput[]; note?: string; llm?: unknown; executionMode?: unknown }): Promise<IngestResult> {
+export async function ingestFiles(ctx: ServiceContext, req: { kind: string; files: IngestFileInput[]; note?: string; llm?: unknown; executionMode?: unknown }, signal?: AbortSignal): Promise<IngestResult> {
   let executionMode: "agent" | "direct";
   try { executionMode = assertExecutionMode(req.executionMode); }
   catch (error) { throw new ServiceError(error instanceof RuntimeProviderError ? error.code : "bad_execution_mode", error instanceof Error ? error.message : String(error)); }
   if (executionMode === "direct") throw new ServiceError("agent_required", "资料转写需要 Agent 读取文件，请先开启 Vibe Research Agent");
   const llm = checkLlmShape(req.llm);
-  assertCodexAgentRuntime(ctx, llm);
+  assertAgentRuntime(ctx, llm);
   // 与台账同一把尺子:kind 先过 guard(白名单 + safePath),再进转写
   ledgerGuard(ctx, req.kind);
   safePath(ctx, "import");
   try {
-    return await ingestFilesCore({ repoRoot: ctx.repoRoot, dataRoot: ctx.dataRoot, python: ctx.python, ...(llm ? { llm } : {}) }, req);
+    return await ingestFilesCore({ repoRoot: ctx.repoRoot, dataRoot: ctx.dataRoot, python: ctx.python, signal, ...(llm ? { llm } : {}) }, req);
   } catch (e) {
     if (e instanceof IngestError) throw new ServiceError(e.code, e.message);
     throw e;
@@ -1427,6 +1489,7 @@ export async function runTool(
   ctx: ServiceContext,
   name: string,
   body: unknown,
+  signal?: AbortSignal,
 ): Promise<unknown> {
   const tools = currentPlugin().tools ?? {};
   const spec = Object.prototype.hasOwnProperty.call(tools, name) ? tools[name] : undefined;
@@ -1435,9 +1498,11 @@ export async function runTool(
   const input = JSON.stringify(body ?? {});
   const r = await runFetchProcess(ctx.python, ["-m", spec.module], {
     cwd: ctx.repoRoot,
-    env: researchEnv(ctx),
+    // 普通工具不调用模型；沿用取数基础白名单，不继承 provider key 或 VRA_* 私密配置。
+    env: fetchEnv(),
     timeout: spec.timeoutMs ?? TOOL_DEFAULT_TIMEOUT_MS,
     input,
+    signal,
   });
   if (r.status !== 0) {
     const tail = (r.stderr || "").trim().split("\n").slice(-2).join(" / ");
@@ -1480,7 +1545,7 @@ export async function runToolRequest(
     if (mode === "direct") {
       throw new ServiceError("agent_required", "这个工具需要 Agent，请先开启 Vibe Research Agent");
     }
-    assertCodexAgentRuntime(ctx, llm);
+    assertAgentRuntime(ctx, llm);
   }
   return await runTool(ctx, name, req.input);
 }
@@ -1508,7 +1573,7 @@ export async function guidedToolTurn(
     throw new ServiceError("agent_required", "这个功能需要 Agent 调用工具并维持任务状态，请先开启 Vibe Research Agent");
   }
   const llm = checkLlmShape(req.llm);
-  assertCodexAgentRuntime(ctx, llm);
+  assertAgentRuntime(ctx, llm);
   try {
     return await guidedToolTurnCore(
       { repoRoot: ctx.repoRoot, dataRoot: ctx.dataRoot, python: ctx.python, signal },
@@ -1519,7 +1584,7 @@ export async function guidedToolTurn(
         message: String(req.message ?? ""),
         ...(llm ? { llm } : {}),
       },
-      { chat: chatSendCore, runTool: (tool, body) => runTool(ctx, tool, body) },
+      { chat: chatSendCore, runTool: (tool, body) => runTool(ctx, tool, body, signal) },
     );
   } catch (e) {
     if (e instanceof GuidedToolError) throw new ServiceError(e.code, e.message);

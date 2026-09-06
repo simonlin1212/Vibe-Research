@@ -106,16 +106,7 @@ def _load_history_csv(spec: dict, run_dir: str | None) -> tuple[list, dict]:
     where = spec.get("where") or {}
     if not rel or not col:
         raise ValueError("history_csv 需要 raw_ref 与 column")
-    if Path(rel).is_absolute():
-        raise ValueError(f"history_csv.raw_ref 必须是运行目录内的相对路径(raw/...),不接受绝对路径:{rel!r}")
-    raw_root = Path(run_dir).resolve(strict=True) / "raw"
-    target = (Path(run_dir) / rel).resolve(strict=True)  # 解析符号链接后再校验
-    try:
-        target.relative_to(raw_root.resolve(strict=True))
-    except ValueError as e:
-        raise ValueError(f"history_csv.raw_ref 越出运行目录的 raw/:{rel!r}") from e
-    if not target.is_file():
-        raise ValueError(f"history_csv.raw_ref 不是文件:{rel!r}")
+    target = _raw_target(rel, run_dir, "history_csv")
     data = target.read_bytes()
     sha = hashlib.sha256(data).hexdigest()
     rows = list(csv.DictReader(data.decode("utf-8").splitlines()))
@@ -145,8 +136,10 @@ def _raw_target(rel: str, run_dir: str | None, kind: str) -> Path:
         raise ValueError(f"{kind} 需要 raw_ref")
     if Path(rel).is_absolute():
         raise ValueError(f"{kind}.raw_ref 必须是运行目录内的相对路径(raw/...),不接受绝对路径:{rel!r}")
-    if any(part in ("..", "") for part in Path(rel).parts) or not rel.startswith("raw/"):
-        raise ValueError(f"{kind}.raw_ref 必须形如 raw/<文件>,不得含 ..(同一文件只能有一种写法,保证身份唯一):{rel!r}")
+    # Path.parts erases '.' and duplicate separators before they can be checked.
+    # Reject ambiguous spelling in both loaders rather than minting another ID.
+    if any(part in ("..", ".", "") for part in rel.split("/")) or "\\" in rel or not rel.startswith("raw/"):
+        raise ValueError(f"{kind}.raw_ref 必须使用规范相对路径 raw/<文件>，不得含 ..、.、重复或反向分隔符:{rel!r}")
     raw_root = Path(run_dir).resolve(strict=True) / "raw"
     target = (Path(run_dir) / rel).resolve(strict=True)
     try:

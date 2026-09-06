@@ -100,7 +100,9 @@ export class DirectStageAgent implements AgentRunner {
     if (this.observer) { try { this.observer(ev); } catch { /* 显示层永不影响运行 */ } }
   }
 
-  async runTurn(stage: Stage, attempt: number, prompt: string, outputSchema?: unknown): Promise<TurnOutcome> {
+  async runTurn(stage: Stage, attempt: number, prompt: string, outputSchema?: unknown, signal?: AbortSignal): Promise<TurnOutcome> {
+    signal = signal && this.opts.signal ? AbortSignal.any([signal, this.opts.signal]) : signal ?? this.opts.signal;
+    signal?.throwIfAborted();
     const t0 = Date.now();
     const { capability, apiKey, model } = this.opts;
     const maxRounds = this.opts.maxToolRounds ?? 24;
@@ -141,13 +143,14 @@ export class DirectStageAgent implements AgentRunner {
     //    ⇒ 干活的时候只给工具;要格式化的汇报,等干完再单独要一轮(见下面的 finalize)。
     //    Codex 路径没这个问题:outputSchema 由引擎在 turn 层面处理。
     for (let round = 1; round <= maxRounds; round += 1) {
+      signal?.throwIfAborted();
       let reply;
       try {
         reply = await chatCompletion({
           baseURL: capability.baseURL ?? "", apiKey, model, messages,
           tools: toolSpecs,
           timeoutMs: this.opts.requestTimeoutMs,
-          signal: this.opts.signal,
+          signal,
         });
       } catch (e) {
         const err = e instanceof DirectTransportError ? e : null;
@@ -216,7 +219,7 @@ export class DirectStageAgent implements AgentRunner {
           baseURL: capability.baseURL ?? "", apiKey, model, messages,
           responseFormat,   // 此时没有 tools,强制结构化才不会挤掉工具调用
           timeoutMs: this.opts.requestTimeoutMs,
-          signal: this.opts.signal,
+          signal,
         });
         itemCount += 1;
         usage = mergeUsage(usage, reply.usage);

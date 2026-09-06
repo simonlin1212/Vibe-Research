@@ -37,11 +37,29 @@ def run_one(ep: dict, out_dir: str, timeout: int, python: str) -> dict:
             d = json.loads(p.stdout)
         except json.JSONDecodeError:
             return {"id": ep["id"], "status": "crash", "exit": p.returncode, "seconds": dur, "error": (p.stderr or p.stdout)[-300:]}
+        # A broken endpoint must be reported, not crash the diagnostic itself.
+        valid = isinstance(d, dict) and d.get("status") in ("ok", "partial", "failed")
+        if valid:
+            valid = all(d.get(k) is None or isinstance(d[k], list) for k in ("evidence", "missing", "errors"))
+            valid = valid and (d.get("extra") is None or isinstance(d["extra"], dict))
+        if valid:
+            extra = d.get("extra") or {}
+            valid = (extra.get("raw_files") is None or isinstance(extra["raw_files"], list)) and (
+                extra.get("degraded") is None or isinstance(extra["degraded"], str))
+            valid = valid and all(isinstance(e, dict) and isinstance(e.get("error", ""), str) for e in (d.get("errors") or []))
+        if not valid:
+            return {"id": ep["id"], "status": "crash", "exit": p.returncode, "seconds": dur,
+                    "error": "端点响应结构无效（status 或证据/错误/extra 字段不符合信封契约）",
+                    "symbol": sym or "-", "layer": ep.get("layer"), "source": ep.get("source")}
         return {"id": ep["id"], "status": d.get("status"), "exit": p.returncode, "seconds": dur, "evidence": len(d.get("evidence") or []), "missing": len(d.get("missing") or []),
                 "raw_files": len((d.get("extra") or {}).get("raw_files") or []), "error": (d.get("errors") or [{}])[0].get("error", "")[:200] if d.get("errors") else "", "degraded": (d.get("extra") or {}).get("degraded", ""),
                 "symbol": sym or "-", "layer": ep.get("layer"), "source": ep.get("source"), "compliance": ep.get("compliance")}
     except subprocess.TimeoutExpired:
         return {"id": ep["id"], "status": "timeout", "exit": None, "seconds": timeout, "error": f"超过 {timeout}s", "symbol": sym or "-", "layer": ep.get("layer"), "source": ep.get("source")}
+    except (OSError, UnicodeError) as error:
+        return {"id": ep["id"], "status": "crash", "exit": None, "seconds": round(time.time() - t0, 1),
+                "error": f"无法运行或读取端点输出：{type(error).__name__}", "symbol": sym or "-",
+                "layer": ep.get("layer"), "source": ep.get("source")}
 
 
 def main() -> None:

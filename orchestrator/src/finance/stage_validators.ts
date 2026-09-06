@@ -9,6 +9,7 @@
 import type { StageValidationContext } from "../plugin.ts";
 import type { RunView } from "../validator.ts";
 import { financeQuoteDecision } from "./quote_freshness.ts";
+import { peDisclosureErrors, peDisclosureLines } from "./pe_disclosure.ts";
 
 type SourceConflictEntry = { field?: string; period?: string; kind?: string; values?: { ref_id?: string }[] };
 
@@ -44,4 +45,8 @@ function validateRisk(ctx: StageValidationContext): string[] {
 export const FINANCE_STAGE_VALIDATORS: Record<string, (ctx: StageValidationContext) => string[]> = {
   profile: validateProfile,
   risk: validateRisk,
+  report: (ctx) => {
+    const run = ctx.run as RunView;
+    return peDisclosureErrors(run.report ?? "", peDisclosureLines(run.evidence.values(), run.calcById.values()));
+  },
 };

@@ -1,0 +1,23 @@
+{
+  "id": "selfhosted",
+  "name": "自托管模型（需验证 Responses 兼容性）",
+  "wire_api": "responses",
+  "base_url": "http://localhost:11434/{ApiPath}",
+  "env_key": "SELFHOSTED_API_KEY",
+  "auth_modes": ["api_key"],
+  "requires_openai_auth": false,
+  "default_model": null,
+  "responses_support": "gateway",
+  "stream_format": "responses-sse",
+  "tool_calls": true,
+  "reasoning": "none",
+  "context_limit_tokens": null,
+  "retryable_errors": ["429", "5xx", "stream-idle"],
+  "known_incompatibilities": [
+    "本模板未实测。复制到 <数据根>/providers/selfhosted.json 后替换整个 base_url 和 default_model；ApiPath 占位未替换时禁止直接选用",
+    "Agent 路径要求实际兼容 Responses 与工具调用；仅支持 Chat Completions 的端点需要用户自行提供并验证转换网关，gateway 声明不会自动转换协议",
+    "延续双引擎地址边界：远程和局域网端点必须 HTTPS，明文 HTTP 仅允许 localhost、127.0.0.1 或 [::1]；回环指运行后端的机器，不是访问页面的手机"
+  ],
+  "verified_at": null,
+  "matrix": { "status": "unverified", "note": "占位模板，实际端点与模型需先验证" }
+}

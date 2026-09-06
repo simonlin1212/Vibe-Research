@@ -50,6 +50,18 @@ def test_calculation_id_identity_rules():
     assert zero_a == zero_b  # -0.0 / 0.0 规范化
 
 
+@pytest.mark.parametrize("kind", ["history_csv", "history_json"])
+@pytest.mark.parametrize("alias", ["raw/./x", "raw/sub/../x", "raw//x", "raw/../raw/x"])
+def test_series_paths_reject_ambiguous_spelling_before_creating_an_identity(tmp_path, kind, alias):
+    raw = tmp_path / "raw"
+    raw.mkdir()
+    (raw / "sub").mkdir()
+    (raw / "x").write_text("v\n10\n20\n" if kind == "history_csv" else '{"rows":[{"close":10},{"close":20}]}')
+    spec = {"raw_ref": alias, **({"column": "v"} if kind == "history_csv" else {"rows_path": "rows", "columns": {"date": "date", "close": "close"}})}
+    with pytest.raises(ValueError, match="规范相对路径"):
+        cli.resolve_inputs({"history": {kind: spec}}, str(tmp_path))
+
+
 def test_not_meaningful_exit_two():
     rc, out = run("peg", "--args", '{"pe": 30, "cagr": 0}')
     assert rc == 2 and out["output"]["status"] == "not_meaningful" and out["output"]["value"] is None

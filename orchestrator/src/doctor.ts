@@ -34,7 +34,7 @@ export interface DoctorResult { generated_at: string; repoRoot: string; dataRoot
 
 const MIN_NODE = [22, 18] as const;
 const REQUIRED_SKILLS = ["data-access", "company-research"];
-const PY_IMPORTS = "requests, pandas, lxml, akshare, baostock";
+const PY_IMPORTS = "requests, pandas, lxml, akshare, baostock, mootdx.quotes";
 const NET_PROBE_ENDPOINT = "tx_quote";
 /**
  * 不扫的目录。

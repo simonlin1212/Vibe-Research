@@ -20,7 +20,7 @@
  */
 
 /** 交易时段。`unknown` = 上游没给,**别当成任何一种**猜 */
-export type SessionPhase = "pre_open" | "trading" | "post_close" | "closed" | "unknown";
+export type SessionPhase = "pre_open" | "trading" | "post_close" | "closed" | "non_trading_day" | "unknown";
 
 export interface CalendarFacts {
   /** 最近一个交易日(含今天,如果今天是交易日) */
@@ -69,7 +69,7 @@ export function resolveSession(f: CalendarFacts): SessionContext {
   return { ...f, review_date: f.previous_trading_day, review_reason: why, intraday: f.session_phase === "trading" };
 }
 
-const PHASES: SessionPhase[] = ["pre_open", "trading", "post_close", "closed"];
+const PHASES: SessionPhase[] = ["pre_open", "trading", "post_close", "closed", "non_trading_day"];
 
 /**
  * 从取数信封里挑出日历事实。

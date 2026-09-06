@@ -54,6 +54,7 @@ interface Session {
   dir: string;
   turns: number;
   lastUsed: number;
+  busy: boolean;
 }
 
 interface LocalSession {
@@ -125,7 +126,8 @@ function chatCodexOptions(cfg: RunConfig, engineEnv: NodeJS.ProcessEnv, workingD
   const base = codexOptionsFor({ ...cfg, executionMode: "shell_hooks", codexPath: realCodex }, engineEnv);
   // MCP 发现必须与线程的真实 cwd 完全一致。对话 cwd 是 dataRoot/chat/<session>，
   // 不是研究配置的 cfg.runDir；用错目录会漏掉会话目录下的 `.codex/config.toml`。
-  const mcpIsolation = mcpIsolationOverride({ ...cfg, runDir: workingDirectory }, undefined, engineEnv);
+  // #44：发现与执行使用同一份已注入产品 CODEX_HOME 的环境，不能枚举用户全局 MCP。
+  const mcpIsolation = mcpIsolationOverride({ ...cfg, runDir: workingDirectory }, undefined, base.env);
   const baseConfig = (base.config ?? {}) as Record<string, unknown>;
   const foreignSkills = listForeignSkillPaths({ codexHome: cfg.codexHome, productRoots: [cfg.repoRoot] });
   return {
@@ -153,7 +155,7 @@ const localSessions = new Map<string, LocalSession>();
 
 function sweep(): void {
   const now = Date.now();
-  for (const [k, s] of sessions) if (now - s.lastUsed > SESSION_IDLE_MS) sessions.delete(k);
+  for (const [k, s] of sessions) if (!s.busy && now - s.lastUsed > SESSION_IDLE_MS) sessions.delete(k);
   for (const [k, s] of localSessions) {
     if (!s.busy && now - s.lastUsed > SESSION_IDLE_MS) localSessions.delete(k);
   }
@@ -235,6 +237,8 @@ export async function chatSend(
     dataRoot?: string;
     python?: string;
     maxMessage?: number;
+    /** Internal long-task deadline; never read from the HTTP request body. */
+    timeoutMs?: number;
     /** 内部专用：放进引擎的 developer 层，外部 HTTP 请求不能指定。 */
     developerInstructions?: string;
     /** 内部专用：固定结构化输出；仍需调用方自己解析校验。 */
@@ -262,6 +266,10 @@ export async function chatSend(
   const message = String(req.message ?? "").trim();
   if (!message) throw new ChatError("empty_message", "消息不能为空");
   if (opts.signal?.aborted) throw new ChatError("chat_cancelled", "对话请求已取消");
+  const timeoutMs = opts.timeoutMs ?? TURN_TIMEOUT_MS;
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 600_000) {
+    throw new ChatError("bad_timeout", "内部任务超时须为 1–600000 毫秒");
+  }
   const maxMessage = Math.max(1, Math.min(Number(opts.maxMessage) || MAX_MESSAGE, 64_000));
   if (message.length > maxMessage) throw new ChatError("message_too_long", `消息过长(> ${maxMessage} 字符)`);
 
@@ -351,7 +359,7 @@ export async function chatSend(
         userPrompt,
         ...(opts.outputSchema !== undefined ? { outputSchema: opts.outputSchema } : {}),
         env: rt.env,
-        timeoutMs: TURN_TIMEOUT_MS,
+        timeoutMs,
         signal: opts.signal,
       });
     } catch (e) {
@@ -432,6 +440,7 @@ export async function chatSend(
   const sessionKey = `${path.resolve(cfg.dataRoot)}\u0000${providerFingerprint}\u0000${reportScopeFingerprint}\u0000${session}`;
   const persistent = opts.persistent !== false;
   let s = persistent ? sessions.get(sessionKey) : undefined;
+  if (s?.busy) throw new ChatError("chat_busy", "这个 Agent 会话正在回答上一条消息");
   if (s && s.turns >= MAX_TURNS) {
     // 线程越长越贵、也越容易漂;到上限换一条新的
     sessions.delete(sessionKey);
@@ -450,7 +459,7 @@ export async function chatSend(
       webSearchMode: "disabled",
       model: cfg.model ?? cfg.providerProfile?.default_model ?? undefined,
     });
-    s = { thread, dir, turns: 0, lastUsed: Date.now() };
+    s = { thread, dir, turns: 0, lastUsed: Date.now(), busy: false };
     if (persistent) sessions.set(sessionKey, s);
   }
 
@@ -463,8 +472,9 @@ export async function chatSend(
   const onExternalAbort = () => ac.abort();
   opts.signal?.addEventListener("abort", onExternalAbort, { once: true });
   if (opts.signal?.aborted) ac.abort();
-  const timer = setTimeout(() => ac.abort(), TURN_TIMEOUT_MS);
+  const timer = setTimeout(() => ac.abort(), timeoutMs);
   let raw = "";
+  s.busy = true;
   try {
     const { events } = await s.thread.runStreamed(shaped.prompt, {
       ...(shaped.outputSchema ? { outputSchema: shaped.outputSchema } : {}),
@@ -481,15 +491,16 @@ export async function chatSend(
     if (e instanceof ChatError) throw e;
     if (ac.signal.aborted) {
       if (opts.signal?.aborted) throw new ChatError("chat_cancelled", "对话请求已取消");
-      throw new ChatError("timeout", `对话超时(${TURN_TIMEOUT_MS / 1000} 秒)`);
+      throw new ChatError("timeout", `对话超时(${timeoutMs / 1000} 秒)`);
     }
     throw publicAgentFailure(e, rt);
   } finally {
     clearTimeout(timer);
     opts.signal?.removeEventListener("abort", onExternalAbort);
+    s.busy = false;
+    s.lastUsed = Date.now();
   }
   s.turns += 1;
-  s.lastUsed = Date.now();
 
   const clean = scrubKey(raw, rt);
   const { reply, redacted } = opts.skipGate ? { reply: clean, redacted: 0 } : applyGate(clean);

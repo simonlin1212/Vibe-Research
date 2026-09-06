@@ -9,7 +9,8 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
-import { Codex, type CodexOptions, type Thread, type ThreadEvent, type ThreadItem } from "@openai/codex-sdk";
+import type { Codex, CodexOptions, Thread, ThreadOptions, ThreadEvent, ThreadItem } from "@openai/codex-sdk";
+import { runCodexSdkTurn } from "./codex_sdk_process.ts";
 
 import { EventsLog, type AgentRunner, type TurnOutcome } from "./agent_runner.ts";
 import { CODEX_SHELL_ENV_POLICY, codexEnvFor, secretsFor, type RunConfig, type Stage } from "./config.ts";
@@ -51,6 +52,10 @@ export function configuredMcpServerNames(cfg: RunConfig, engineEnv: NodeJS.Proce
   // 不存在时 Node 会把它报成近似“二进制 ENOENT”，因此退到已存在的数据根；
   // 对话入口会先建立会话目录，仍使用精确 cwd。
   const configCwd = fs.existsSync(cfg.runDir) ? cfg.runDir : fs.existsSync(cfg.dataRoot) ? cfg.dataRoot : cfg.repoRoot;
+  // #44：调用方传入裸环境或其他 CODEX_HOME 时也不得回落到用户配置。
+  // 官方引擎要求 CODEX_HOME 已存在；首次预检时可能还未初始化。
+  fs.mkdirSync(cfg.codexHome, { recursive: true });
+  const discoveryEnv = { ...engineEnv, CODEX_HOME: cfg.codexHome };
   const effective = spawnSync(codexBin, [
     "-c", "features.apps=false",
     "-c", "features.enable_mcp_apps=false",
@@ -58,7 +63,7 @@ export function configuredMcpServerNames(cfg: RunConfig, engineEnv: NodeJS.Proce
     "mcp", "list", "--json",
   ], {
     cwd: configCwd,
-    env: engineEnv,
+    env: discoveryEnv,
     encoding: "utf8",
     timeout: 20_000,
     windowsHide: true,
@@ -151,7 +156,8 @@ export function codexOptionsFor(cfg: RunConfig, env: NodeJS.ProcessEnv = process
 
 export class CodexRunner implements AgentRunner {
   private thread: Thread | null = null;
-  private readonly codex: Codex;
+  private readonly codex: Codex | null;
+  private workerThreadId: string | null = null;
   private readonly cfg: RunConfig;
   private readonly events: EventsLog;
   private seq = 0;
@@ -161,24 +167,29 @@ export class CodexRunner implements AgentRunner {
   /** 事件旁路观察者(进度渲染用)。**只观察不参与** —— 它抛错不得影响运行,见 log()。 */
   private readonly observer: ((ev: Record<string, unknown>) => void) | null;
 
-  constructor(cfg: RunConfig, eventsPath: string, codexFactory: (opts: CodexOptions) => Codex = (o) => new Codex(o),
+  constructor(cfg: RunConfig, eventsPath: string, codexFactory?: (opts: CodexOptions) => Codex,
               observer?: (ev: Record<string, unknown>) => void) {
     this.cfg = cfg;
     this.events = new EventsLog(eventsPath, secretsFor(cfg));   // 已知密钥值落盘前脱敏(纵深)
     this.codexOptions = codexOptionsFor(cfg);
-    this.codex = codexFactory(this.codexOptions);
+    this.codex = codexFactory ? codexFactory(this.codexOptions) : null;
     this.observer = observer ?? null;
   }
 
   eventsDigest(): string | null { return this.events.digest(); }
 
   get threadId(): string | null {
-    return this.thread?.id ?? null;
+    return this.thread?.id ?? this.workerThreadId;
   }
 
   private ensureThread(): Thread {
     if (this.thread) return this.thread;
-    this.thread = this.codex.startThread({
+    this.thread = this.codex!.startThread(this.threadOptions());
+    return this.thread;
+  }
+
+  private threadOptions(): ThreadOptions {
+    return {
       workingDirectory: this.cfg.runDir,
       // Windows 原生模式不把可写目录交给模型；所有落盘只经受控 MCP 工具完成。
       sandboxMode: this.cfg.executionMode === "controlled_mcp" ? "read-only" : "workspace-write",
@@ -196,8 +207,7 @@ export class CodexRunner implements AgentRunner {
       webSearchMode: "disabled",            // 不联网搜索,数据只来自登记脚本
       model: this.cfg.model ?? this.cfg.providerProfile?.default_model ?? undefined,  // 未指定模型时用 provider 模板默认(openai 模板为 null → 引擎默认)
       modelReasoningEffort: this.cfg.reasoning as never,
-    });
-    return this.thread;
+    };
   }
 
   log(stage: Stage | "orchestrator", type: string, payload: Record<string, unknown> = {}): void {
@@ -208,31 +218,44 @@ export class CodexRunner implements AgentRunner {
     if (this.observer) { try { this.observer(ev); } catch { /* 显示层永不影响运行 */ } }
   }
 
-  async runTurn(stage: Stage, attempt: number, prompt: string, outputSchema?: unknown): Promise<TurnOutcome> {
-    const thread = this.ensureThread();
+  async runTurn(stage: Stage, attempt: number, prompt: string, outputSchema?: unknown, signal?: AbortSignal): Promise<TurnOutcome> {
+    signal?.throwIfAborted();
+    const thread = this.codex ? this.ensureThread() : null;
     const t0 = Date.now();
     const outcome: TurnOutcome = { finalResponse: "", usage: null, commands: [], fileChanges: [], itemCount: 0, durationMs: 0, failed: null, threadId: null };
     this.log(stage, "turn.prompt", { attempt, chars: prompt.length });
     const ac = new AbortController();
+    const cancel = () => ac.abort(signal?.reason);
+    signal?.addEventListener("abort", cancel, { once: true });
     const timer = setTimeout(() => ac.abort(), this.cfg.turnTimeoutMs);
     try {
       // provider 不认服务端 schema 时(如小米 MiMo 的 Responses 只收 text / json_object),
       // 把 schema 写进提示词而不是硬传 —— 传了会被整轮拒掉,阶段直接 failed。
       const shaped = withOutputSchema(prompt, outputSchema, structuredOutputMode(this.cfg.providerProfile));
-      const { events } = await thread.runStreamed(shaped.prompt, { ...(shaped.outputSchema ? { outputSchema: shaped.outputSchema } : {}), signal: ac.signal });
-      for await (const ev of events) {
+      const record = (ev: ThreadEvent) => {
+        if (ev.type === "thread.started") this.workerThreadId = ev.thread_id;
         this.record(stage, attempt, ev, outcome);
-        if (ev.type === "turn.failed") { outcome.failed = ev.error?.message ?? "turn.failed"; break; }
-        if (ev.type === "error") { outcome.failed = `stream error: ${ev.message}`; break; }
+        if (ev.type === "turn.failed") outcome.failed ??= ev.error?.message ?? "turn.failed";
+        if (ev.type === "error") outcome.failed ??= `stream error: ${ev.message}`;
+      };
+      if (thread) {
+        const { events } = await thread.runStreamed(shaped.prompt, { ...(shaped.outputSchema ? { outputSchema: shaped.outputSchema } : {}), signal: ac.signal });
+        for await (const ev of events) { record(ev); if (outcome.failed) break; }
+      } else {
+        await runCodexSdkTurn({ options: this.codexOptions, threadOptions: this.threadOptions(), threadId: this.workerThreadId,
+          prompt: shaped.prompt, ...(shaped.outputSchema ? { outputSchema: shaped.outputSchema } : {}) }, ac.signal, this.cfg.turnTimeoutMs + 5000, record);
       }
     } catch (e) {
-      outcome.failed = ac.signal.aborted ? `turn 超时(${this.cfg.turnTimeoutMs} ms)` : e instanceof Error ? e.message : String(e);
+      // A failed tree shutdown is not a cancellation acknowledgement.
+      if ((e as NodeJS.ErrnoException)?.code === "STOP_FAILED") throw e;
+      outcome.failed = signal?.aborted ? "用户取消研究" : outcome.failed ?? (ac.signal.aborted ? `turn 超时(${this.cfg.turnTimeoutMs} ms)` : e instanceof Error ? e.message : String(e));
       this.log(stage, "turn.exception", { attempt, message: outcome.failed });
     } finally {
       clearTimeout(timer);
+      signal?.removeEventListener("abort", cancel);
     }
     outcome.durationMs = Date.now() - t0;
-    outcome.threadId = thread.id;
+    outcome.threadId = this.threadId;
     this.log(stage, "turn.done", { attempt, duration_ms: outcome.durationMs, commands: outcome.commands.length, failed: outcome.failed, usage: outcome.usage });
     return outcome;
   }

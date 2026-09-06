@@ -34,6 +34,7 @@ from backtest.metrics import (
     by_symbol_stats,
     calc_fill_turnover_series,
     calc_metrics,
+    equal_weight_hold_curve,
 )
 from backtest.models import EquitySnapshot, FillRecord, Position, TradeRecord
 
@@ -754,8 +755,10 @@ class BaseEngine(ABC):
             [s.equity for s in self.equity_snapshots],
             index=[s.timestamp for s in self.equity_snapshots],
         )
-        bench_ret = ret_df.mean(axis=1) if ret_df.shape[1] > 0 else pd.Series(0.0, index=dates)
-        benchmark_metadata = {}
+        held_curve = equal_weight_hold_curve(close_df)
+        bench_ret = bar_returns(held_curve, label="initial equal-weight held benchmark")
+        bench_equity = self.initial_capital * held_curve
+        benchmark_metadata = {"benchmark_return": float(held_curve.iloc[-1] - 1)}
 
         # ── External benchmark fetch ──────────────────────────────────────────
         bench_ticker = config.get("benchmark")
@@ -776,13 +779,12 @@ class BaseEngine(ABC):
             )
             if bench_result is not None:
                 bench_ret = bench_result.ret_series.reindex(dates).fillna(0.0)
+                bench_equity = self.initial_capital * (1 + bench_ret).cumprod()
                 benchmark_metadata = {
                     "benchmark_ticker": bench_result.ticker,
                     "benchmark_return": bench_result.total_ret,
                 }
         # ── External benchmark fetch ──────────────────────────────────────────
-
-        bench_equity = self.initial_capital * (1 + bench_ret).cumprod()
 
         # 6. Metrics
         realized_turnover = calc_fill_turnover_series(self.fill_records, equity_series)
@@ -1461,11 +1463,33 @@ class BaseEngine(ABC):
             elif self.can_execute(symbol, 0, bar):
                 reductions.append(self._plan_reduction(before, target_size, price))
 
-        projected_capital = (
-            self.capital
-            + sum(order.capital_credit for order in reductions)
-            - sum(order.cost for order in opens)
-        )
+        available = self.capital + sum(order.capital_credit for order in reductions)
+        self._validate_rebalance_values(available)
+        if available >= 0 and sum(order.cost for order in opens) > available + 1e-9:
+            # Same basket-wide budget rule as hold mode: reserve actual fees,
+            # round by each market's lot rule, and scale all new quantities
+            # together. Reductions stay unchanged; no first-symbol priority.
+            requested = opens
+            opens = []
+            low, high = 0.0, 1.0
+            for _ in range(50):
+                scale = (low + high) / 2
+                candidate = []
+                for order in requested:
+                    self._active_symbol = order.symbol
+                    size = self.round_size(order.size * scale, order.price)
+                    if size <= 0:
+                        continue
+                    resized = replace(order, size=size,
+                        margin=self._calc_margin(order.symbol, size, order.price, order.leverage),
+                        commission=self.calc_commission(size, order.price, order.direction, is_open=True))
+                    self._validate_rebalance_values(resized.size, resized.margin, resized.commission)
+                    candidate.append(resized)
+                if sum(order.cost for order in candidate) <= available + 1e-9:
+                    low, opens = scale, candidate
+                else:
+                    high = scale
+        projected_capital = available - sum(order.cost for order in opens)
         self._validate_rebalance_values(projected_capital)
         if projected_capital < -1e-9:
             raise ValueError("insufficient capital for position rebalance")

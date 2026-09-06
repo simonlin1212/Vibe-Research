@@ -5,9 +5,11 @@
  * 再把真实返回交给 Agent 写成报告。工具叫什么、参数与结果是什么，Core 一概不认识。
  */
 import crypto from "node:crypto";
+import AjvModule from "ajv";
 
 import { ChatError, chatSend, type ChatTurnResult } from "./chat.ts";
 import { complianceGate } from "./gate.ts";
+import { gatePatterns } from "./config.ts";
 import type { LlmOverride } from "./runtime_provider.ts";
 
 export class GuidedToolError extends Error {
@@ -67,6 +69,11 @@ const OUTPUT_SCHEMA = {
   },
 } as const;
 
+const AjvCtor = ((AjvModule as unknown as { default?: unknown }).default ?? AjvModule) as new (opts: object) => {
+  compile: (schema: object) => (value: unknown) => boolean;
+};
+const validModel = new AjvCtor({ strict: false }).compile(OUTPUT_SCHEMA);
+
 const INSTRUCTIONS = [
   "你是一个对话驱动的任务 Agent。服务端会给你一个垂类工具的真实能力说明。",
   "先理解用户要验证的问题，再判断工具要运行还缺哪些信息。不要把整张参数表甩给用户；每轮只问当前真正缺少的一组信息。",
@@ -76,6 +83,7 @@ const INSTRUCTIONS = [
   "服务端随后会把工具的真实返回再发给你。收到成功结果后：status=complete，基于真实返回写完整 Markdown 报告；不得补造返回中没有的数字。",
   "报告必须覆盖：问题、假设、执行逻辑、数据与口径、核心结果、限制与可验证结论。只报告验证结果，不给动作建议。",
   "工具拒绝执行或返回错误时：status=needs_input，解释原因并只追问修正所需的信息，不得写成已完成。",
+  "运行错误不等于用户参数有错；没有确定依据时，不要猜测用户需要改变什么。应说明本次失败、尚不能给出结果。",
   "只输出符合 schema 的 JSON。",
 ].join("\n");
 
@@ -93,7 +101,7 @@ function parseModel(reply: string): ModelTurn {
   let raw: unknown;
   try { raw = JSON.parse(reply); }
   catch { throw new GuidedToolError("bad_agent_output", "Agent 没有返回可读的结构化结果"); }
-  if (!object(raw)) throw new GuidedToolError("bad_agent_output", "Agent 返回必须是对象");
+  if (!object(raw) || !validModel(raw)) throw new GuidedToolError("bad_agent_output", "Agent 返回不符合完整结构与长度约束");
   const status = raw.status;
   if (status !== "needs_input" && status !== "ready" && status !== "complete") {
     throw new GuidedToolError("bad_agent_output", "Agent 返回了未知状态");
@@ -156,22 +164,38 @@ async function ask(
   llm: LlmOverride | undefined,
   deps: GuidedToolDeps,
 ): Promise<ModelTurn> {
-  let turn: ChatTurnResult;
-  try {
-    turn = await deps.chat({
-      ...opts,
-      maxMessage: 32_000,
-      developerInstructions: INSTRUCTIONS,
-      outputSchema: OUTPUT_SCHEMA,
-      preambleText: "",
-      skipGate: true,
-      contextText: context,
-    }, { session, message, ...(llm ? { llm } : {}) });
-  } catch (e) {
-    if (e instanceof ChatError) throw new GuidedToolError(e.code, e.message);
-    throw e;
+  let correction = "";
+  for (let attempt = 0; attempt < 2; attempt++) {
+    opts.signal?.throwIfAborted();
+    let turn: ChatTurnResult;
+    try {
+      turn = await deps.chat({
+        ...opts,
+        maxMessage: 32_000,
+        developerInstructions: `${INSTRUCTIONS}\n产品内部禁用表达（所有文本字段都不得复述，改用中性的历史事实或参数描述）：${JSON.stringify(gatePatterns())}${correction}`,
+        outputSchema: OUTPUT_SCHEMA,
+        preambleText: "",
+        skipGate: true,
+        contextText: context,
+      }, { session, message, ...(llm ? { llm } : {}) });
+    } catch (e) {
+      if (e instanceof ChatError) throw new GuidedToolError(e.code, e.message);
+      throw e;
+    }
+    opts.signal?.throwIfAborted();
+    try {
+      const parsed = parseModel(turn.reply);
+      // Gate every user-visible field before execution/return, not just message.
+      for (const text of [parsed.message, parsed.title, parsed.question, parsed.hypothesis, ...parsed.logic, parsed.document]) assertVisible(text);
+      return parsed;
+    } catch (e) {
+      if (!(e instanceof GuidedToolError) || attempt === 1) throw e;
+      // Retry only this model response, never the real tool. No field filling,
+      // JSON repair, gate weakening, or switch to another model source.
+      correction = `\n【唯一一次格式修正】上一条输出未通过 ${e.code}。重新回答本轮问题，必须符合全部 schema 与产品边界；不改变已执行的工具结果，不编造字段或数字。`;
+    }
   }
-  return parseModel(turn.reply);
+  throw new GuidedToolError("bad_agent_output", "Agent 输出修正失败");
 }
 
 export async function guidedToolTurn(
@@ -184,10 +208,13 @@ export async function guidedToolTurn(
   const message = String(req.message ?? "").trim();
   if (!message || message.length > 4_000) throw new GuidedToolError("bad_message", "消息必须为 1–4000 个字符");
 
+  opts.signal?.throwIfAborted();
   const catalog = await deps.runTool(req.name, { action: "catalog" });
+  opts.signal?.throwIfAborted();
   const context = `【工具】${req.label}\n【真实能力说明】\n${safeJson(catalog, "工具能力说明")}`;
   const threadSession = `guided-${crypto.createHash("sha256").update(`${req.name}\0${req.session}`).digest("hex").slice(0, 20)}`;
   const first = await ask(opts, threadSession, message, context, req.llm, deps);
+  opts.signal?.throwIfAborted();
   assertVisible(first.message);
   if (first.status === "needs_input") return { status: "needs_input", message: first.message };
   if (first.status !== "ready") throw new GuidedToolError("bad_agent_state", "工具尚未执行，Agent 却声称已经完成");
@@ -197,6 +224,7 @@ export async function guidedToolTurn(
 
   const args = parseArgs(first.tool_args_json);
   const toolResult = await deps.runTool(req.name, args);
+  opts.signal?.throwIfAborted();
   const explicitFailure = object(toolResult) && toolResult.ok === false;
   const disclosures = explicitFailure ? [] : requiredDisclosures(toolResult);
   const disclosureInstruction = disclosures.length
@@ -206,6 +234,7 @@ export async function guidedToolTurn(
     ? `【工具没有完成任务】\n${safeJson(toolResult, "工具返回")}\n请解释原因并追问修正所需的信息，status 必须是 needs_input。`
     : `【工具已执行，以下是唯一可用的真实结果】\n${safeJson(toolResult, "工具返回")}${disclosureInstruction}\n请据此完成报告，status 必须是 complete。`;
   const second = await ask(opts, threadSession, follow, context, req.llm, deps);
+  opts.signal?.throwIfAborted();
   assertVisible(second.message);
   if (explicitFailure) {
     if (second.status !== "needs_input") throw new GuidedToolError("bad_agent_state", "工具拒绝后 Agent 没有回到补问状态");

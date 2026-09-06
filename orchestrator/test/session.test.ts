@@ -10,6 +10,16 @@ const base: CalendarFacts = {
   session_phase: "trading",
 };
 
+test("上游真实非交易日枚举保留，不降为 unknown", () => {
+  const facts = calendarFromEnvelope({ evidence: Object.entries({ ...base,
+    is_today_trading_day: false, session_phase: "non_trading_day" }).map(([field, value]) => ({ field, value })) });
+  assert.equal(facts?.session_phase, "non_trading_day");
+  const context = resolveSession(facts!);
+  assert.equal(context.review_date, base.last_trading_day);
+  assert.equal(context.intraday, false);
+  assert.match(context.review_reason, /不是交易日/);
+});
+
 test("🔴 盘中看上一个交易日 —— 今天还没结束,半天的数据不是复盘", () => {
   const r = resolveSession({ ...base, session_phase: "trading" });
   assert.equal(r.review_date, "2026-08-25");

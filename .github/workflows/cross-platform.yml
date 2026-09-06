@@ -3,12 +3,18 @@ name: Cross-platform verification
 on:
   push:
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
   test:
+    defaults:
+      run:
+        # Explicit bash uses -e -o pipefail on every runner, so an early
+        # npm/pytest failure cannot be hidden by a later successful command.
+        shell: bash
     env:
       VRA_PYTHON: python
       # Python subprocesses emit UTF-8 JSON. Force the Windows test runner to
@@ -50,8 +56,10 @@ jobs:
           npm run typecheck --prefix orchestrator
       - name: Orchestrator Windows contract and typecheck
         if: runner.os == 'Windows'
+        shell: pwsh
         run: |
-          node --test orchestrator/test/windows_support.test.ts
+          node --test --test-concurrency=1 orchestrator/test/windows_support.test.ts orchestrator/test/local_agent_runtime.test.ts orchestrator/test/local_agent_stage_agent.test.ts orchestrator/test/runtime_provider.test.ts orchestrator/test/task_router.test.ts orchestrator/test/task_adapters.test.ts orchestrator/test/run_tools_registry.test.ts orchestrator/test/startup_health.test.ts
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           npm run typecheck --prefix orchestrator
       - name: Desktop tests and build
         run: |

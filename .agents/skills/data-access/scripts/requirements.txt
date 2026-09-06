@@ -1,6 +1,7 @@
-# data-access 脚本依赖(Python 3.10+)。腾讯 / 深交所 / 东财 K 线只用标准库;以下为其余源所需。
+# data-access 脚本依赖(产品要求 Python 3.11+)。腾讯 / 深交所 / 东财 K 线只用标准库;以下为其余源所需。
 requests>=2.31
 pandas>=2.0
 lxml>=4.9
 akshare>=1.12
 baostock>=0.9
+mootdx==0.11.7

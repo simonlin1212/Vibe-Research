@@ -167,6 +167,13 @@ test("doctor:真实仓库 + 假 exec → 全绿(除 api_token / net skip);引擎
   const f = await runDoctor({ repoRoot: doctorRepo, env: fakeEnv, exec: badPy, python: "/fake/python", writeReport: false });
   const fb = Object.fromEntries(f.checks.map((c) => [c.id, c]));
   assert.equal(fb.python.status, "fail"); assert.match(fb.python.fix ?? "", /pip install -r/); assert.equal(fb.calc.status, "skip"); assert.equal(f.exit_code, 3);
+  // 安装清单与体检都必须覆盖已注册的 mootdx 源，不能“初始化正常、五个端点全缺包”。
+  const requirements = fs.readFileSync(path.join(REPO, ".agents/skills/data-access/scripts/requirements.txt"), "utf8");
+  assert.match(requirements, /^mootdx==0\.11\.7$/m);
+  const noMootdx: Exec = (cmd, args) => args[0] === "-c" && String(args[1]).includes("mootdx")
+    ? { status: 1, stdout: "", stderr: "ModuleNotFoundError: No module named 'mootdx'" } : good(cmd, args);
+  const missingTdx = await runDoctor({ repoRoot: doctorRepo, env: fakeEnv, exec: noMootdx, python: "/fake/python", writeReport: false });
+  assert.equal(missingTdx.checks.find(c => c.id === "python")?.status, "fail");
   // 受控 MCP 与 skills 配置隔离使用标准库 tomllib；3.10 即使取数依赖都能导入，也不能标成可用。
   const oldPy: Exec = (cmd, args) => args[0] === "-c" ? { status: 0, stdout: "3.10.14\n", stderr: "" } : good(cmd, args);
   const old = await runDoctor({ repoRoot: doctorRepo, env: fakeEnv, exec: oldPy, python: "/fake/python", writeReport: false });

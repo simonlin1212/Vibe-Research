@@ -7,6 +7,7 @@ import AjvModule, { type ValidateFunction } from "ajv";
 import { applyCoreFormats } from "./formats.ts";
 import { GAP_REASON_CODES, stages, type Stage } from "./config.ts";
 import { currentPlugin } from "./plugin.ts";
+import { FAILURE_CODES } from "./research_failure.ts";
 
 /**
  * 🔴 **带垂类枚举的 schema 一律做成函数,不能是模块级常量。**
@@ -220,6 +221,7 @@ export const manifestSchema = () => ({
     market: { type: "string", enum: [...currentPlugin().evidence.markets, ""] },
     started_at: { type: "string", pattern: ISO_TS }, finished_at: { type: ["string", "null"], pattern: ISO_TS },
     status: { type: "string", enum: ["complete", "incomplete", "failed", "stale", "running"] },
+    cancelled: { type: "boolean" },
     stages: { type: "array", items: { type: "object", additionalProperties: false, required: ["stage", "status", "attempts", "errors", "validator_ok"],
       properties: { stage: { type: "string", enum: [...stages()] }, status: { type: "string", enum: ["complete", "incomplete", "skipped", "failed"] }, attempts: { type: "integer" }, errors: { type: "array", items: { type: "string" } }, validator_ok: { type: "boolean" } } } },
     codex_version: { type: "string" }, model: { type: ["string", "null"] }, model_note: { type: "string" }, calc_version: { type: "string" },
@@ -244,6 +246,7 @@ export const manifestSchema = () => ({
     viewer: { type: ["object", "null"], additionalProperties: false, required: ["html", "appendix"], properties: { html: { type: "string" }, appendix: { type: "string" } } },
     thermo_archived: { type: ["object", "null"], additionalProperties: false, required: ["endpoints", "appended", "skipped", "corrupt_moved"], properties: { endpoints: { type: "array", items: { type: "string" } }, appended: { type: "integer" }, skipped: { type: "integer" }, corrupt_moved: { type: "integer" } } },
     final_errors: { type: "array", items: { type: "string" } },
+    failure_code: { enum: [...FAILURE_CODES, null] },
   },
 } as const);
 

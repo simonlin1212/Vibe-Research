@@ -68,7 +68,7 @@ class Result:
         bench = self.metrics.get("benchmark_return")
         if isinstance(bench, (int, float)):
             ticker = self.metrics.get("benchmark_ticker")
-            what = f"指数 {ticker}" if ticker else "等权买入持有这几只标的本身（不是指数）"
+            what = f"指数 {ticker}" if ticker else "初始等权持有这几只标的本身（不是指数；无再平衡、不计费用；缺报价沿用前值，首笔报价前留现金）"
             lines.append(f"  对照 {bench * 100:.2f}%    ← {what}")
         if self.missing:
             lines += ["", "取不到数据（未参与回测）："] + [f"  · {c}：{why}" for c, why in self.missing.items()]

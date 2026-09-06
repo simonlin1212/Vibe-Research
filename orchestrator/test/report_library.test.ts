@@ -1,15 +1,17 @@
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
 import { FINANCE_PLUGIN } from "../src/finance/register.ts";
-import type { ReportRecallPlan } from "../src/report_library.ts";
+import { reportContextAsync, searchReportsAsync } from "../src/report_library.ts";
+import type { ReportRecallPlan, ReportRecord } from "../src/report_library.ts";
 
 /** 召回计划只比 reason 与 reportIds;query 由各用例按需单独断言 */
 const planOf = (p: ReportRecallPlan | null) => (p ? { reason: p.reason, ...(p.reportIds ? { reportIds: p.reportIds } : {}) } : null);
-import { ReportLibraryError, addReport, listReports, removeReport, reportCitationErrors, reportCitations, reportContext, reportFile, reportRecallPlan, reportsForSymbol } from "../src/report_library.ts";
+import { ReportLibraryError, addReport, listReports, removeReport, reportCitationErrors, reportCitations, reportContext, reportFile, reportRecallPlan, reportsForSymbol, searchReports } from "../src/report_library.ts";
 
 const tmp = (): string => fs.mkdtempSync(path.join(os.tmpdir(), "vra-reports-"));
 const b64 = (buf: Buffer, mime = "text/plain") => `data:${mime};base64,${buf.toString("base64")}`;
@@ -89,6 +91,54 @@ test("研报引用必须来自本轮真实命中，且页码不能由模型编�
   assert.deepEqual(reportCitations(`前文 [资料:${id} p.3]`), [{ id, page: 3 }]);
 });
 
+test("检索片段优先覆盖不同查询词，不被封面单词重复或正文靠后误导", async (t) => {
+  const root = tmp();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const rec = await addReport(root, {
+    name: "会议纪要.md",
+    content: b64(Buffer.from(`--- 第 1 页 ---\n${"收入 封面标题\n".repeat(1200)}\n--- 第 2 页 ---\n收入增长驱动因素：海外新产线交付带来新增需求。`)),
+  });
+  const [hit] = searchReports(root, "收入增长驱动因素");
+  assert.equal(hit?.id, rec.id, "正文检索不能要求文件名也命中");
+  assert.equal(hit?.page, 2);
+  assert.match(hit!.snippet, /海外新产线交付带来新增需求/);
+  assert.doesNotMatch(hit!.snippet, /封面标题/);
+  assert.ok(hit!.snippet.length <= 1782);
+});
+
+test("片段覆盖跨扫描窗口的相邻关键词，保留 NFKC 原文与真实页码", async (t) => {
+  const root = tmp();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  await addReport(root, {
+    name: "note.md",
+    content: b64(Buffer.from(`--- 第 7 页 ---\n${"growth filler\n".repeat(400)}--- 第 8 页 ---\n${"填".repeat(1460)}ＲＥＶＥＮＵＥ\n\n\n\nｇｒｏｗｔｈ：ｏｆﬁｃｅ新业务贡献。${"尾".repeat(2000)}`)),
+  });
+  const [hit] = searchReports(root, "revenue growth office");
+  assert.equal(hit?.page, 8);
+  assert.match(hit!.snippet, /ＲＥＶＥＮＵＥ/);
+  assert.match(hit!.snippet, /ｏｆﬁｃｅ新业务贡献/);
+  assert.doesNotMatch(hit!.snippet, /growth filler/);
+});
+
+test("同一引用片段不拼接相邻页，选定资料范围与无词命中兜底不变", async (t) => {
+  const root = tmp();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const rec = await addReport(root, {
+    name: "selected.md",
+    content: b64(Buffer.from("--- 第 3 页 ---\nrevenue 本页资料。\n--- 第 4 页 ---\ngrowth 另一页的资料。")),
+  });
+  await addReport(root, { name: "unselected.md", content: b64(Buffer.from("revenue growth 更高相关性但未获授权。")) });
+  const hits = searchReports(root, "revenue growth", { reportIds: [rec.id] });
+  assert.deepEqual(hits.map((hit) => hit.id), [rec.id]);
+  assert.equal(hits[0]!.page, 3, "相同覆盖分数按正文先后稳定选择");
+  assert.match(hits[0]!.snippet, /本页资料/);
+  assert.doesNotMatch(hits[0]!.snippet, /另一页的资料|未获授权/);
+  const [fallback] = searchReports(root, "unmatched", { reportIds: [rec.id], mustInclude: true });
+  assert.equal(fallback?.page, 3);
+  assert.match(fallback!.snippet, /本页资料/);
+  assert.doesNotMatch(fallback!.snippet, /另一页的资料/);
+});
+
 test("同一文件重复上传不复制；删除同时移除原文件与正文，但不碰其他报告", async () => {
   const root = tmp();
   const content = b64(Buffer.from("300308 同一份内容"));
@@ -101,6 +151,41 @@ test("同一文件重复上传不复制；删除同时移除原文件与正文�
   assert.equal(fs.existsSync(file), false);
   assert.deepEqual(listReports(root).map((r) => r.id), [other.id]);
   assert.equal(await removeReport(root, a.id), false);
+});
+
+test("候选先排名再提片段：排序、上限、页码及未入选资料的版本核验不变", async t => {
+  const root = tmp();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const revisions: Record<string, string> = {};
+  const records: ReportRecord[] = [];
+  for (let i = 0; i < 25; i++) {
+    const text = `--- 第 1 页 ---\n无关封面 ${i}\n--- 第 2 页 ---\nrevenue growth 第 ${i} 份资料。`;
+    const rec = await addReport(root, { name: i === 0 ? "revenue growth.md" : `test-${i}.md`, content: b64(Buffer.from(text)) });
+    records.push(rec);
+    const stored = fs.readFileSync(path.join(root, "knowledge/reports", rec.text_file), "utf8");
+    revisions[rec.id] = crypto.createHash("sha256").update(stored.endsWith("\n") ? stored.slice(0, -1) : stored).digest("hex");
+  }
+  const hits = searchReports(root, "revenue growth", { limit: 100 });
+  assert.equal(hits.length, 20);
+  assert.equal(hits[0]?.id, records[0]?.id, "文件名命中排序优先，不能先截文件数");
+  assert.ok(hits.every(h => h.page === 2 && h.snippet.includes("revenue growth")));
+  let ticks = 0;
+  const timer = setInterval(() => ticks++, 0);
+  try {
+    assert.deepEqual(await searchReportsAsync(root, "revenue growth", { limit: 100 }), hits);
+    assert.ok(ticks > 0, "异步入口在全库扫描结束前须允许其他事件运行");
+    assert.deepEqual(await reportContextAsync(root, "revenue growth"), reportContext(root, "revenue growth"));
+  } finally { clearInterval(timer); }
+  const ac = new AbortController();
+  setImmediate(() => ac.abort());
+  await assert.rejects(searchReportsAsync(root, "revenue growth", {}, ac.signal),
+    e => e instanceof ReportLibraryError && e.code === "cancelled");
+  assert.deepEqual(searchReports(root, "revenue growth", { limit: 1.9 }), hits.slice(0, 1));
+  assert.deepEqual(searchReports(root, "revenue growth", { limit: NaN }), []);
+  const loser = records.find(r => !hits.some(h => h.id === r.id))!;
+  revisions[loser.id] = "0".repeat(64);
+  assert.throws(() => searchReports(root, "revenue growth", { limit: 1, expectedRevisions: revisions }),
+    e => e instanceof ReportLibraryError && e.code === "report_revision_mismatch");
 });
 
 test("损坏索引 fail-loud，绝不把它当空库覆盖；不支持的格式给出真实范围", async () => {

@@ -1,10 +1,20 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import vm from "node:vm";
 
 const backtest = readFileSync(new URL("../src/verticals/finance/pages/Backtest.tsx", import.meta.url), "utf8");
 const debate = readFileSync(new URL("../src/verticals/finance/pages/Debate.tsx", import.meta.url), "utf8");
 const history = readFileSync(new URL("../src/verticals/finance/components/ui/ReportHistory.tsx", import.meta.url), "utf8");
+
+test("#34 回测初始化 ID 在没有 crypto.randomUUID 的 HTTP 环境仍可生成", () => {
+  const generators = backtest.match(/const id = [\s\S]*?\nconst session = [^\n]+/);
+  assert.ok(generators);
+  const [message, session] = vm.runInNewContext(`${generators[0]}\n[id(), session()]`, { crypto: {} }) as string[];
+  assert.ok(message && session);
+  assert.match(session, /^bt-[a-z0-9]+$/);
+  assert.ok(session.length <= 24);
+});
 
 test("回测页面只保留 Agent 对话入口，不再暴露参数表单", () => {
   assert.match(backtest, /backend\.guidedTool\("backtest"/);

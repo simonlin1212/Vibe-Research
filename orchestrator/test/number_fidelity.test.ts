@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import "../src/finance/register.ts";   // Core 不内置词表:未注册就抛错(这正是设计)
 import { checkNumberFidelity, quotedHistory, summarizeFidelityViolations } from "../src/number_fidelity.ts";
+import { currentPlugin } from "../src/plugin.ts";
 
 const CALC = "calc-" + "a".repeat(16);
 const EV = "ev-bbbbbb";
@@ -10,6 +11,14 @@ const EV = "ev-bbbbbb";
 const calcs = new Map([[CALC, { output: { status: "ok", value: 34.07, unit: "倍", display: "34.07 倍", details: null }, inputs: { price: 943.0, eps: 27.68 } }]]);
 const evs = new Map([[EV, { value: 200.42 }]]);
 const n = (report: string, quoted: string[] = []) => checkNumberFidelity(report, evs as never, calcs as never, "300308", quoted).violations;
+
+test("数字检查无内置中文章节豁免；调用方显式传契约", () => {
+  const report = `## 数据缺口\n结果为 99.99 倍 [${CALC}]。`;
+  assert.equal(n(report).length, 1);
+  const p = currentPlugin();
+  assert.deepEqual(checkNumberFidelity(report, evs as never, calcs as never, undefined, [], p.lexicon, p.fidelityExcludedSections).violations, []);
+  assert.deepEqual(checkNumberFidelity(report.replace("数据缺口", "Missing inputs"), evs as never, calcs as never, undefined, [], p.lexicon, ["Missing inputs"]).violations, []);
+});
 
 test("该抓的要抓到:引了真 id 却写别的数", () => {
   // 这正是架构审计点名的缺口 —— 在此之前 validateReport 只查 id 存不存在

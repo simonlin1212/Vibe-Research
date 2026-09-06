@@ -10,6 +10,26 @@ const tmp = (): string => fs.mkdtempSync(path.join(os.tmpdir(), "vra-snap-"));
 const ok = () => true;
 const META = { endpoint: "fetch_quote", symbol: "300308" };
 
+test("快照内存按数据根隔离，等价根路径仍使用同一份缓存", () => {
+  resetSnapshotMemory();
+  const a = tmp(), b = tmp(), k = snapshotKey("ep", "s");
+  try {
+    writeSnapshot(a, k, META, { owner: "a" }, ok);
+    assert.equal(readSnapshot(b, k), null, "空 B 根不能读到 A 的内存快照");
+    writeSnapshot(b, k, META, { owner: "b" }, ok);
+    assert.equal(readSnapshot<{ owner: string }>(a, k)?.payload.owner, "a");
+    assert.equal(readSnapshot<{ owner: string }>(path.join(a, "unused", ".."), k)?.payload.owner, "a");
+    assert.equal(readSnapshot<{ owner: string }>(b, k)?.payload.owner, "b");
+    resetSnapshotMemory();
+    assert.equal(readSnapshot<{ owner: string }>(b, k)?.payload.owner, "b");
+    assert.equal(readSnapshot<{ owner: string }>(a, k)?.payload.owner, "a", "磁盘回填内存也必须隔离");
+  } finally {
+    resetSnapshotMemory();
+    fs.rmSync(a, { recursive: true, force: true });
+    fs.rmSync(b, { recursive: true, force: true });
+  }
+});
+
 test("🔴 默认读上次的快照 —— 页面打开不该把依赖的端点全跑一遍(慢且费钱)", () => {
   resetSnapshotMemory();
   const root = tmp();

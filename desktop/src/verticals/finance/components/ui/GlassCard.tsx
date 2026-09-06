@@ -8,7 +8,7 @@ interface Props {
   onClick?: () => void;
 }
 
-// 玻璃卡：半透明填充 + 发丝边框 + 柔投影 + 顶部内高光（科技玻璃暖橙风的基础容器）。
+// 保留公共组件名；视觉已迁移到 V2 的不透明面板、细边框与顶部内高光。
 export function GlassCard({ children, className, glow, onClick }: Props) {
   return (
     <div

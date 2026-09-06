@@ -11,7 +11,8 @@ import { ProductTaskOperations, ReportTaskMaterials, splitQuickPassages } from "
 import { TaskRouteError, TaskRouter, makeResearchTask, type ResearchTask } from "../src/task_router.ts";
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-const PYTHON = path.join(REPO, "..", ".venv", "bin", "python");
+const PYTHON = process.env.VRA_PYTHON?.trim()
+  || (process.platform === "win32" ? "python" : path.join(REPO, "..", ".venv", "bin", "python"));
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), "vra-task-adapter-"));
 const b64 = (text: string) => Buffer.from(text, "utf8").toString("base64");
 

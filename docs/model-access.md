@@ -25,9 +25,10 @@
 | Agent（默认） | 本地上下文、工具调用、任务状态、研究进度、资料转写与六阶段研究 | Codex 订阅走 Codex Harness；Claude 与 WorkBuddy 订阅走各自本机 Agent，不混叫 |
 | 模型直连 | 普通对话、标题翻译、现有材料定位等轻量任务 | 不调用工具、不保留 Agent 任务记忆；研究、辩论、Agent 回测与资料转写会要求重新开启 Agent |
 
-上表的 Agent 能力是产品能力集合，不代表每个订阅来源均已覆盖全部功能。当前 Claude/WorkBuddy 支持
-普通对话、有界材料任务与 A 股六阶段研究；**辩论、Agent 回测、资料转写仍要求 Codex 运行时**，选了
-Claude/WorkBuddy 后会明确拒绝这些入口，不会暗中换来源。“首次选择后全功能无缝使用”尚未完成。
+Claude / WorkBuddy 的辩论、Agent 回测与资料转写已接通，和对话、材料定位、A 股六阶段研究一样沿用
+设置里选定的来源，不再要求换成 Codex。持仓页可提交截图或表格生成草稿，核对后填入表单，再由用户
+点击“添加”保存；文件内容会交给选定的 AI，不能把“台账本地保存”理解成“所选文件不发送给模型”。
+真实业务验收的输入、来源、失败轮次和边界见 [M12](跨来源业务验收_M12_2026-09-05.md)。
 
 当前 Claude Code 与 WorkBuddy / CodeBuddy Agent 已支持对话、有界材料任务和完整 A 股六阶段研究。
 研究时每个阶段使用一次独立 CLI 会话，关闭内建工具，只开放本次运行目录内的五个产品受控 MCP 工具；
@@ -36,6 +37,10 @@ Claude/WorkBuddy 后会明确拒绝这些入口，不会暗中换来源。“首
 
 ### 2026-09-05 真实运行与发布边界
 
+最新未提交开发版的回归、干净安装、全端点诊断与修后 full 实跑状态以
+[M14](完整版本机验收_M14_2026-09-05.md) 为准；不是 Windows 真机、所有 API 厂商或全部数据源均通过。
+下列 M8 数字保留为历史检查点，不覆盖 M12–M14 的后继修复与验收。
+
 - WorkBuddy：核心数据范围六阶段 `complete / exit 0`，约 103 分钟；119 条证据、29 条计算记录
   （22 成功、7 失败尝试留痕）。报告首轮 30 分钟超时，第二轮通过。
 - Claude Code 2.1.261：重新登录后，核心数据范围六阶段用 27 分 43 秒结束，各阶段最终 validator 通过；
@@ -43,9 +48,14 @@ Claude/WorkBuddy 后会明确拒绝这些入口，不会暗中换来源。“首
   `incomplete / exit 2`。已有 11 个有效单季足够当前 TTM，必需计算范围与可选长历史缺口的状态区分待完善。
 - 两次 `endpoint_scope` 均为 `core`，不是全注册表端点范围 `full`；不代表所有资料源或所有业务页已验收。
 - 后续四轮 Claude Code 整仓范围审计确认的 14 项优先 P2 已完成本地整改、回归及独立 Codex 复审。
-  当前回归为 orchestrator 721 项（720 通过、1 Windows ACL 跳过）、desktop 37/37、Python 640/640；
+  该提交检查点回归为 orchestrator 721 项（720 通过、1 Windows ACL 跳过）、desktop 37/37、Python 640/640；
   类型检查与构建通过。首页/行情/查看器使用独立合成数据完成实际浏览器验收，不替代订阅六阶段修后重跑。
-  M8 与整改尚未提交、未推送、未发布；后续 P3、Windows 真机、全端点与跨来源业务缺口仍保留。
+  M8 与原 14 项优先整改已本地提交为 `2ed80ac`，未推送、未发布；当时仍有后继产品与验收缺口。
+
+- 后继运行隔离与辩论中止批次单独记账，状态及验证边界见
+  [本地验收记录](运行隔离与辩论中止验收_2026-09-05.md)。六阶段深度研究的取消入口已在
+  [M11](深度研究取消验收_2026-09-05.md) 单独实现并验收；“请求中止”与“已确认停止”分开显示，
+  保留此前已完成阶段，停止未确认不冒充已取消。
 
 ### 本地模型地址的范围
 
@@ -204,10 +214,42 @@ agent 那一轮 4.7 分钟 —— ⚠️ 慢,turn 超时压到 5 分钟会连续
 这次验证的是普通用户真实路径，不是只调用 provider 矩阵或后端函数：从无配置/未登录状态开始，
 经过浏览器设置页接入，再在实际业务页面发起 Agent 任务。
 
+## 3. 自托管模型与局域网访问
+
+来自上游 PR #34 的自托管模板与 LAN 开关已适配当前双引擎开发版。它们是两件不同的事：
+模型运行在哪里决定 API 地址；从哪台设备看工作台决定前端监听地址。不要把两者混为一谈。
+
+### 自托管模型
+
+普通用户仍在“接入 AI”选择 API 来源，填写实际地址、模型名和 key，测试成功后全站沿用这份配置，
+不需要再把聊天和研究各配一次。后端机器上的模型可用 `http://127.0.0.1:11434/v1`；远程模型使用 HTTPS。
+从手机访问时，模型地址中的 `127.0.0.1` 指后端所在电脑，不是手机。
+
+开发者需要 provider 模板时，复制 `providers/selfhosted.json` 到 `<数据根>/providers/selfhosted.json`，
+替换整个 `base_url`（不能保留 `{ApiPath}`）并填写 `default_model`。密钥仅经 `SELFHOSTED_API_KEY`
+环境变量提供，不写进模板或配置文件。未替换占位符时选用会被拒绝。
+模板保持 `matrix.status=unverified`，没有附带自动转换网关，也没有宣称某个推理框架版本已通过。
+Agent 路径需要兼容 Responses 与工具调用；`responses_support=gateway` 只是描述用户提供的网关，
+不会自动把 Chat Completions 变成 Responses。实际兼容矩阵需使用自己的服务与授权运行。
+此模板未声明已验证的模型直连能力，不会因为模板存在就解锁直连开关。
+
+### 局域网工作台
+
+默认只绑定 `127.0.0.1:5930`。从仓库根运行 `VRA_LAN=1 bash scripts/start` 才将 UI 绑定所有网卡；
+Windows PowerShell 使用 `$env:VRA_LAN="1"` 后运行 `scripts/start.ps1`。
+后端继续绑定 `127.0.0.1:8765`，不改其跨站检查。代理先拒绝异源/不合法来源，再将合法请求归一化为回环来源。
+Vite 的 `strictPort` 保留，端口被占用时明确失败，不能静默漂移到另一个界面。
+关闭方式是停止本次服务，取消 `VRA_LAN` 环境变量后重启；本功能不修改保存的 AI 配置。
+
+这不是多用户或公网产品：没有新增 LAN 登录保护，可达该 UI 端口的人可以使用工作台权限、读取或修改本地资料。
+HTTP 上浏览器到后端这一跳不加密，输入的 API key/资料存在网络窃听风险；后端 Bearer 不进浏览器并不能消除这一点。
+仅在受信任局域网主动开启，不对公网映射端口。本轮只在回环网络测试该开关与代理，不替代实际跨设备或 Windows 验收。
+局域网浏览器缺少 `crypto.randomUUID` 时，回测、页面分析、记录反思与资料任务均使用非鉴权的 UI 标识。
+
 ## 4. 加一家新的 provider
 
 1. 复制 `providers/deepseek.json` 为 `providers/<id>.json`(或放用户私有覆盖 `.local/providers/<id>.json`,同结构,优先级更高);`id` 小写字母开头,只含 `a-z0-9_-`,且与文件名一致。
-2. 填字段:`name`、`wire_api`(**只能 `responses`**;`chat` 会被当场拒绝,见上文)、`base_url`(**第三方必须显式 https**——Codex 对空 base_url 会回退到 `api.openai.com`,密钥会发到错误主机)、`env_key`(大写变量名,不得是 HOME / PATH 等受保护名)、`auth_modes`(第三方只能 `["api_key"]`)、`requires_openai_auth: false`、`default_model`、`responses_support`(厂商自己提供 `/responses` 填 `native`,经自建网关转换填 `gateway`;不能填 `none`)。可选:`query_params` / `http_headers` / `env_http_headers`(值是环境变量名)/ `request_max_retries` / `stream_max_retries` / `stream_idle_timeout_ms` / `context_limit_tokens` / `retryable_errors` / `known_incompatibilities` / `verified_at`。
+2. 填字段:`name`、`wire_api`(**只能 `responses`**;`chat` 会被当场拒绝,见上文)、`base_url`(**第三方必须显式填写；远程 HTTPS、本机字面回环主机允许 HTTP**——Codex 对空 base_url 会回退到 `api.openai.com`,密钥会发到错误主机)、`env_key`(大写变量名,不得是 HOME / PATH 等受保护名)、`auth_modes`(第三方只能 `["api_key"]`)、`requires_openai_auth: false`、`default_model`、`responses_support`(厂商自己提供 `/responses` 填 `native`,经自建网关转换填 `gateway`;不能填 `none`)。可选:`query_params` / `http_headers` / `env_http_headers`(值是环境变量名)/ `request_max_retries` / `stream_max_retries` / `stream_idle_timeout_ms` / `context_limit_tokens` / `retryable_errors` / `known_incompatibilities` / `verified_at`。
 3. `http_headers` / `query_params` 里写了像密钥的值会被直接拒绝——密钥只能经 `env_key` / `env_http_headers` 引用。
 4. 跑矩阵,按结果回填 `matrix.status` / `matrix.results` / `matrix.note`。
 

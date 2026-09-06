@@ -7,6 +7,9 @@
 
 两者都是非验收型辅助工具,不改变研究运行的状态机。
 
+开发期回归与真实模型联调见 [开发验证说明](../docs/development-validation.md)：
+先跑零模型测试，再用 Spark（不可用时 GPT-5.6）验证主流程；不修改客户默认接入。
+
 ## Windows
 
 - `scripts\\setup-windows.cmd`:创建 `.venv`、安装 Python/Node 依赖、初始化并运行体检。

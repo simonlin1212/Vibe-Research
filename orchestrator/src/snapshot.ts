@@ -103,12 +103,13 @@ export function snapshotUsable(snap: Snapshot | null, c: Consistency, endpointMa
 
 /** 读快照。没有 / 结构版本对不上 → null(调用方去真取) */
 export function readSnapshot<T = unknown>(dataRoot: string, key: string): Snapshot<T> | null {
-  const hit = mem.get(key);
+  const file = fileOf(dataRoot, key);
+  const hit = mem.get(file);
   if (hit && Date.now() - hit.at < MEM_TTL_MS) return hit.snap as Snapshot<T>;
-  const raw = readJsonIfExists<Snapshot<T>>(fileOf(dataRoot, key));
+  const raw = readJsonIfExists<Snapshot<T>>(file);
   // ⚠️ 读的是产品自己写的文件,但仍要查形状:用户可能手改过,也可能是上一个版本写的
   if (!raw || typeof raw !== "object" || raw.schema !== SNAPSHOT_SCHEMA || typeof raw.fetched_at !== "string") return null;
-  mem.set(key, { at: Date.now(), snap: raw as Snapshot });
+  mem.set(file, { at: Date.now(), snap: raw as Snapshot });
   return raw;
 }
 
@@ -132,8 +133,9 @@ export function writeSnapshot<T>(
     fetched_at: nowIso(),
     payload,
   };
-  atomicWrite(fileOf(dataRoot, key), `${JSON.stringify(snap, null, 2)}\n`);
-  mem.set(key, { at: Date.now(), snap: snap as Snapshot });
+  const file = fileOf(dataRoot, key);
+  atomicWrite(file, `${JSON.stringify(snap, null, 2)}\n`);
+  mem.set(file, { at: Date.now(), snap: snap as Snapshot });
   return snap;
 }
 

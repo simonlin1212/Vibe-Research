@@ -58,7 +58,7 @@ export function FinanceHomeAgent() {
     <section
       id="home-agent"
       data-home-agent
-      className="glass flex min-h-[470px] flex-col overflow-hidden rounded-2xl border border-primary/25 shadow-[0_22px_70px_-54px_hsl(var(--primary)/0.85)] sm:h-[510px]"
+      className="glass flex min-h-[420px] flex-col overflow-hidden sm:h-[460px]"
     >
       <div className="flex items-center justify-between gap-3 border-b border-border/60 px-4 py-3 sm:px-5">
         <div className="flex min-w-0 items-center gap-2.5">

@@ -23,12 +23,19 @@ import { z } from "zod";
 import { atomicWrite, readJsonIfExists, writeJson } from "./fsutil.ts";
 import { readHookContext } from "./hooks.ts";
 import { currentPlugin } from "./plugin.ts";
-import { validateStageOutput } from "./schemas.ts";
+import { calcRecordSchema, validateStageOutput } from "./schemas.ts";
 
 export const MAX_READ_CHARS = 1_000_000;
 const CALC_FILE_RE = /^\d{2}_[a-z0-9][a-z0-9_]{0,80}\.json$/;
 const CALC_FUNCTION_RE = /^[a-z][a-z0-9_]{0,80}$/;
 const CALC_OWNERS_REL = path.join(".vibe", "calc-owners.json");
+
+/** 与落盘契约共用引用格式，让模型在工具调用时修正，而不是等整个阶段结束。 */
+function referenceIdSchema(kind: "evidence" | "calculation") {
+  const variant = calcRecordSchema.properties.inputs_refs.items.oneOf.find(v => v.properties.ref_type.const === kind);
+  if (!variant) throw new Error(`计算契约缺少引用类型:${kind}`);
+  return z.string().regex(new RegExp(variant.properties.ref_id.pattern));
+}
 
 export interface RunToolsContext {
   runDir: string;
@@ -223,7 +230,8 @@ const TOOL_DEFS: RunToolDef[] = [
     description: "调用产品 calc 纯函数并把结果写入 calcs/。所有输入证据和上游 calculation id 必须完整列出。",
     inputShape: {
       function: z.string(), args: z.record(z.string(), z.unknown()),
-      evidence_ids: z.array(z.string()).optional(), calculation_ids: z.array(z.string()).optional(), output_file: z.string(),
+      evidence_ids: z.array(referenceIdSchema("evidence")).optional(),
+      calculation_ids: z.array(referenceIdSchema("calculation")).optional(), output_file: z.string(),
     },
     concurrency: "exclusive",
     run: (ctx: RunToolsContext, a: Record<string, unknown>) => runCalculation(ctx, a as unknown as Parameters<typeof runCalculation>[1]),

@@ -3,131 +3,141 @@
 @tailwind utilities;
 
 @layer base {
-  /* ============================================================
-     Vibe-Research · 科技玻璃暖橙主题
-     默认呈现 = 暗色暖橙（数据密集、长时间看，暗底最护眼；橙红＝A股红盘气质，避开近绿的青色）。
-     .light 提供亮色备选。HSL 变量沿用 4 级 surface 架构。
-     ============================================================ */
+  /* Approved MVP V2: charcoal, warm paper and restrained vermilion.
+     Retain semantic token names so existing data/state logic is unchanged. */
   :root {
-    /* ---- 暗色暖橙（默认） ---- */
-    --background: 222 47% 6%;          /* 深蓝黑纵深底 */
-    --foreground: 210 30% 92%;
-    --card: 222 40% 9%;                /* 卡底（玻璃质感另用 .glass 叠加） */
-    --card-foreground: 210 30% 92%;
-
-    --primary: 15 89% 56%;             /* 暖橙红主色（朱橙 ≈#F35D2B）—— A股红盘气质，替代原青光 */
-    --primary-foreground: 222 47% 6%;
-    --accent: 25 95% 58%;              /* 橙 · 强调/告警点缀 */
-    --accent-foreground: 222 47% 6%;
-
-    --muted: 220 28% 15%;              /* surface-2 */
-    --muted-foreground: 215 18% 62%;
-    --destructive: 0 72% 58%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 210 30% 22%;             /* surface-3 边框 */
-    --radius: 1rem;
-
-    /* 语义色（涨跌配色由页面按 A股红涨绿跌自行选用 success/danger） */
-    --success: 145 62% 47%;
-    --danger: 0 74% 60%;
-    --warning: 38 92% 55%;
-    --info: 15 89% 56%;
-
-    /* 玻璃发丝边框 / 内高光（rgba，供 .glass 使用） */
-    --glass-fill-top: rgba(255, 255, 255, 0.055);
-    --glass-fill-bot: rgba(255, 255, 255, 0.012);
-    --glass-stroke: rgba(255, 232, 214, 0.10);
-    --glass-hi: rgba(255, 255, 255, 0.06);
-
-    /* Chart tokens */
-    --chart-grid: 220 20% 14%;
-    --chart-text: 215 15% 55%;
-    --chart-axis: 220 20% 24%;
+    color-scheme: dark;
+    --background: 225 10% 8%;
+    --foreground: 45 10% 93%;
+    --card: 220 10% 11%;
+    --card-foreground: 45 10% 93%;
+    --primary: 5 77% 70%;
+    --primary-foreground: 225 10% 8%;
+    --accent: 34 40% 69%;
+    --accent-foreground: 225 10% 8%;
+    --muted: 223 10% 14%;
+    --muted-foreground: 240 2% 66%;
+    --destructive: 4 75% 70%;
+    --destructive-foreground: 225 10% 8%;
+    --border: 223 6% 22%;
+    --radius: 0.5rem;
+    /* Legacy success also means declines. Slate distinguishes it from red
+       rises without using green as a brand/status color. Keep numeric signs. */
+    --success: 217 18% 71%;
+    --danger: 5 77% 70%;
+    --warning: 34 40% 69%;
+    --info: 5 77% 70%;
+    --glass-hi: rgba(255,255,255,.035);
+    --chart-grid: 223 8% 17%;
+    --chart-text: 240 2% 66%;
+    --chart-axis: 223 6% 28%;
   }
-
   .light {
-    --background: 210 30% 97%;
-    --foreground: 222 40% 12%;
-    --card: 0 0% 100%;
-    --card-foreground: 222 40% 12%;
-
-    --primary: 15 82% 50%;             /* 暖橙红主色（亮色版，略深保对比） */
+    color-scheme: light;
+    --background: 45 14% 95%;
+    --foreground: 240 5% 15%;
+    --card: 40 100% 99%;
+    --card-foreground: 240 5% 15%;
+    --primary: 5 53% 42%;
     --primary-foreground: 0 0% 100%;
-    --accent: 25 90% 50%;
+    --accent: 34 23% 40%;
     --accent-foreground: 0 0% 100%;
-
-    --muted: 210 20% 92%;
-    --muted-foreground: 215 16% 42%;
-    --destructive: 0 74% 55%;
+    --muted: 40 16% 92%;
+    --muted-foreground: 240 3% 43%;
+    --destructive: 4 65% 42%;
     --destructive-foreground: 0 0% 100%;
-    --border: 214 20% 84%;
-
-    --success: 145 62% 40%;
-    --danger: 0 74% 52%;
-    --warning: 38 92% 45%;
-    --info: 15 82% 50%;
-
-    --glass-fill-top: rgba(255, 255, 255, 0.7);
-    --glass-fill-bot: rgba(255, 255, 255, 0.35);
-    --glass-stroke: rgba(15, 40, 70, 0.10);
-    --glass-hi: rgba(255, 255, 255, 0.8);
-
-    --chart-grid: 214 20% 88%;
-    --chart-text: 215 16% 42%;
-    --chart-axis: 214 20% 78%;
+    --border: 40 7% 82%;
+    --success: 217 17% 41%;
+    --danger: 5 53% 42%;
+    --warning: 34 35% 37%;
+    --info: 5 53% 42%;
+    --glass-hi: rgba(255,255,255,.8);
+    --chart-grid: 40 7% 89%;
+    --chart-text: 240 3% 43%;
+    --chart-axis: 40 7% 77%;
   }
-
   * { @apply border-border; }
-
-  body {
-    @apply bg-background text-foreground;
-    /* 纵深暖冷双光晕（顶橙 + 右下冷蓝），别留死黑 */
-    background-color: hsl(var(--background));
-    background-image:
-      radial-gradient(1100px 620px at 12% -12%, hsl(15 89% 56% / 0.11), transparent 60%),
-      radial-gradient(980px 720px at 108% 112%, hsl(220 60% 45% / 0.08), transparent 55%);
-    background-attachment: fixed;
+  body { @apply bg-background text-foreground font-sans; margin: 0; }
+  button, a, input, textarea, select { -webkit-tap-highlight-color: transparent; }
+  :where(button, a, input, textarea, select):focus-visible {
+    outline: 2px solid hsl(var(--primary)); outline-offset: 3px;
   }
-
-  .light body {
-    background-image:
-      radial-gradient(1100px 620px at 12% -12%, hsl(15 85% 55% / 0.08), transparent 60%),
-      radial-gradient(980px 720px at 108% 112%, hsl(220 65% 60% / 0.06), transparent 55%);
-  }
-
-  /* prose 表格 */
+  ::selection { background: hsl(var(--primary) / .22); }
+  .prose { overflow-wrap: anywhere; }
   .prose table { border-collapse: collapse; width: 100%; }
-  .prose th, .prose td { border: 1px solid hsl(var(--border)); }
-  .prose tbody tr:nth-child(even) { background: hsl(var(--muted) / 0.3); }
-
-  ::-webkit-scrollbar { width: 7px; height: 7px; }
+  .prose th, .prose td { border: 1px solid hsl(var(--border)); padding: .7em .9em; }
+  .prose tbody tr:nth-child(even) { background: hsl(var(--muted) / .35); }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 4px; }
   ::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground)); }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { scroll-behavior: auto !important; animation: none !important; transition: none !important; }
+  }
 }
 
 @layer components {
-  /* 玻璃卡：半透明填充 + 发丝边框 + 柔投影 + 顶部内高光（EP26 高级感配方） */
+  /* Retain .glass for existing consumers; it now means an opaque V2 panel. */
   .glass {
-    background-image: linear-gradient(162deg, var(--glass-fill-top), var(--glass-fill-bot));
-    border: 1px solid var(--glass-stroke);
-    border-radius: var(--radius);
-    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35), inset 0 1px 0 var(--glass-hi);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
+    background-color: hsl(var(--card));
+    background-image: linear-gradient(155deg, var(--glass-hi), transparent 48%);
+    border: 1px solid hsl(var(--border)); border-radius: var(--radius);
+    box-shadow: 0 8px 28px rgb(0 0 0 / .07), inset 0 1px 0 var(--glass-hi);
   }
-  .light .glass { box-shadow: 0 10px 26px rgba(30, 60, 100, 0.10), inset 0 1px 0 var(--glass-hi); }
-
-  /* 顶角暖橙光晕（配 .glass 用，装饰热点） */
-  .glass-glow { position: relative; overflow: hidden; }
-  .glass-glow::before {
-    content: "";
-    position: absolute; top: -40%; right: -20%;
-    width: 240px; height: 240px;
-    background: radial-gradient(circle, hsl(var(--primary) / 0.16), transparent 70%);
-    pointer-events: none;
+  .light .glass { box-shadow: 0 4px 18px rgb(40 36 32 / .025), inset 0 1px 0 var(--glass-hi); }
+  .glass-glow { border-top-color: hsl(var(--primary) / .5); }
+  .text-glow { text-shadow: none; }
+  .workspace-sidebar {
+    /* Side rail stays charcoal in both themes, with local contrast tokens. */
+    --foreground: 45 10% 93%; --muted-foreground: 240 2% 68%;
+    --primary: 5 77% 70%; --muted: 223 10% 15%; --border: 223 6% 23%;
+    background: linear-gradient(150deg, #1c1d21, #121316 45%, #111215);
+    color: hsl(var(--foreground)); border-right: 1px solid hsl(var(--border));
   }
-
-  /* 暖橙光文字 */
-  .text-glow { text-shadow: 0 0 18px hsl(var(--primary) / 0.45); }
+  .workspace-brand { font-family: Georgia, "Songti SC", serif; }
+  .workspace-nav-link { position: relative; border-radius: 4px; min-height: 40px; }
+  .workspace-nav-link[aria-current="page"] { background: hsl(var(--muted)); color: hsl(var(--foreground)); }
+  .workspace-nav-link[aria-current="page"]::before {
+    content: ""; position: absolute; left: 0; top: 10px; bottom: 10px;
+    width: 2px; background: hsl(var(--primary)); border-radius: 2px;
+  }
+  .workspace-topbar { background: hsl(var(--background)); border-bottom: 1px solid hsl(var(--border)); }
+  .workspace-content { max-width: 1600px; margin: 0 auto; padding: 30px 34px; }
+  .workspace-content > div > .glass { margin-bottom: 20px; }
+  .workspace-kicker { font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: hsl(var(--muted-foreground)); }
+  .workspace-title { font-size: clamp(25px, 2.5vw, 34px); font-weight: 600; letter-spacing: -.045em; line-height: 1.4; }
+  .workspace-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 18px 20px; border-bottom: 1px solid hsl(var(--border)); }
+  .workspace-panel-head h2 { font-size: 14px; font-weight: 600; }
+  .workspace-home-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr); gap: 22px; }
+  .workspace-index { padding: 22px 20px; border-right: 1px solid hsl(var(--border)); min-width: 0; }
+  .workspace-index:last-child { border-right: 0; }
+  .workspace-index-value { font-size: clamp(18px, 2vw, 28px); letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
+  .workspace-editorial { font-family: "Songti SC", "STSong", Georgia, serif; }
+  .research-stages { display: grid; grid-template-columns: repeat(6,minmax(0,1fr)); gap: 8px; }
+  .research-stage { border-top: 2px solid hsl(var(--border)); padding: 14px 10px; background: hsl(var(--muted) / .3); }
+  .research-stage[data-status="complete"], .research-stage[data-status="running"] { border-top-color: hsl(var(--primary)); }
+  .research-stage[data-status="failed"] { border-top-color: hsl(var(--destructive)); }
+  .research-stage[data-status="running"] { background: hsl(var(--primary) / .06); }
+  .research-paper { padding: clamp(18px, 3vw, 42px); min-width: 0; background: hsl(var(--card)); }
+  .research-paper .prose { color: hsl(var(--foreground)); line-height: 1.95; }
+  .research-paper .prose :is(h1,h2,h3,strong) { color: hsl(var(--foreground)); }
+  .research-paper .prose :is(h1,h2) { font-family: "Songti SC", "STSong", Georgia, serif; font-weight: 600; letter-spacing: -.02em; }
+  .research-paper .prose blockquote { border-left-color: hsl(var(--primary)); color: hsl(var(--foreground)); background: hsl(var(--muted) / .3); padding: 1px 18px; font-style: normal; }
+  .research-paper .prose a { color: hsl(var(--primary)); }
+  .research-paper .prose table { display: block; overflow-x: auto; }
+  .research-paper .prose pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+  .research-evidence { border-top: 2px solid hsl(var(--primary)); background: hsl(var(--muted) / .3); padding: 20px; min-width: 0; }
+  .research-evidence .prose { font-size: 12px; }
+  .workspace-skip { position: fixed; top: -100px; left: 16px; z-index: 90; padding: 10px 16px; background: hsl(var(--card)); }
+  .workspace-skip:focus { top: 10px; }
+  @media (max-width: 1100px) { .workspace-home-grid { grid-template-columns: 1fr; } }
+  @media (max-width: 767px) {
+    .workspace-content { padding: 24px 16px; }
+    .workspace-index { padding: 16px 10px; }
+    .workspace-index-value { font-size: 18px; }
+    .workspace-panel-head { padding: 16px; }
+    .research-stages { grid-template-columns: repeat(3,minmax(0,1fr)); }
+  }
 }
+/* Citation focus marks the exact row, including keyboard-driven navigation. */
+.research-evidence tr:focus { outline: 2px solid hsl(var(--primary)); outline-offset: -2px; background: hsl(var(--muted)); }

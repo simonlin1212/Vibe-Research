@@ -57,7 +57,7 @@ export interface DebateNumberAudit {
 export interface DebateStageState {
   id: string;
   label: string;
-  status: "pending" | "running" | "done" | "failed";
+  status: "pending" | "running" | "done" | "failed" | "cancelled";
   /** 数字自查结果(阶段跑完才有) */
   audit?: DebateNumberAudit;
   text: string;
@@ -80,7 +80,7 @@ export interface DebateState {
    *    界面只看 done 的话,会把"供应商鉴权挂了、五段全空"显示成"辩论正常完成"
    *    (审计 pages-r2)。
    */
-  outcome: "running" | "completed" | "completed_with_errors" | "failed";
+  outcome: "running" | "completed" | "completed_with_errors" | "failed" | "cancelled";
 }
 
 /**
@@ -105,7 +105,9 @@ const MAX_SESSIONS = 20;
 /** 资料包上限:太长会把角色指令本身挤掉 */
 const MAX_DOSSIER = 12000;
 /** 一条辩论消息的上限:资料包 + 前置产出 + 角色指令。比用户手打的上限大得多是**有意的** */
-const MAX_MESSAGE = 40000;
+export const MAX_DEBATE_MESSAGE = 40000;
+/** Long dossier synthesis may exceed ordinary chat's three-minute deadline. */
+export const DEBATE_TURN_TIMEOUT_MS = 600_000;
 
 /** 有阶段在跑 = 这一场正忙,清扫与淘汰都要绕开它 */
 const busy = (s: Session) => s.stages.some((x) => x.status === "running");
@@ -212,6 +214,8 @@ export function startDebate(req: {
   /** 服务层生成的 AI 来源摘要；Core 不解释它，只保证后续推进不换源。 */
   sourceFingerprint?: string;
 }): DebateState {
+  // 拒绝同名覆盖，包括尚未推进/已经完成的场次；重开必须使用新的 id。
+  if (sessions.has(req.id)) throw new DebateError("debate_exists", "这个辩论编号已存在，请使用新的编号重开");
   sweep();
   const def = debateDef();
   const { text, count, truncated, values } = renderDossier(req.envelopes);
@@ -243,13 +247,14 @@ export function startDebate(req: {
 
 /** 跑下一个待跑的阶段。一次一个 —— 界面据此逐段显示,不用干等整场。 */
 /** 一轮对话的最小签名。**测试注入用** —— 单测不该真去起引擎(又慢又在并发下 EPIPE) */
-export type ChatFn = (message: string, session: string) => Promise<string>;
+export type ChatFn = (message: string, session: string, signal?: AbortSignal) => Promise<string>;
 
 export async function advanceDebate(
-  opts: { repoRoot: string; dataRoot?: string; python?: string },
+  opts: { repoRoot: string; dataRoot?: string; python?: string; signal?: AbortSignal },
   req: { id: string; sourceFingerprint?: string },
   chat?: ChatFn,
 ): Promise<DebateState> {
+  if (opts.signal?.aborted) throw new DebateError("cancelled", "辩论请求已取消");
   const s = sessions.get(String(req.id));
   if (!s) throw new DebateError("unknown_debate", "没有这场辩论(可能已超时清掉),重开一场");
   if (s.sourceFingerprint !== req.sourceFingerprint) {
@@ -303,9 +308,12 @@ export async function advanceDebate(
     // 🔴 每个阶段一个**全新会话**:同一会话里连着扮演多空 = 一个人写辩论稿,不是对抗。
     // 资料包 + 前置产出 + 角色指令都在这一条里 —— 用户手打的 4000 上限对它不适用
     const session = `debate-${s.id}-${sd.id}`;
-    stage.text = chat
-      ? await chat(message, session)
-      : (await chatSend({ ...opts, maxMessage: MAX_MESSAGE }, { session, message })).reply;
+    const text = chat
+      ? await chat(message, session, opts.signal)
+      : (await chatSend({ ...opts, persistent: false, maxMessage: MAX_DEBATE_MESSAGE, timeoutMs: DEBATE_TURN_TIMEOUT_MS }, { session, message })).reply;
+    // 底层即使在取消后正常返回，也不能将晚到正文记成完成。
+    if (opts.signal?.aborted) throw new DebateError("cancelled", "辩论请求已取消");
+    stage.text = text;
     stage.status = "done";
     // 🔴 **产出落定就地自查**。引用来的数字能跟资料包比对,算出来的数字比不了 ——
     //    后者是唯一一类「谁都没在看」的数字,而它就摆在核对过的数字旁边,看着一样可信。
@@ -314,18 +322,28 @@ export async function advanceDebate(
     //    但**必须让人看见**,而不是让它混在正确的数字里。
     stage.audit = auditStageText(stage.text, s.dossierValues);
   } catch (e) {
-    // 单个阶段失败不废掉整场:只记原因,**状态交给 finally 统一定** —— 见下。
-    stage.error = e instanceof ChatError ? `${e.code}:${e.message}` : e instanceof Error ? e.message : String(e);
+    // 停止未确认是失败，不得被外层的取消信号覆盖成“已停止”。余下流程不再调用模型。
+    if (e instanceof ChatError && e.code === "agent_shutdown_failed") {
+      for (const item of s.stages) if (item.status === "running" || item.status === "pending") {
+        item.status = "failed";
+        item.error = `${e.code}:${e.message}`;
+      }
+    } else if (opts.signal?.aborted) {
+      stage.status = "cancelled";
+      stage.error = "用户已中止辩论";
+      for (const item of s.stages) if (item.status === "running" || item.status === "pending") {
+        item.status = "cancelled";
+        item.error = "用户已中止辩论";
+      }
+    } else {
+      stage.error = e instanceof ChatError ? `${e.code}:${e.message}` : e instanceof Error ? e.message : String(e);
+    }
   } finally {
-    // 🔴 **状态只有这一处决定**:没变成 done 的一律算 failed。
-    //    写成"catch 里标 failed + finally 再兜一次"的话,finally 那句永远轮不到执行
-    //    (catch 已经改过状态了)—— 它看着是道保险,其实是**装饰**:
-    //    变异掉它测试照样绿。而真正会漏的是"异常没走 catch"那条路,恰恰只有这里能兜住。
-    //    ⇒ 同一个不变量只留一个判官。
-    if (stage.status !== "done") stage.status = "failed";
+    // 普通失败在此收口；已取消阶段保留自己的终态。
+    if (stage.status !== "done" && stage.status !== "cancelled") stage.status = "failed";
     // 跑完再刷一次:一个阶段要一分钟,只在开头刷会让长阶段看着像"空闲了一分钟"
     s.lastUsed = Date.now();
-    s.done = s.stages.every((x) => x.status === "done" || x.status === "failed");
+    s.done = s.stages.every((x) => x.status !== "pending" && x.status !== "running");
   }
   return project(s);
 }
@@ -340,11 +358,15 @@ function project(s: Session): DebateState {
   const failed = s.stages.filter((x) => x.status === "failed").length;
   const outcome: DebateState["outcome"] = !s.done
     ? "running"
-    : failed === s.stages.length
+    : s.stages.some(x => x.error?.startsWith("agent_shutdown_failed:"))
       ? "failed"
-      : failed
-        ? "completed_with_errors"
-        : "completed";
+    : s.stages.some(x => x.status === "cancelled")
+      ? "cancelled"
+      : failed === s.stages.length
+        ? "failed"
+        : failed
+          ? "completed_with_errors"
+          : "completed";
   return {
     id: s.id,
     symbol: s.symbol,

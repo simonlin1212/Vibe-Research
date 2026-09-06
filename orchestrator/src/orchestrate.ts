@@ -28,9 +28,16 @@ import { rawHashes, writeConflicts, writeManifest, writeMergedArtifacts, type Ma
 import type { AgentRunner } from "./agent_runner.ts";
 import { turnReplySchema, validateManifest } from "./schemas.ts";
 import { reportContext, reportsForSymbol, type ReportContext } from "./report_library.ts";
+import { isResearchCancellation } from "./research_control.ts";
+import { classifyResearchFailure, researchFailure, type ResearchFailureCode } from "./research_failure.ts";
+import { LocalAgentError } from "./local_agent_runtime.ts";
 import { allCriticalFetchFailed, checkAgentTrace, deriveQuoteDecision, deriveStageStatus, loadRun, summarizeErrorsForAgent, validateFetchIntegrity, validateFinalArtifacts, validateProtectedArtifacts, validateReport, validateStage, type AgentTrace, type CalcVerifier, type ProtectedExpectation, type ValidationResult, isUpstreamContractError } from "./validator.ts";
 
 export interface Deps {
+  signal?: AbortSignal;
+  checkpoint?: () => void;
+  /** Atomic boundary: once acquired, cancellation is no longer accepted. */
+  beginFinalization?: () => void;
   runner: AgentRunner;
   fetchRunner: FetchExecutor;
   verify: CalcVerifier;
@@ -173,13 +180,21 @@ export async function runResearch(cfg: RunConfig, deps: Deps, onlyStages?: Stage
   } catch (e) {
     // 异常路径也要闭合领域事件(API / UI 不会永远停在 running),并把 manifest 标为 failed
     const msg = e instanceof Error ? e.message : String(e);
+    const cancelled = isResearchCancellation(e, deps.signal);
     try {
       const mp = path.join(cfg.runDir, "manifest.json");
       const m = fs.existsSync(mp) ? (JSON.parse(fs.readFileSync(mp, "utf8")) as Manifest) : null;
-      if (m) { m.status = "failed"; m.exit_code = 3; m.finished_at = nowIso(); m.final_errors = [...(m.final_errors ?? []), `exception:${msg}`]; writeManifest(cfg, m); }
+      if (m) { m.status = "failed"; m.exit_code = 3; m.finished_at = nowIso();
+        if (cancelled) m.cancelled = true;
+        // 这里只识别订阅执行器的类型化异常；取数/校验异常不是模型错误。
+        else if (e instanceof LocalAgentError) {
+          m.failure_code = classifyResearchFailure(`${e.code}: ${msg}`);
+          if (m.failure_code) m.final_errors = [...(m.final_errors ?? []), `execution:${m.failure_code}: ${researchFailure(m.failure_code)!.message}`];
+        }
+        m.final_errors = [...(m.final_errors ?? []), `exception:${msg}`]; writeManifest(cfg, m); }
     } catch { /* 尽力而为 */ }
-    deps.runner.log("orchestrator", "research.failed", { error: msg });
-    deps.runner.log("orchestrator", "research.finished", { run_id: cfg.runId, status: "failed", exit_code: 3, error: msg });
+    deps.runner.log("orchestrator", cancelled ? "research.cancelled" : "research.failed", { error: msg });
+    deps.runner.log("orchestrator", "research.finished", { run_id: cfg.runId, status: cancelled ? "cancelled" : "failed", exit_code: 3, error: msg });
     throw e;
   }
 }
@@ -330,7 +345,10 @@ async function runResearchInner(cfg: RunConfig, deps: Deps, onlyStages?: Stage[]
   writeJson(path.join(cfg.runDir, PLAN_REL), planFileOf(cfg.endpointScope, cfg.registryVersion, cfg.stagePlan, cfg.criticalScripts, cfg.endpoints));
   runner.log("orchestrator", "plan.written", { scope: cfg.endpointScope, registry_version: cfg.registryVersion, stages: Object.fromEntries(Object.entries(cfg.stagePlan).map(([k, v]) => [k, { required: v.required.length, optional: v.optional.length }])) });
 
+  let stoppedFailure: ResearchFailureCode | null = null;
   for (const stage of stagesToRun) {
+    deps.checkpoint?.();
+    deps.signal?.throwIfAborted();
     const scripts = cfg.stagePlan[stage];
     let toFetch = [...scripts.required, ...scripts.optional];
     // 取数前的垂类门控:Core 无条件调用一次,由插件决定实际跑哪些端点(原本这段直接 import 金融模块)。
@@ -340,7 +358,9 @@ async function runResearchInner(cfg: RunConfig, deps: Deps, onlyStages?: Stage[]
       record: (key, value) => { (manifest as unknown as Record<string, unknown>)[key] = value; },
       log: (type, payload) => runner.log(stage, type, payload),
     }) ?? toFetch;
-    deps.fetchRunner(cfg, stage, toFetch, (t, p) => runner.log(stage, t, p), ledger);
+    await deps.fetchRunner(cfg, stage, toFetch, (t, p) => runner.log(stage, t, p), ledger, deps.signal);
+    deps.checkpoint?.();
+    deps.signal?.throwIfAborted();
     // 取数后的垂类后处理:Core **无条件调用一次**,由插件自己决定管不管这个阶段、做什么。
     // 🔴 这里原本写死 `if (stage === "risk" || stage === "report")` 并直接 import 金融模块(全审 r4-P1)。
     currentPlugin().afterFetch?.({
@@ -357,20 +377,31 @@ async function runResearchInner(cfg: RunConfig, deps: Deps, onlyStages?: Stage[]
     let res: ValidationResult = { ok: false, errors: ["未运行"], warnings: [] };
     let lastErrors: string[] | undefined;
     let turnFailed = false;
+    let executionFailure: ResearchFailureCode | null = null;
     const maxAttempts = cfg.noAgent ? 1 : cfg.maxRetries + 1;
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      deps.checkpoint?.();
+      deps.signal?.throwIfAborted();
       rec.attempts = attempt + 1;
       turnFailed = false;
+      executionFailure = null;
       if (!cfg.noAgent) {
         const prompt = currentPlugin().buildStagePrompt(stage, cfg, { attempt, validatorErrors: lastErrors, stageStatusSoFar: statusSoFar, ledger });
         console.error(`[orchestrator] stage=${stage} attempt=${attempt + 1}/${maxAttempts}`);
         hookCtx(stage, attempt + 1);
         agentTurns += 1;
-        const turn = await runner.runTurn(stage, attempt + 1, prompt, turnReplySchema);
+        const turn = await runner.runTurn(stage, attempt + 1, prompt, turnReplySchema, deps.signal);
+        deps.checkpoint?.();
+        deps.signal?.throwIfAborted();
         const stopFail = hookSummary(stage, attempt + 1);
         trace.commands.push(...turn.commands.map((c) => c.command));
         trace.fileChanges.push(...turn.fileChanges);
-        if (turn.failed) { turnFailed = true; rec.errors.push(`turn 失败:${turn.failed}`); }
+        if (turn.failed) {
+          turnFailed = true; rec.errors.push(`turn 失败:${turn.failed}`);
+          const code = classifyResearchFailure(turn.failed);
+          executionFailure = code;
+          if (code && (!researchFailure(code)!.retryable || attempt + 1 === maxAttempts)) stoppedFailure = code;
+        }
         if (stopFail) { turnFailed = true; rec.errors.push(stopFail); }
       }
       const run = loadRun(cfg.runDir, ledger, planOf);
@@ -384,6 +415,7 @@ async function runResearchInner(cfg: RunConfig, deps: Deps, onlyStages?: Stage[]
         if (!rv.ok) res = { ok: false, errors: rv.errors, warnings: res.warnings };
       }
       runner.log(stage, "validator", { attempt: attempt + 1, ok: res.ok, errors: res.errors, warnings: res.warnings });
+      if (stoppedFailure) break;
       if (res.ok && !turnFailed) break; // turn 本身失败(含 Stop 钩子终止)即使产物恰好过校验也要补跑
       lastErrors = res.errors;
       console.error(`[orchestrator] stage=${stage} validator 未通过(${res.errors.length} 条)\n${summarizeErrorsForAgent(res, 6)}`);
@@ -392,6 +424,8 @@ async function runResearchInner(cfg: RunConfig, deps: Deps, onlyStages?: Stage[]
       //    说成 agent 没做好。⇒ 立刻停下并如实归因。
       const upstream = res.errors.filter(isUpstreamContractError);
       if (upstream.length) {
+        // 上游契约已不可由模型修复；若同时有执行错误，整次停止而非继续后续阶段。
+        stoppedFailure = executionFailure;
         console.error(`[orchestrator] stage=${stage} 其中 ${upstream.length} 条是**取数层**契约违约(agent 无法修复),不再补跑:\n  ${upstream.slice(0, 3).join("\n  ")}`);
         runner.log(stage, "validator.upstream_contract", { attempt: attempt + 1, errors: upstream });
         break;
@@ -405,8 +439,10 @@ async function runResearchInner(cfg: RunConfig, deps: Deps, onlyStages?: Stage[]
     manifest.stages = stageRecords;
     manifest.fetch_ledger = ledgerSummary(ledger);
     manifest.thread_id = runner.threadId;
+    if (stoppedFailure) manifest.failure_code = stoppedFailure;
     persistManifest();
     runner.log(stage, "stage.completed", { stage, status: rec.status, attempts: rec.attempts, validator_ok: rec.validator_ok, errors: rec.errors.length });
+    if (stoppedFailure) { runner.log(stage, "research.execution_stopped", { code: stoppedFailure }); break; }
   }
 
   // 合规 gate:报告阶段 validator 已含 gate;这里是独立的最终一道闸 + 重写循环(重写后全量复验 report 阶段)
@@ -418,19 +454,33 @@ async function runResearchInner(cfg: RunConfig, deps: Deps, onlyStages?: Stage[]
   }
   let gate = complianceGate(fs.existsSync(reportPath) ? fs.readFileSync(reportPath, "utf8") : "");
   const reportRec = stageRecords.find((s) => s.stage === REPORT_STAGE);
-  let rewriteTurnFailed = false;
+  // 未发生成功重写时，不能抹掉成稿 turn/Stop 的既有失败。
+  let rewriteTurnFailed = !!stoppedFailure || reportRec?.status === "failed";
+  let rewriteFailure: ResearchFailureCode | null = null;
   if (!gate.ok) runner.log(REPORT_STAGE, "gate.failed", { hits: gate.hits, will_rewrite: cfg.gateRetries > 0 && !cfg.noAgent && !!reportRec });
-  for (let i = 0; i < cfg.gateRetries && !gate.ok && !cfg.noAgent && reportRec; i++) {
+  for (let i = 0; i < cfg.gateRetries && !stoppedFailure && !gate.ok && !cfg.noAgent && reportRec; i++) {
     runner.log(REPORT_STAGE, "gate.rewrite", { attempt: i + 1, hits: gate.hits });
     hookCtx(REPORT_STAGE, 100 + i);
     agentTurns += 1;
-    const turn = await runner.runTurn(REPORT_STAGE, 100 + i, currentPlugin().buildRewritePrompt(cfg, gate.hits), turnReplySchema);
+    deps.checkpoint?.();
+    deps.signal?.throwIfAborted();
+    const turn = await runner.runTurn(REPORT_STAGE, 100 + i, currentPlugin().buildRewritePrompt(cfg, gate.hits), turnReplySchema, deps.signal);
+    deps.checkpoint?.();
+    deps.signal?.throwIfAborted();
     const stopFail = hookSummary(REPORT_STAGE, 100 + i);
     trace.commands.push(...turn.commands.map((c) => c.command));
     trace.fileChanges.push(...turn.fileChanges);
     rewriteTurnFailed = !!turn.failed || !!stopFail;
+    rewriteFailure = turn.failed ? classifyResearchFailure(turn.failed) : null;
     if (stopFail) reportRec.errors.push(stopFail);
-    if (turn.failed) reportRec.errors.push(`gate 重写 turn 失败:${turn.failed}`);
+    if (turn.failed) {
+      reportRec.errors.push(`gate 重写 turn 失败:${turn.failed}`);
+      const code = classifyResearchFailure(turn.failed);
+      if (code && (!researchFailure(code)!.retryable || i + 1 === cfg.gateRetries)) {
+        stoppedFailure = code; manifest.failure_code = code;
+        runner.log(REPORT_STAGE, "research.execution_stopped", { code });
+      }
+    }
     const run = loadRun(cfg.runDir, ledger, planOf);
     let rv = validateStage(REPORT_STAGE, run);
     const behaviour = checkAgentTrace(trace, cfg);
@@ -445,9 +495,13 @@ async function runResearchInner(cfg: RunConfig, deps: Deps, onlyStages?: Stage[]
     gate = complianceGate(fs.existsSync(reportPath) ? fs.readFileSync(reportPath, "utf8") : "");
     if (!gate.ok) runner.log(REPORT_STAGE, "gate.failed", { hits: gate.hits, after_rewrite: i + 1 });
   }
+  // 重写过程中正文可能已修好，但 turn 随后超时；即使 gate 提前结束也保留执行失败原因。
+  if (rewriteTurnFailed && rewriteFailure) { stoppedFailure = rewriteFailure; manifest.failure_code = rewriteFailure; }
   if (reportRec) reportRec.status = deriveStageStatus(REPORT_STAGE, reportRec.validator_ok && gate.ok, rewriteTurnFailed, loadRun(cfg.runDir, ledger, planOf));
 
   // 最终状态(确定性)
+  deps.checkpoint?.();
+  deps.signal?.throwIfAborted();
   const finalRun = loadRun(cfg.runDir, ledger, planOf);
   const qd = deriveQuoteDecision(finalRun);
   const reportInScope = stagesToRun.includes(REPORT_STAGE);
@@ -459,6 +513,7 @@ async function runResearchInner(cfg: RunConfig, deps: Deps, onlyStages?: Stage[]
 
   // 报告首行状态归一(不动正文),并核对一致性;最终校验失败 → 进入状态推导(产物不齐 / 校验不过不得宣称完成)
   const finalErrors: string[] = [];
+  if (stoppedFailure) finalErrors.push(`execution:${stoppedFailure}: ${researchFailure(stoppedFailure)!.message}`);
   if (finalRun.report) {
     const n = normalizeReportStatus(finalRun.report, status);
     if (n.changed) { atomicWrite(reportPath, n.text); runner.log(REPORT_STAGE, "report.status_normalized", { to: status }); }
@@ -499,6 +554,11 @@ async function runResearchInner(cfg: RunConfig, deps: Deps, onlyStages?: Stage[]
     const n2 = normalizeReportStatus(fs.readFileSync(reportPath, "utf8"), status);
     if (n2.changed) atomicWrite(reportPath, n2.text);
   }
+  // No model/fetch work remains. Atomically close cancellation before any
+  // archival side effect; a competing cancellation wins or is explicitly late.
+  deps.beginFinalization?.();
+  deps.checkpoint?.();
+  deps.signal?.throwIfAborted();
   // M2:查看器 / 附录(运行目录内,非受保护文件)+ 知识层归档(.local/knowledge);都在最终状态定下之后,失败只记事件不改状态
   manifest.viewer = null;
   manifest.knowledge_archived = null;

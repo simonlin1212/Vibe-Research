@@ -9,10 +9,10 @@
 
 <p align="center">
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-yellow"></a>
-  <img alt="Version" src="https://img.shields.io/badge/version-v1.0.3-F35D2B">
+  <img alt="Version" src="https://img.shields.io/badge/version-v1.0.4-F35D2B">
   <img alt="UI" src="https://img.shields.io/badge/UI-React%20%2B%20Vite-646cff">
-  <img alt="Orchestrator tests" src="https://img.shields.io/badge/orchestrator-708%20checks-passing">
-  <img alt="Desktop tests" src="https://img.shields.io/badge/desktop-34%20tests-passing">
+  <img alt="Orchestrator tests" src="https://img.shields.io/badge/orchestrator-797%20passed-passing">
+  <img alt="Desktop tests" src="https://img.shields.io/badge/desktop-54%20tests-passing">
   <img alt="Codex Harness" src="https://img.shields.io/badge/runtime-Codex%20Harness-black">
 </p>
 
@@ -42,6 +42,8 @@ Contact: [simonlin0423@gmail.com](mailto:simonlin0423@gmail.com)
 
 ## What it is
 
+This development branch includes the v1.0.4 baseline, subsequent Issue/PR fixes, and unreleased dual-engine changes. The badge does not mean this branch has been released.
+
 Vibe Research is a **local financial research workbench**. On first launch, the user makes one decision: connect an
 existing Codex / Claude Code / WorkBuddy (CodeBuddy) subscription, or provide a model API. After the connection succeeds, Vibe Research
 Agent is enabled by default. No understanding of harnesses, scripts, or routing modes is required.
@@ -52,7 +54,8 @@ process. A Codex subscription runs through the
 the local Claude Code Agent; a WorkBuddy / CodeBuddy account runs through Tencent's official CodeBuddy Code CLI. Vibe Research applies the same financial data, research procedures, deterministic
 calculations, evidence checks, and compliance boundaries above those runtimes.
 
-The Claude Code and WorkBuddy / CodeBuddy Agents support chat, bounded document tasks, and the full six-stage A-share research workflow.
+The Claude Code and WorkBuddy / CodeBuddy Agents support chat, bounded document tasks, debate, Agent-guided backtesting,
+image/table transcription, and the full six-stage A-share research workflow.
 During research, their built-in tools are disabled and only five controlled Vibe Research MCP tools are exposed. The runtime is never silently switched to Codex.
 
 API users may turn the Agent off in Settings and use direct model mode. This switch is available only to provider
@@ -74,7 +77,7 @@ their own API key.
 
 | Module | Current capability |
 |---|---|
-| Home agent | Start a conversation immediately and ask about a company, industry, market review, or research task |
+| Home agent | Chat, plus controlled entries for daily review, company research, and existing reports; confirm execution on the relevant page |
 | Daily review | Summarises market activity, themes, limit-up drivers, and daily signals |
 | Intelligence radar | Translated Investment News headlines, public news, A-share filings, and event probabilities |
 | Industry signals | GPU rental rates, monthly industry data, commodities, hiring, and data calendars |
@@ -83,7 +86,7 @@ their own API key.
 | My reports | Stores PDF, DOCX, TXT, MD, and CSV locally, with extraction, search, citations, download, and deletion |
 | Backtesting | Uses an agent conversation as the only input; asks for missing details, then calls the real backtest tool |
 | Bull/bear review | Bull, bear, rebuttal, and neutral-referee stages share the same factual dossier |
-| Watchlist and portfolio | Recognises A-share, US, and Hong Kong symbols; stores records locally and refreshes quotes |
+| Watchlist and portfolio | Recognises A-share, US, and Hong Kong symbols; local records and quote refresh; image/table drafts require review, form completion, and explicit saving |
 | Research records | Stores research, backtest, and debate reports with search, timestamps, expansion, and deletion |
 | Connect AI | First connects a subscription or model API, then shows the global Agent switch, enabled by default |
 
@@ -101,6 +104,10 @@ A six-stage research run produces:
 If required data is missing, the run becomes `incomplete` or `failed`. It does not fill gaps with stale values or
 model guesses.
 
+An active research run can be stopped, and its status remains available after a page refresh. Completed stages are retained.
+A stop request is not a confirmation: the page distinguishes a request, confirmed shutdown, and failure to confirm shutdown.
+Portfolio imports create drafts without writing to the ledger automatically. Selected image or table contents are sent to the current AI provider; remove unrelated sensitive information before submitting.
+
 ## Quick start
 
 ### Requirements
@@ -111,7 +118,7 @@ model guesses.
 | Node.js | ≥ 22.18; Node 24 LTS recommended |
 | Python | ≥ 3.11; Python 3.12 recommended and currently verified |
 | Agent engine | Codex Harness is installed with the product dependencies; version 0.149.0 verified; no global Codex install required |
-| Model access | ChatGPT or Claude.ai subscription login, or a provider that supports the Responses API |
+| Model access | Codex / Claude Code / WorkBuddy subscription login, or a model API compatible with the selected execution mode |
 
 > Node must be a build with TypeScript support enabled (the official nodejs.org installers and anything installed via nvm / fnm / Volta are): `node -p process.features.typescript` should print `strip` or `transform`. Some Linux distribution packages ship Node compiled without it; starting the app or running tests then fails with `ERR_UNKNOWN_FILE_EXTENSION ".ts"` / `ERR_NO_TYPESCRIPT` — switch to an official build. `npm test` runs this check first and prints the same guidance.
 
@@ -255,11 +262,19 @@ The second answer defaults to on, so most users never need to change it.
   use on a shared machine. It is sent to the local backend per request and is not written to the repository, backend
   configuration, run ledger, or logs.
 
-Built-in provider templates: OpenAI, DeepSeek, Qwen, GLM, Kimi, and MiMo. The Agent engine supports the Responses
+Built-in provider templates: OpenAI, DeepSeek, Qwen, GLM, Kimi, MiMo, and an unverified `selfhosted` placeholder. The Agent engine supports the Responses
 API; the direct channel uses the separately declared and verified protocol in each provider profile. A template's
 presence does not mean it passed the compatibility matrix. Unverified profiles do not unlock the direct switch.
 
 See [docs/model-access.md](docs/model-access.md) and [providers/README.md](providers/README.md).
+
+LAN access is optional and off by default. From the repository root, run `VRA_LAN=1 bash scripts/start`;
+in Windows PowerShell, set `$env:VRA_LAN="1"` and run `scripts/start.ps1`. Only the UI is exposed; the backend stays on loopback.
+With the backend already running, `VRA_LAN=1 npm run dev --prefix desktop` also starts the UI.
+**Trusted LANs only**: this shares a single-user workspace, not separate accounts. Anyone who can reach the port can operate it.
+HTTP is unencrypted; API keys and research data may travel in plaintext. Never expose this port publicly or on an untrusted network.
+The proxy checks the browser origin before normalizing it. Remote model endpoints still require HTTPS; loopback HTTP is supported.
+See [model access and LAN boundaries](docs/model-access.md#3-自托管模型与局域网访问) (Chinese).
 
 ## Data and markets
 
@@ -315,12 +330,15 @@ npm run build --prefix desktop
 .venv/bin/python -m pytest .agents/skills/data-access/scripts/tests -q
 ```
 
-Current verified baseline:
+Local verification of the current uncommitted development version:
 
-- orchestrator: **708 checks** (707 passed locally plus one Windows-only ACL check skipped off Windows), Core industry-term count **0**, TypeScript typecheck passed.
-- desktop: **34/34**, TypeScript typecheck and Vite production build passed.
-- Python (calculation library, backtest, and data scripts): **577/577**.
-- The current unreleased changes passed an independent Codex re-review with `No actionable P1/P2 findings`.
+- orchestrator: **798 tests** run serially (797 passed, one Windows-only ACL test skipped); typecheck passed.
+- desktop: **54/54**; typecheck and production build passed, with a bundle-size warning retained.
+- Python (calculation library, backtest, and data scripts): **699/699** at the latest M14 checkpoint; no Python changes or rerun in this upstream sync.
+- Latest upstream adaptations, two independent reviews, and test scope: [upstream Issue sync validation](docs/上游Issue同步验收_2026-09-05.md) (Chinese).
+- Incremental fixes passed separate independent Codex reviews. This is not a claim of an exhaustive audit or release readiness.
+- Successes, failures, and validation scope for cross-runtime workflows, clean setup, the 117-endpoint diagnostic, and full-scope research are recorded in
+  [M12 business validation](docs/跨来源业务验收_M12_2026-09-05.md) and [M14 local validation](docs/完整版本机验收_M14_2026-09-05.md) (Chinese).
 
 Project rule: test each completed component, run an independent Codex review, verify every finding, fix valid issues,
 and re-review. A component is not described as complete and is not committed or pushed before that loop closes.
@@ -332,7 +350,8 @@ and re-review. A component is not described as complete and is not committed or 
 - MiMo API has passed an end-to-end run from an empty configuration to a real business report. Other third-party
   providers still require the user's own keys and are not marked verified without real compatibility-matrix runs.
 - Native Windows 11 support includes PowerShell setup/start scripts, Windows path and process handling, and the
-  controlled research toolchain. The CI matrix covers `windows-latest`, `macos-latest`, and `ubuntu-latest`.
+  controlled research toolchain. CI configuration includes `windows-latest`, `macos-latest`, and `ubuntu-latest`;
+  these uncommitted changes have not run in remote CI or been validated on a Windows machine.
   Windows 10 is best-effort, following upstream Codex support.
 
 ## Changelog

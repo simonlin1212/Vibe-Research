@@ -30,6 +30,7 @@ import { LocalAgentStageAgent } from "./engines/local_agent_stage_agent.ts";
 import { directCapabilityOf, structuredOutputMode } from "./providers.ts";
 import type { AgentRunner } from "./agent_runner.ts";
 import { runFetchScripts } from "./fetchrun.ts";
+import { watchResearchCancellation, updateResearchControl, isResearchCancellation } from "./research_control.ts";
 import { ProgressReporter } from "./progress.ts";
 import { runResearch } from "./orchestrate.ts";
 import { loadProductConfig } from "./productConfig.ts";
@@ -281,11 +282,23 @@ async function main(): Promise<number> {
     try { reporter = new ProgressReporter({ runDir: cfg.runDir }); }
     catch (e) { console.error(`[orchestrator] 进度显示未启用(不影响研究):${e instanceof Error ? e.message : String(e)}`); }
   }
+  const token = process.env.VRA_RESEARCH_CONTROL_TOKEN;
+  const control = token ? watchResearchCancellation(cfg.dataRoot, cfg.runId, token) : null;
+  try {
+  control?.signal.throwIfAborted();
   const { runner, lifecycle, runtime } = await makeEngine(cfg, path.join(cfg.runDir, "events.jsonl"), reporter ? (ev) => reporter.onEvent(ev) : undefined);
-  const res = await runResearch(cfg, { runner, lifecycle, fetchRunner: runFetchScripts, verify: verifyCalcs, sdkVersion: () => runtime }, stages);
+  control?.check();
+  control?.signal.throwIfAborted();
+  const res = await runResearch(cfg, { runner, lifecycle, signal: control?.signal, checkpoint: control?.checkpoint,
+    beginFinalization: control?.finalize, fetchRunner: runFetchScripts, verify: verifyCalcs, sdkVersion: () => runtime }, stages);
+  if (token) updateResearchControl(cfg.dataRoot, cfg.runId, token, res.status);
   console.log(JSON.stringify({ run_id: cfg.runId, run_dir: cfg.runDir, status: res.status, exit_code: res.exitCode,
     stages: res.manifest.stages.map((s) => ({ stage: s.stage, status: s.status, attempts: s.attempts, validator_ok: s.validator_ok })) }, null, 2));
   return res.exitCode;
+  } catch (e) {
+    if (token) updateResearchControl(cfg.dataRoot, cfg.runId, token, isResearchCancellation(e, control?.signal) ? "cancelled" : "failed");
+    throw e;
+  } finally { control?.close(); }
 }
 
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);

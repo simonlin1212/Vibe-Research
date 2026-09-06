@@ -14,6 +14,14 @@ import { sha256File, writeJson } from "../src/fsutil.ts";
 import "../src/finance/register.ts";   // 测试文件也是入口:插件要先注册
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
+test("用户端点目录与当前注册表逐项一致，不只验证标题数字", () => {
+  const reg = loadRegistry(REPO)!;
+  const catalog = fs.readFileSync(path.join(REPO, "datasources/CATALOG.md"), "utf8");
+  assert.ok(catalog.includes(`共 ${reg.endpoints.length} 个`));
+  const ids = [...catalog.matchAll(/^\| `([^`]+)` \|/gm)].map(match => match[1]);
+  assert.deepEqual(ids.sort(), reg.endpoints.map(endpoint => endpoint.id).sort());
+});
+
 test("注册表可读;core 计划与 Phase 0 stageScripts() 完全一致;关键端点一致", () => {
   const reg = loadRegistry(REPO);
   assert.ok(reg && reg.endpoints.length > 80, "注册表应已接入 80+ 端点");

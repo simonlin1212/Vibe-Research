@@ -42,6 +42,28 @@ def _catalog() -> dict:
     """
     from backtest.gate import MARKETS, STYLES
     return {
+        # The model assembles this JSON; option labels alone do not tell it that
+        # a ticker must be passed as codes: ["AAPL"], not symbol/ticker/code.
+        "input_schema": {
+            "type": "object", "additionalProperties": False,
+            "required": ["codes", "start", "end"],
+            "properties": {
+                "codes": {"type": "array", "minItems": 1, "items": {"type": "string"},
+                          "description": "标的代码数组，例如 AAPL、600519.SH、00700.HK。字段必须叫 codes，不是 symbol。"},
+                "start": {"type": "string", "format": "date", "description": "起始日期 YYYY-MM-DD"},
+                "end": {"type": "string", "format": "date", "description": "结束日期 YYYY-MM-DD"},
+                "style": {"type": "string", "enum": list(STYLES), "default": "swing"},
+                "strategy": {"type": "string", "enum": list(BUILTIN), "default": "buy_and_hold"},
+                "params": {"type": "object", "description": "所选策略的参数，按 strategies 对应 params 填写；无参数用 {}。"},
+                "initial_cash": {"type": "number", "exclusiveMinimum": 0, "default": 1000000},
+                "allow_short": {"type": "boolean", "default": False},
+            },
+        },
+        "example_request": {
+            "codes": ["AAPL"], "start": "2021-01-01", "end": "2025-12-31", "style": "swing",
+            "strategy": "ma_cross", "params": {"fast": 20, "slow": 60}, "initial_cash": 100000,
+            "allow_short": False,
+        },
         "styles": [
             {"key": s.key, "label": s.label, "holding": s.holding,
              "interval": s.interval, "min_bars": s.min_bars, "why_min": s.why_min}
@@ -55,15 +77,15 @@ def _catalog() -> dict:
         ],
         "strategies": [
             {"key": "buy_and_hold", "label": "买入持有", "params": {},
-             "note": "任何策略的及格线：跑不赢它就没有意义"},
+             "note": "恒定目标权重的历史对照；不代表未来表现。"},
             {"key": "ma_cross", "label": "均线交叉",
              "params": {"fast": {"default": 20, "label": "快线"}, "slow": {"default": 60, "label": "慢线"}},
-             "note": "快线在慢线上方满仓、下方空仓"},
+             "note": "快线在慢线上方时目标权重为 1，下方为 0；多标的时均分权重。"},
             {"key": "rsi_reversion", "label": "RSI 均值回归",
              "params": {"window": {"default": 14, "label": "窗口"},
                         "buy_below": {"default": 30, "label": "买入线"},
                         "sell_above": {"default": 70, "label": "卖出线"}},
-             "note": "超卖买入、超买清仓"},
+             "note": "RSI 低于下阈值时目标权重为 1，高于上阈值时为 0；中间保留前值，多标的均分。"},
         ],
     }
 

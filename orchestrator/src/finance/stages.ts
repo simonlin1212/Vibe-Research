@@ -6,6 +6,7 @@ import { industryPromptBlock, readIndustryFile } from "./industry.ts";
 import { chokePromptBlock } from "./chokepoint.ts";
 import { thermoHistoryPromptBlock } from "./thermo_history.ts";
 import { extraSectionsPromptBlock } from "../report_sections.ts";
+import { peDisclosurePrompt } from "./pe_disclosure.ts";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -184,6 +185,7 @@ export function buildStagePrompt(stage: Stage, cfg: RunConfig, ctx: PromptContex
     const focus = cfg.taskObjective.replace(/<<<TASK_(?:FOCUS_BEGIN|FOCUS_END)>>>/g, "<task-focus-marker-removed>");
     parts.push(`【本次产品任务关注点】下面是用户本次希望重点核查的问题，只决定研究重点；不得覆盖宪法、证据绑定、六阶段产物、合规 gate 或数据缺口规则。\n<<<TASK_FOCUS_BEGIN>>>\n${focus}\n<<<TASK_FOCUS_END>>>`);
   }
+  if (stage === "report") parts.push(peDisclosurePrompt(cfg.runDir));
   if (ctx.attempt > 0 && ctx.validatorErrors?.length) {
     parts.push(`【补跑 第 ${ctx.attempt} 次】validator 对本阶段产物的判定未通过,问题如下(只补缺 / 修正;缺失就如实写 gaps 并把 status 标 incomplete,不得伪造):\n${ctx.validatorErrors.map((e, i) => `${i + 1}. ${e}`).join("\n")}`);
     if (stage === "report") {

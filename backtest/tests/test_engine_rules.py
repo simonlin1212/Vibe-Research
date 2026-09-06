@@ -60,6 +60,13 @@ def run_engine(engine, frames, signals, cash=1_000_000.0):
 
 # ── T+1 ──
 
+def test_default_benchmark_holds_initial_equal_shares_without_daily_rebalancing():
+    a, b = frame([100., 200., 100.]), frame([100., 100., 100.])
+    _, metrics = run_engine(GlobalEquityEngine, {"A": a, "B": b},
+                            {"A": pd.Series(0., index=a.index), "B": pd.Series(0., index=b.index)})
+    assert metrics["benchmark_return"] == pytest.approx(0), "daily rebalancing incorrectly yields 12.5%"
+
+
 def test_a_share_cannot_sell_on_the_day_it_bought():
     """信号第 2 天叫买、第 3 天叫卖。买入在第 3 天开盘成交（信号后移一根），
     卖出信号落在第 4 天开盘 —— 这里验的是引擎**不会**把两者压到同一天。"""
@@ -90,6 +97,38 @@ def test_a_share_rounds_down_to_100_lots(raw, expect):
 
 def test_us_allows_fractional_shares():
     assert GlobalEquityEngine({}).round_size(1234.56, 10.0) > 1234
+
+
+def test_us_fractional_sizing_never_exceeds_target():
+    assert GlobalEquityEngine({}).round_size(123.456, 10.0) == 123.45
+
+
+@pytest.mark.parametrize("market,code,price", [
+    ("us", "AAPL", 123.456), ("hk", "00700.HK", 100.0),
+    ("cn", "600519.SH", 100.0),
+])
+def test_full_target_reserves_real_fees_without_negative_cash(market, code, price):
+    df = frame([price] * 8)
+    sig = pd.Series([1.0] * 8, index=df.index)
+    engine = (lambda cfg: ChinaAEngine({**cfg, "slippage": 0})) if market == "cn" else (
+        lambda cfg: GlobalEquityEngine({**cfg, "slippage_hk": 0, "slippage_us": 0}, market))
+    eng, _ = run_engine(engine, {code: df}, {code: sig}, cash=100_000)
+    assert eng.fill_records
+    assert all(s.capital >= -1e-8 for s in eng.equity_snapshots)
+    assert eng.capital <= 100_000, "恒定行情不能因忽略费用而产生收益"
+
+
+def test_fee_budget_is_shared_by_basket_not_symbol_order():
+    df = frame([100.0] * 6)
+    sig = pd.Series([0.5] * 6, index=df.index)
+    filled = []
+    for codes in [("A", "B"), ("B", "A")]:
+        eng, _ = run_engine(lambda cfg: GlobalEquityEngine({**cfg, "slippage_hk": 0}, "hk"),
+                            {c: df for c in codes}, {c: sig for c in codes}, cash=100_000)
+        first = {f.symbol: f.signed_quantity for f in eng.fill_records if f.bar_idx == 1}
+        assert first["A"] == first["B"]
+        filled.append(first)
+    assert filled[0] == filled[1]
 
 
 # ── 费用：印花税只在卖出 ──

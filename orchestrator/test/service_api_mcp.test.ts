@@ -8,12 +8,17 @@ import { fileURLToPath } from "node:url";
 
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { Thread } from "@openai/codex-sdk";
 
 import { createApiServer, resolveToken, isLoopbackHost } from "../src/api.ts";
 import { ServiceError, assertArgs, chatSend, debateStart, fetchEndpoint, guidedToolTurn, ingestFiles, ledgerList, ledgerSnapshot, ledgerUpsert, getEvidence, getReport, knowledgeRecall, listEndpoints, listRuns, listTools, runToolRequest, redact, researchEnv, researchStatus, safePath, startResearch, translateHeadlines, type ServiceContext, displayUrl } from "../src/service.ts";
 import { writeJson } from "../src/fsutil.ts";
+import { reserveResearch, readResearchControl, updateResearchControl } from "../src/research_control.ts";
 import { detectPython } from "../src/init.ts";
 import { addReport } from "../src/report_library.ts";
+import { getDebate, startDebate as startDebateCore } from "../src/debate.ts";
+import { runtimeSourceFingerprint } from "../src/runtime_provider.ts";
+import { debateAdvance } from "../src/service.ts";
 
 
 import "../src/finance/register.ts";   // 测试文件也是入口:插件要先注册
@@ -21,6 +26,70 @@ const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 /** 解释器:VRA_PYTHON → 仓库 .venv → 上一级 .venv(开发布局)→ PATH 上的 python3;不写死任何机器的绝对路径 */
 const PY = process.env.VRA_PYTHON ?? detectPython(REPO) ?? detectPython(path.join(REPO, "..")) ?? "python3";
 const TOKEN = "t".repeat(32);
+
+test("研究失败状态提供固定恢复提示，未知码不透传磁盘自由文本", () => {
+  const ctx = fakeCtx();
+  const dir = path.join(ctx.dataRoot, "runs", "failure-status");
+  fs.mkdirSync(dir, { recursive: true });
+  try {
+    for (const code of ["quota", "authentication", "timeout", "rate_limit"]) {
+      writeJson(path.join(dir, "manifest.json"), { status: "failed", exit_code: 3, finished_at: "2026-09-06T01:00:00Z", stages: [], failure_code: code, final_errors: ["SECRET_CANARY"] });
+      const state = researchStatus(ctx, "failure-status");
+      assert.equal(state.failure?.code, code);
+      assert.doesNotMatch(JSON.stringify(state.failure), /SECRET_CANARY/);
+    }
+    writeJson(path.join(dir, "manifest.json"), { status: "failed", finished_at: "2026-09-06T01:00:00Z", failure_code: "SECRET_CANARY" });
+    assert.equal(researchStatus(ctx, "failure-status").failure, null);
+    writeJson(path.join(dir, "manifest.json"), { status: "complete", finished_at: "2026-09-06T01:00:00Z", failure_code: "quota" });
+    assert.equal(researchStatus(ctx, "failure-status").failure, null);
+  } finally { fs.rmSync(ctx.dataRoot, { recursive: true, force: true }); }
+});
+
+test("界面选定来源的辩论沿用内部材料上限，而不是普通消息 4000 字", async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "vra-debate-long-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const ctx: ServiceContext = { repoRoot: REPO, dataRoot: root, python: PY, node: process.execPath, providerEnvKey: null };
+  const llm = { provider: "cli-codex" };
+  const id = "debate-long-source";
+  startDebateCore({ id, symbol: "300308", sourceFingerprint: runtimeSourceFingerprint(REPO, root, llm), gaps: [],
+    envelopes: [{ evidence: Array.from({ length: 80 }, (_, i) => ({ id: `ev-long-${i}`, field: "sample", value: "仅为验收的合成材料".repeat(10) })) }] });
+  let seen = "";
+  t.mock.method(Thread.prototype, "runStreamed", async (input: string) => {
+    seen = input;
+    return { events: (async function* () { yield { type: "item.completed", item: { type: "agent_message", text: "资料不足，无法下结论。" } }; })() };
+  });
+  const out = await debateAdvance(ctx, { id, llm });
+  assert.equal(out.stages[0]!.status, "done", out.stages[0]!.error);
+  assert.ok(seen.length > 4000);
+});
+
+test("研究取消 HTTP 接口：拒绝无鉴权和多余字段，重复请求保持等待确认", async () => {
+  const ctx = fakeCtx();
+  const owner = reserveResearch(ctx.dataRoot, "cancel-http");
+  const server = createApiServer(ctx, { token: TOKEN });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const base = `http://127.0.0.1:${(server.address() as import("node:net").AddressInfo).port}`;
+  const post = (body: unknown, token = TOKEN) => fetch(`${base}/research/cancel`, {
+    method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify(body),
+  });
+  try {
+    assert.equal((await post({ run_id: "cancel-http" }, "wrong")).status, 401);
+    assert.equal((await post({ run_id: "cancel-http", pid: process.pid })).status, 400);
+    for (let i = 0; i < 2; i++) {
+      const response = await post({ run_id: "cancel-http" });
+      assert.equal(response.status, 200);
+      const payload = await response.json();
+      assert.equal(payload.status, "cancelling"); assert.equal(payload.finished_at, null);
+      assert.ok(!JSON.stringify(payload).includes(owner.token));
+    }
+    assert.equal(readResearchControl(ctx.dataRoot, "cancel-http")?.state, "starting");
+    updateResearchControl(ctx.dataRoot, "cancel-http", owner.token, "cancelled");
+    assert.equal((await (await post({ run_id: "cancel-http" })).json()).status, "cancelled");
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    fs.rmSync(ctx.repoRoot, { recursive: true, force: true });
+  }
+});
 
 function fakeNodeExecutable(dir: string, name: string, source: string): string {
   if (process.platform !== "win32") {
@@ -65,7 +134,107 @@ json.dump(env, open(os.path.join(out,'fetch',ep+'.json'),'w')); print(json.dumps
   return { repoRoot: repo, dataRoot, python: PY, node: process.execPath, providerEnvKey: "OPENAI_API_KEY" };
 }
 
+test("普通工具仅继承取数基础环境，不继承模型 key 或 VRA 私密配置", async () => {
+  const ctx = fakeCtx();
+  const { runTool } = await import("../src/service.ts");
+  const keys = ["TEST_RUNTIME_KEY", "VRA_API_TOKEN", "VRA_TASK_OBJECTIVE", "CODEX_HOME"];
+  const previous = keys.map(k => process.env[k]);
+  const moduleDir = path.join(ctx.repoRoot, "calc");
+  fs.mkdirSync(moduleDir);
+  fs.writeFileSync(path.join(moduleDir, "__init__.py"), "");
+  fs.writeFileSync(path.join(moduleDir, "tool.py"), `import os,json\nprint(json.dumps({k: k in os.environ for k in ${JSON.stringify([...keys, "PATH"])} }))\n`);
+  try {
+    for (const k of keys) process.env[k] = "synthetic-test-value";
+    ctx.providerEnvKey = keys[0]!;
+    const result = await runTool(ctx, "calc", {}) as Record<string, boolean>;
+    assert.equal(result.PATH, true);
+    for (const k of keys) assert.equal(result[k], false, `${k} 不属于普通工具环境`);
+  } finally {
+    keys.forEach((k, i) => { if (previous[i] === undefined) delete process.env[k]; else process.env[k] = previous[i]; });
+    fs.rmSync(ctx.repoRoot, { recursive: true, force: true });
+  }
+});
+
 const noAbs = (v: unknown, ctx: ServiceContext) => { const s = JSON.stringify(v); assert.ok(!s.includes(ctx.dataRoot) && !s.includes(ctx.repoRoot) && !s.includes(os.tmpdir()), `返回值含绝对路径:${s.slice(0, 200)}`); };
+
+async function waitUntil(check: () => boolean): Promise<void> {
+  const deadline = Date.now() + 15_000;
+  while (!check() && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 20));
+  assert.ok(check(), "等待测试链路就绪超时");
+}
+
+test("断开 /debate 取数请求会结束子进程，不继续取下一源或创建空辩论", async () => {
+  const ctx = fakeCtx();
+  const pidFile = path.join(ctx.repoRoot, "fetch.pid");
+  const script = path.join(ctx.repoRoot, ".agents", "skills", "data-access", "scripts", "fetch_endpoint.py");
+  fs.writeFileSync(script, `import os,time\nopen(${JSON.stringify(pidFile)},'w').write(str(os.getpid()))\ntime.sleep(30)\n`);
+  const server = createApiServer(ctx, { token: TOKEN });
+  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+  const request = http.request({ host: "127.0.0.1", port: (server.address() as { port: number }).port,
+    path: "/debate", method: "POST", headers: { Authorization: `Bearer ${TOKEN}`, "Content-Type": "application/json" } });
+  request.on("error", () => { /* 断开请求是本测试的输入 */ });
+  let pid: number | undefined;
+  try {
+    request.end(JSON.stringify({ symbol: "300308", session: "http-dossier-cancel" }));
+    await waitUntil(() => fs.existsSync(pidFile));
+    pid = Number(fs.readFileSync(pidFile, "utf8"));
+    request.destroy();
+    await waitUntil(() => { try { process.kill(pid!, 0); return false; } catch { return true; } });
+    assert.equal(getDebate("http-dossier-cancel"), null);
+    assert.equal(fs.readdirSync(path.join(ctx.dataRoot, "mcp")).length, 1, "取消后不能再开下一源取数");
+  } finally {
+    request.destroy();
+    if (pid) { try { process.kill(pid, "SIGKILL"); } catch { /* 已退出 */ } }
+    server.closeAllConnections();
+    await new Promise<void>(resolve => server.close(() => resolve()));
+    fs.rmSync(ctx.repoRoot, { recursive: true, force: true });
+  }
+});
+
+test("断开 /debate/advance：默认与界面 API 来源都将取消传到模型 SDK，整场可观察为中止", async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "vra-debate-http-"));
+  const ctx: ServiceContext = { repoRoot: REPO, dataRoot: root, python: PY, node: process.execPath, providerEnvKey: null };
+  const modelSignals: AbortSignal[] = [];
+  const patch = t.mock.method(Thread.prototype, "runStreamed", async (...[_input, options]: Parameters<Thread["runStreamed"]>) => {
+    const signal = options?.signal;
+    assert.ok(signal);
+    modelSignals.push(signal);
+    return { events: (async function* () {
+      if (!signal.aborted) await new Promise<void>(resolve => signal.addEventListener("abort", () => resolve(), { once: true }));
+      throw new Error("模拟 SDK 接收到取消");
+    })() };
+  });
+  const server = createApiServer(ctx, { token: TOKEN });
+  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const sources = [undefined, { provider: "custom", apiKey: "synthetic-fixture", baseURL: "https://api.example.com/v1", model: "fixture" }];
+    for (const [index, llm] of sources.entries()) {
+      modelSignals.length = 0;
+      const id = `http-model-cancel-${index}`;
+      startDebateCore({ id, symbol: "300308", gaps: [],
+        envelopes: [{ script: "fixture", evidence: [{ id: "ev-fixture", field: "price", value: 1 }] }],
+        sourceFingerprint: runtimeSourceFingerprint(REPO, root, llm) });
+      const request = http.request({ host: "127.0.0.1", port: (server.address() as { port: number }).port,
+        path: `/debate/${id}/advance`, method: "POST", headers: { Authorization: `Bearer ${TOKEN}`, "Content-Type": "application/json" } });
+      request.on("error", () => { /* 断开请求是本测试的输入 */ });
+      try {
+        request.end(JSON.stringify({ ...(llm ? { llm } : {}) }));
+        await waitUntil(() => modelSignals.length === 1);
+        assert.equal(getDebate(id)?.stages[0]?.status, "running");
+        request.destroy();
+        await waitUntil(() => getDebate(id)?.done === true);
+        assert.equal(modelSignals[0]?.aborted, true);
+        assert.equal(getDebate(id)?.outcome, "cancelled");
+        assert.ok(getDebate(id)?.stages.every(stage => stage.status === "cancelled" && !stage.text));
+      } finally { request.destroy(); }
+    }
+  } finally {
+    server.closeAllConnections();
+    await new Promise<void>(resolve => server.close(() => resolve()));
+    patch.mock.restore();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
 
 test("service:端点列表 / 取数(子进程 + 落 .local/mcp,只带 auth_env,stderr 脱敏,相对路径)/ 运行状态 / 报告 / 证据 / 列表 / 输入校验", async () => {
   const ctx = fakeCtx();
@@ -115,6 +284,59 @@ test("service:端点列表 / 取数(子进程 + 落 .local/mcp,只带 auth_env,s
   assert.throws(() => knowledgeRecall(ctx, "300308", "XX"), (e: unknown) => e instanceof ServiceError && e.code === "bad_market");
   const red = redact("x ?token=abc&key=def https://h/p?sig=1 api_key: sk-1");
   assert.ok(!red.includes("abc") && !red.includes("def") && !red.includes("sig=1") && !red.includes("sk-1") && red.includes("***"), red);
+});
+
+test("报告与查看器只开放已结束且状态一致的运行，未校验草稿不经 HTTP 泄露且保留原件", async (t) => {
+  const ctx = fakeCtx();
+  const dir = path.join(ctx.dataRoot, "runs", "r1");
+  const manifestPath = path.join(dir, "manifest.json");
+  const original = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  const draft = "UNVALIDATED_REPORT_CANARY";
+  fs.writeFileSync(path.join(dir, "report.md"), draft);
+  fs.writeFileSync(path.join(dir, "report_appendix.md"), draft);
+  fs.writeFileSync(path.join(dir, "viewer.html"), `<pre>${draft}</pre>`);
+  const server = createApiServer(ctx, { token: TOKEN });
+  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+  t.after(async () => { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); fs.rmSync(ctx.repoRoot, { recursive: true, force: true }); });
+  const base = `http://127.0.0.1:${(server.address() as import("node:net").AddressInfo).port}`;
+  const headers = { Authorization: `Bearer ${TOKEN}`, Cookie: `vra_token=${TOKEN}` };
+  for (const patch of [
+    { status: "running", finished_at: null },
+    { status: "failed", exit_code: 3 },
+    { cancelled: true },
+    { status: "incomplete", exit_code: 0 },
+    { status: "complete", exit_code: 2 },
+    { gate: { ok: false } },
+    { final_errors: ["report:bad numeric binding"] },
+    { final_errors: "corrupt" },
+    { finished_at: 123 },
+    null,
+  ]) {
+    if (patch === null) fs.unlinkSync(manifestPath);
+    else writeJson(manifestPath, { ...original, ...patch });
+    const report = getReport(ctx, "r1");
+    assert.equal(report.availability, "unvalidated", JSON.stringify(patch));
+    assert.equal(report.report, null); assert.equal(report.appendix, null);
+    for (const route of ["/runs/r1/report", "/ui/runs/r1", "/runs/r1/viewer"]) {
+      const response = await fetch(`${base}${route}`, { headers });
+      assert.equal(response.status, route.endsWith("viewer") ? 404 : 200);
+      assert.ok(!(await response.text()).includes(draft), route);
+    }
+    assert.equal(fs.readFileSync(path.join(dir, "report.md"), "utf8"), draft);
+    assert.equal(fs.readFileSync(path.join(dir, "report_appendix.md"), "utf8"), draft);
+    assert.equal(fs.readFileSync(path.join(dir, "viewer.html"), "utf8"), `<pre>${draft}</pre>`);
+  }
+  for (const [status, exit_code] of [["complete", 0], ["incomplete", 2]] as const) {
+    writeJson(manifestPath, { ...original, status, exit_code, final_errors: [], gate: { ok: true } });
+    assert.equal(getReport(ctx, "r1").availability, "ready");
+    assert.equal(getReport(ctx, "r1").report, draft);
+    assert.equal(getReport(ctx, "r1").run_status, status);
+    assert.equal((await fetch(`${base}/runs/r1/viewer`, { headers })).status, 200);
+  }
+  fs.unlinkSync(path.join(dir, "report.md"));
+  assert.equal(getReport(ctx, "r1").availability, "missing");
+  assert.equal(getReport(ctx, "r1").appendix, null);
+  assert.equal(getReport(ctx, "missing-run").availability, "missing");
 });
 
 test("service:符号链接穿越被拒(运行目录 / 产物文件 / session 目录)", async () => {
@@ -354,6 +576,11 @@ test("MCP:stdio 起真实 server(SDK Client),tools/list 含 8 个工具,list_end
     const st = await client.callTool({ name: "research_status", arguments: { run_id: "r1" } });
     const stText = (st.content as { text: string }[])[0].text;
     assert.equal(JSON.parse(stText).status, "complete"); assert.ok(!stText.includes(ctx.dataRoot));
+    writeJson(path.join(ctx.dataRoot, "runs", "r1", "manifest.json"), { status: "running", stages: [] });
+    const draft = await client.callTool({ name: "get_report", arguments: { run_id: "r1" } });
+    const payload = JSON.parse((draft.content as { text: string }[])[0].text);
+    assert.equal(payload.availability, "unvalidated");
+    assert.equal(payload.report, null); assert.equal(payload.appendix, null);
   } finally { await client.close(); }
 });
 
@@ -433,6 +660,7 @@ test("运行产物的 HTML 以 CSP 送出 —— 产物里混进 <script> 时不
   const runDir = path.join(ctx.dataRoot, "runs", "r1");
   fs.mkdirSync(runDir, { recursive: true });
   fs.writeFileSync(path.join(runDir, "viewer.html"), "<html><body>hi</body></html>");
+  writeJson(path.join(runDir, "manifest.json"), { status: "complete", exit_code: 0, finished_at: "2026-09-05T12:00:00+08:00" });
   const server = createApiServer(ctx, { token: "t-test-token-0123456789" });
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
   const port = (server.address() as { port: number }).port;
@@ -676,33 +904,33 @@ test("全局 direct 模式在任何副作用前拒绝需要 Agent 的能力", as
   }
 });
 
-test("Claude / CodeBuddy 的能力边界在取数、读文件或起工具前生效", async () => {
+test("Claude / CodeBuddy 业务入口保留参数与模式门控，不再因来源一律拒绝", async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "vra-claude-boundary-"));
   const ctx: ServiceContext = { repoRoot: REPO, dataRoot: root, python: "python3", node: process.execPath, providerEnvKey: null };
-  const unsupported = (error: unknown) => error instanceof ServiceError && error.code === "agent_runtime_unsupported";
+  const code = (expected: string) => (error: unknown) => error instanceof ServiceError && error.code === expected;
   const tool = listTools()[0]?.name;
   assert.ok(tool, "金融插件必须至少声明一个工具");
   try {
     for (const llm of [{ provider: "cli-claude" }, { provider: "cli-codebuddy" }]) {
     await assert.rejects(
-      () => debateStart(ctx, { symbol: "300308", llm, executionMode: "agent" }),
-      unsupported,
-      "Claude 多空辩论必须在拉取资料包前拒绝",
+      () => debateStart(ctx, { symbol: "../invalid", llm, executionMode: "agent" }),
+      code("bad_symbol"),
+      "辩论必须在拉取资料包前校验标的",
     );
     await assert.rejects(
       () => ingestFiles(ctx, { kind: "position", files: [], llm, executionMode: "agent" }),
-      unsupported,
-      "Claude 资料转写必须在读取文件前拒绝",
+      code("no_files"),
+      "转写必须在读取文件前校验上传清单",
     );
     await assert.rejects(
-      () => runToolRequest(ctx, tool, { input: {}, llm, executionMode: "agent" }),
-      unsupported,
-      "Claude 原始工具必须在起脚本前拒绝",
+      () => runToolRequest(ctx, tool, { input: {}, llm, executionMode: "direct" }),
+      code("agent_required"),
+      "来源不改变全局 Agent 开关约束",
     );
     await assert.rejects(
       () => guidedToolTurn(ctx, tool, { message: "开始", llm, executionMode: "agent" }),
-      unsupported,
-      "Claude 对话式工具必须在模型或工具调用前拒绝",
+      code("bad_session"),
+      "对话式工具必须在模型或工具调用前校验会话",
     );
     }
     assert.deepEqual(fs.readdirSync(root), [], "被拒绝的 Claude 请求不能留下运行产物");

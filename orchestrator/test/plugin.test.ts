@@ -24,6 +24,28 @@ const rejects = (p: Plugin, re: RegExp) => {
   assert.throws(() => registerPlugin(p), re);
 };
 
+test("观测字段与校验排除章节由插件声明、校验、只读一次并冻结", () => {
+  rejects(plugin({ alertObservationFields: ["typo"] }), /alertObservationFields/);
+  rejects(plugin({ fidelityExcludedSections: ["typo"] }), /fidelityExcludedSections/);
+  for (const field of ["alertObservationFields", "fidelityExcludedSections"] as const) {
+    rejects(plugin({ [field]: null } as unknown as Partial<Plugin>), /不符契约/);
+    rejects(plugin({ [field]: [" "] }), /不符契约/);
+    rejects(plugin({ [field]: ["price", "price"] }), /不符契约/);
+    let calls = 0;
+    const values = [...FINANCE_PLUGIN[field]!];
+    const p = plugin();
+    Object.defineProperty(p, field, { enumerable: true, get: () => { calls++; return values; } });
+    fresh(p);
+    assert.equal(calls, 1);
+    values.push("unseen");
+    assert.ok(!currentPlugin()[field]!.includes("unseen"));
+    assert.ok(Object.isFrozen(currentPlugin()[field]));
+  }
+  fresh(plugin({ alertObservationFields: undefined, fidelityExcludedSections: undefined }));
+  assert.deepEqual(currentPlugin().alertObservationFields, []);
+  assert.deepEqual(currentPlugin().fidelityExcludedSections, []);
+});
+
 test("四张阶段表的键集必须与 stages 完全一致(这是编译期穷尽性的替代品)", () => {
   const { financials: _drop, ...missing } = FINANCE_PLUGIN.stageCalcs;
   rejects(plugin({ stageCalcs: missing }), /stageCalcs 的键必须与 stages 完全一致[\s\S]*缺少 financials/);

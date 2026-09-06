@@ -12,8 +12,9 @@ import { addNote, loadNotes, type Note } from "@/lib/notes";
 import { useAiPage } from "../../../core/ai/pageContext";
 
 interface Message { id: string; role: "user" | "agent"; content: string }
-const id = () => crypto.randomUUID();
-const session = () => `bt-${crypto.randomUUID().replaceAll("-", "").slice(0, 20)}`;
+// #34：明文局域网页面不提供 crypto.randomUUID；这里只生成 UI 标识，不作为鉴权凭据。
+const id = () => `m${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+const session = () => `bt-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`.slice(0, 24);
 
 export function Backtest() {
   const [messages, setMessages] = useState<Message[]>([]);

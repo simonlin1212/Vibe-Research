@@ -397,7 +397,8 @@ export function summarizeFidelityViolations(items: FidelityViolationDetail[], ma
  */
 export function checkNumberFidelity(report: string, evById: Map<string, EvidenceItem>,
                                     calcById: Map<string, CalcRecord>, symbol?: string,
-                                    quoted: string[] = [], lex: Lexicon = currentLexicon()): FidelityResult {
+                                    quoted: string[] = [], lex: Lexicon = currentLexicon(),
+                                    excludedSections: readonly string[] = []): FidelityResult {
   // `quoted` = 可**逐字引用**的历史文本(知识档案召回内容、knowledge_conflicts 的 claim)。
   // 报告写"旧前瞻 CAGR 59.09% 不再适用,本次为 58.85%"时,59.09% 是对档案的**引用**,
   // 本次运行的证据里当然没有它 —— 不把这类纳入可绑定池,就会把"如实标注新旧差异"这个**正确行为**判成违规。
@@ -409,7 +410,7 @@ export function checkNumberFidelity(report: string, evById: Map<string, Evidence
   const violationDetails: FidelityViolationDetail[] = [];
   const evidenceViolationDetails: FidelityViolationDetail[] = [];
   for (const [sec, lines] of Object.entries(secs)) {
-    if (sec === "_head" || sec === "数据缺口") continue;
+    if (sec === "_head" || excludedSections.includes(sec)) continue;
     for (const line of lines) {
       const ids = [...line.matchAll(/(?<![0-9a-zA-Z_-])(ev-[0-9a-f]{6,}|calc-[0-9a-f]{16})(?![0-9a-zA-Z_])/g)].map((m) => m[1]);
       const calcIds = ids.filter((id) => calcById.has(id));

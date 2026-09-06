@@ -36,8 +36,21 @@ function Stop-ProcessTree($Process) {
 }
 try {
   $api = Start-Process -FilePath node -ArgumentList @("orchestrator\src\api.ts", "--port", "8765", "--host", "127.0.0.1") -WorkingDirectory $root -PassThru -NoNewWindow
-  $ui = Start-Process -FilePath npm.cmd -ArgumentList @("run", "dev", "--prefix", "desktop", "--", "--host", "127.0.0.1") -WorkingDirectory $root -PassThru -NoNewWindow
-  Start-Sleep -Seconds 2
+  # UI 由 Vite 按 VRA_LAN 决定绑定；默认回环，API 的回环绑定不变。
+  $ui = Start-Process -FilePath npm.cmd -ArgumentList @("run", "dev", "--prefix", "desktop") -WorkingDirectory $root -PassThru -NoNewWindow
+  $ready = $false
+  $readyDeadline = [DateTime]::UtcNow.AddSeconds(60)
+  while ([DateTime]::UtcNow -lt $readyDeadline) {
+    $api.Refresh()
+    $ui.Refresh()
+    if ($api.HasExited) { throw "API 启动失败（退出码 $($api.ExitCode)），请检查 8765 端口和产品配置。" }
+    if ($ui.HasExited) { throw "界面启动失败（退出码 $($ui.ExitCode)）。" }
+    # 经界面代理验证后端鉴权；令牌仍只留在本地服务，不传到浏览器或命令参数。
+    & node (Join-Path $root "orchestrator\src\startup_health.ts")
+    if ($LASTEXITCODE -eq 0) { $ready = $true; break }
+    Start-Sleep -Milliseconds 250
+  }
+  if (-not $ready) { throw "启动等待超过 60 秒。请检查上方日志、8765/5930 端口以及产品配置；浏览器尚未打开。" }
   $api.Refresh()
   $ui.Refresh()
   if ($api.HasExited) { throw "API 启动失败（退出码 $($api.ExitCode)），请检查 8765 端口和产品配置。" }

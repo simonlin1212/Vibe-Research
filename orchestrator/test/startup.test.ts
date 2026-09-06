@@ -12,6 +12,19 @@ import { assertPortAvailable, createShutdownMonitor, parseStartupArgs, startupMi
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
+test("#34 两种启动器不覆盖 Vite 的 LAN 开关，API 继续只绑定回环", () => {
+  const posix = fs.readFileSync(path.join(REPO, "orchestrator/src/startup.ts"), "utf8");
+  const windows = fs.readFileSync(path.join(REPO, "scripts/start.ps1"), "utf8");
+  for (const source of [posix, windows]) {
+    const ui = source.split("\n").find((line) => /(?:const ui =|\$ui = Start-Process)/.test(line));
+    assert.ok(ui);
+    assert.doesNotMatch(ui, /--host/);
+    const api = source.split("\n").find((line) => /(?:const api =|\$api = Start-Process)/.test(line));
+    assert.ok(api);
+    assert.match(api, /"--host", "127\.0\.0\.1"/);
+  }
+});
+
 test("POSIX 安装入口在包目录内执行 npm ci，避免首次安装的绝对 prefix 兼容问题", () => {
   const source = fs.readFileSync(path.join(REPO, "scripts", "setup"), "utf8");
   assert.match(source, /cd "\$ROOT\/orchestrator" && npm ci --no-audit --no-fund/);

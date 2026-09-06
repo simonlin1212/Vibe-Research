@@ -25,7 +25,7 @@ export interface TurnOutcome {
 
 /** 可注入的运行器接口（测试用假运行器实现同一接口）。 */
 export interface AgentRunner {
-  runTurn(stage: Stage, attempt: number, prompt: string, outputSchema?: unknown): Promise<TurnOutcome>;
+  runTurn(stage: Stage, attempt: number, prompt: string, outputSchema?: unknown, signal?: AbortSignal): Promise<TurnOutcome>;
   readonly threadId: string | null;
   log(stage: Stage | "orchestrator", type: string, payload?: Record<string, unknown>): void;
   /** events.jsonl 全部已写内容的 sha256；null = 不校验。 */

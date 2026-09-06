@@ -5,6 +5,8 @@ import { GlassCard } from "@/components/ui/GlassCard";
 import { Disclaimer } from "@/components/ui/Disclaimer";
 import { useAiPage } from "../../../core/ai/pageContext";
 import { backend, ApiError, type RunListItem, type ResearchStatus, type AlertDiff } from "@/lib/backend";
+import { ResearchReport } from "../components/ResearchReport";
+import { ResearchRunItem, ResearchFailureNotice } from "../components/ResearchRunItem";
 
 /**
  * 「个股研究」—— 六阶段研究引擎的唯一入口。
@@ -15,7 +17,7 @@ import { backend, ApiError, type RunListItem, type ResearchStatus, type AlertDif
  *    用户完全不知道产品能生成带证据链与裁决点的正式研究。
  *    「我的研报」是上传外部文件的归档柜，不是这个。
  *
- * ⚠️ 跑一次真的**花模型额度、要十几分钟**，所以：
+ * ⚠️ 完整研究会消耗模型额度，耗时受来源、取数与校验重试影响，所以：
  *    ① 必须用户显式点，页面打开不自动跑；
  *    ② 阶段逐个显示，不是一个转圈 —— 用户要知道它在哪一步、卡在哪一步。
  */
@@ -36,9 +38,12 @@ const KIND_CN: Record<string, string> = { changed: "变了", added: "新增", re
 const STATUS_CN: Record<string, string> = {
   complete: "完成",
   running: "进行中",
+  cancelling: "正在取消",
+  finalizing: "正在归档收尾（已不能取消）",
+  cancelled: "已取消",
   failed: "失败",
   pending: "待跑",
-  incomplete: "未跑完",
+  incomplete: "资料不完整",
 };
 
 export function Research() {
@@ -46,6 +51,7 @@ export function Research() {
   const [symbol, setSymbol] = useState("");
   const [scope, setScope] = useState<"core" | "full">("core");
   const [starting, setStarting] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const [err, setErr] = useState("");
   const [active, setActive] = useState<ResearchStatus | null>(null);
   /** 🔴 `null` = 还没取回；`[]` = 真的一次都没跑过。**两者不能混** ——
@@ -55,7 +61,8 @@ export function Research() {
   const [watchErr, setWatchErr] = useState<string | null>(null);
   /** 只认最后一次点击的运行：慢请求回来时不许覆盖已经切走的那一个 */
   const wantRun = useRef<string | null>(null);
-  const [report, setReport] = useState<{ run_id: string; report: string | null } | null>(null);
+  const watchGeneration = useRef(0);
+  const [report, setReport] = useState<Awaited<ReturnType<typeof backend.report>> | null>(null);
   /**
    * 「昨天以来变了什么」：对齐同一标的最近两次研究。
    * 🔴 `need_two_runs` 要显示成"还没有可比较的第二次"，**不能显示成"没有变化"** ——
@@ -73,38 +80,47 @@ export function Research() {
   useEffect(() => {
     void loadRuns();
     // 组件卸载要停掉轮询，否则它会在后台一直打接口
-    return () => { if (timer.current) window.clearInterval(timer.current); };
+    return () => { wantRun.current = null; watchGeneration.current += 1; if (timer.current) window.clearInterval(timer.current); };
   }, []);
 
   /** 轮询一次运行的状态，直到它不再是 running */
   const watch = (id: string) => {
+    wantRun.current = id;
+    const generation = ++watchGeneration.current;
     if (timer.current) window.clearInterval(timer.current);
     setWatchErr(null);
     // 🔴 一次网络抖动不该让整块永久停住(页面会一直显示"进行中"、开始按钮一直禁用)。
     //    连续失败到上限才停,并且**把原因说出来** —— 停掉却不说话是静默失败。
     let fails = 0;
+    let pending = false;
     const MAX_FAILS = 3;
     timer.current = window.setInterval(() => {
+      if (pending || generation !== watchGeneration.current) return;
+      pending = true;
       backend
         .researchStatus(id)
         .then((st) => {
+          if (wantRun.current !== id || generation !== watchGeneration.current) return;
           fails = 0; setWatchErr(null);
           setActive(st);
-          if (st.status !== "running") {
+          if (st.finished_at !== null) {
+            watchGeneration.current += 1;
             if (timer.current) window.clearInterval(timer.current);
             void loadRuns();
           }
         })
         .catch((e) => {
+          if (wantRun.current !== id || generation !== watchGeneration.current) return;
           fails += 1;
           const msg = e instanceof ApiError ? e.message : String(e);
           if (fails >= MAX_FAILS) {
+            watchGeneration.current += 1;
             if (timer.current) window.clearInterval(timer.current);
             setWatchErr(`连着 ${MAX_FAILS} 次没问到进度，已停止跟踪：${msg}。研究**可能仍在后台跑**，稍后回到这一页从下面的归档里打开它。`);
           } else {
             setWatchErr(`第 ${fails} 次没问到进度（还在重试）：${msg}`);
           }
-        });
+        }).finally(() => { pending = false; });
     }, 4000);
   };
 
@@ -135,6 +151,23 @@ export function Research() {
     }
   };
 
+  const cancel = async () => {
+    if (!active || cancelling) return;
+    const id = active.run_id;
+    const generation = ++watchGeneration.current;
+    if (timer.current) window.clearInterval(timer.current);
+    setCancelling(true); setErr("");
+    try {
+      const st = await backend.cancelResearch(id);
+      if (wantRun.current === id && generation === watchGeneration.current) { setActive(st); if (!st.finished_at) watch(id); }
+    } catch (e) {
+      if (wantRun.current === id && generation === watchGeneration.current) {
+        setErr(e instanceof ApiError ? e.message : String(e)); watch(id);
+      }
+    }
+    finally { setCancelling(false); }
+  };
+
   const loadAlerts = async (code: string, market?: string, forRun?: string) => {
     setAlerts(null); setAlertsNote("");
     try {
@@ -154,16 +187,18 @@ export function Research() {
 
   const openReport = async (id: string) => {
     setErr("");
+    const generation = ++watchGeneration.current;
+    if (timer.current) window.clearInterval(timer.current);
     // 🔴 连点两个运行时,慢的那个后回来会盖掉快的 —— 报告是 A 的、变化列表是 B 的,
     //    而页面上完全看不出这是两次运行拼起来的。⇒ 只认最后一次点击。
     wantRun.current = id;
     try {
       const r = await backend.report(id);
-      if (wantRun.current !== id) return;
-      setReport({ run_id: id, report: r.report });
+      if (wantRun.current !== id || generation !== watchGeneration.current) return;
+      setReport(r);
       const st = await backend.researchStatus(id).catch(() => null);
-      if (wantRun.current !== id) return;
-      if (st) setActive(st);
+      if (wantRun.current !== id || generation !== watchGeneration.current) return;
+      if (st) { setActive(st); if (!st.finished_at) watch(id); }
       const run = runs.find((x) => x.run_id === id);
       if (run?.symbol) void loadAlerts(run.symbol, run.market ?? undefined, id);
     } catch (e) {
@@ -178,7 +213,7 @@ export function Research() {
     context: active
       ? `当前研究运行 ${active.run_id}：状态 ${active.status}｜证据 ${active.evidence_count ?? "—"} 条｜计算 ${active.calculation_count ?? "—"} 项｜` +
         `阶段 ${active.stages.map((s) => `${STAGE_CN[s.stage] ?? s.stage}=${STATUS_CN[s.status] ?? s.status}`).join("、")}` +
-        (report?.report ? `\n\n报告全文：\n${report.report.slice(0, 6000)}` : "")
+        (report?.availability === "ready" && report.run_id === active.run_id && report.report ? `\n\n报告全文：\n${report.report.slice(0, 6000)}` : "")
       : `研究归档共 ${runs.length} 次运行。当前完整六阶段取数链支持 A 股。`,
     suggestions: ["这份研究的裁决点是什么", "哪些数据有缺口", "反证部分说了什么"],
   });
@@ -217,21 +252,27 @@ export function Research() {
               className="rounded-lg border border-border bg-background/60 px-3 py-2 text-sm"
             >
               <option value="core">核心（快，够形成判断）</option>
-              <option value="full">完整（慢，全部端点）</option>
+              <option value="full">完整（含适用的扩展数据，较慢）</option>
             </select>
           </label>
           <button
             onClick={() => void start()}
-            disabled={starting || active?.status === "running"}
+            disabled={starting || active?.status === "running" || active?.status === "cancelling" || active?.status === "finalizing"}
             className="inline-flex items-center gap-1.5 rounded-lg bg-primary/15 px-4 py-2 text-sm font-medium text-primary ring-1 ring-primary/30 hover:bg-primary/25 disabled:opacity-50"
           >
             {starting || active?.status === "running" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
             开始
           </button>
+          {(active?.status === "running" || active?.status === "cancelling") && (
+            <button onClick={() => void cancel()} disabled={cancelling || active.status === "cancelling"}
+              className="rounded-lg border border-border px-4 py-2 text-sm disabled:opacity-50">
+              {cancelling || active.status === "cancelling" ? "正在取消，等待后台停止…" : "取消研究"}
+            </button>
+          )}
         </div>
-        {/* 🔴 代价要说在前面：它真的花额度、真的要十几分钟 */}
+        {/* 不用固定时长承诺掩盖不同来源和校验重试的差异。 */}
         <p className="mt-2.5 text-xs leading-relaxed text-muted-foreground">
-          一次完整研究会多轮调用你配置的模型、并真实取数十几个端点，<b className="text-foreground">通常十几分钟</b>，
+          一次完整研究会多轮调用你配置的模型，并按标的获取适用数据。取数、模型响应和校验重试会影响耗时，<b className="text-foreground">可能需要数十分钟或更久</b>，
           消耗你自己的模型额度。产出是一份带证据 id、确定性计算、数据缺口与裁决点的报告 ——
           每个数字都能追回它的来源。
         </p>
@@ -250,21 +291,20 @@ export function Research() {
             {active.calculation_count !== null && <span className="text-xs text-muted-foreground">计算 {active.calculation_count} 项</span>}
           </div>
           {/* 阶段逐个显示 —— 用户要知道它在哪一步，而不是看一个转圈 */}
-          <div className="flex flex-wrap gap-2">
-            {stagesToShow.map((s) => (
+          <div className="research-stages" aria-label="研究阶段索引">
+            {stagesToShow.map((s, index) => (
               <span
                 key={s.stage}
-                className={
-                  s.status === "complete" ? "rounded-md bg-primary/15 px-2.5 py-1 text-xs text-primary"
-                    : s.status === "failed" ? "rounded-md bg-destructive/15 px-2.5 py-1 text-xs text-destructive"
-                    : s.status === "running" ? "rounded-md bg-muted/60 px-2.5 py-1 text-xs"
-                    : "rounded-md border border-border/60 px-2.5 py-1 text-xs text-muted-foreground/60"
-                }
+                data-status={s.status}
+                className="research-stage min-w-0 rounded-b text-xs"
               >
-                {STAGE_CN[s.stage] ?? s.stage} · {STATUS_CN[s.status] ?? s.status}
+                <span className="mb-2 block font-mono text-[10px] text-primary">{String(index + 1).padStart(2, "0")}</span>
+                <span className="block font-medium">{STAGE_CN[s.stage] ?? s.stage}</span>
+                <span className="mt-1 block text-[10px] text-muted-foreground">{STATUS_CN[s.status] ?? s.status}</span>
               </span>
             ))}
           </div>
+          {active.failure && <ResearchFailureNotice failure={active.failure} />}
         </GlassCard>
       )}
 
@@ -291,7 +331,7 @@ export function Research() {
                       : "rounded bg-muted/60 px-1.5 py-0.5 text-[11px]"
                   }>{KIND_CN[d.kind] ?? d.kind}</span>
                   <span className="font-medium">{d.field}</span>
-                  <span className="text-xs text-muted-foreground">{d.period}</span>
+                  <span className="text-xs text-muted-foreground">{d.base && d.next && d.base.period !== d.next.period ? `${d.base.period} → ${d.next.period}` : d.period}</span>
                   {/* 🔴 两侧各挂自己的证据 id(tooltip) —— 一条变化要能追回它两边分别出自哪条证据。
                       id 收进 title 不占版面,但**不能不给**:溯源链是这产品的立身之本。 */}
                   <span className="ml-auto font-mono text-xs">
@@ -322,9 +362,7 @@ export function Research() {
             <FileText className="h-4 w-4 text-primary" />
             <h3 className="font-semibold">{report.run_id} 的报告</h3>
           </div>
-          {report.report
-            ? <pre className="max-h-[60vh] overflow-auto whitespace-pre-wrap break-words rounded-lg bg-muted/20 p-3 text-xs leading-relaxed">{report.report}</pre>
-            : <p className="text-sm text-muted-foreground">这次运行没有产出报告（多半是中途没跑完）。</p>}
+          <ResearchReport result={report} />
         </GlassCard>
       )}
 
@@ -338,14 +376,7 @@ export function Research() {
         ) : (
           <div className="space-y-1.5">
             {runs.map((r) => (
-              <button
-                key={r.run_id}
-                onClick={() => void openReport(r.run_id)}
-                className="flex w-full items-center gap-3 rounded-md border-b border-border/30 px-1 py-2.5 text-left text-sm last:border-0 hover:bg-muted/30"
-              >
-                <span className="font-medium">{r.name ?? "个股"}</span>
-                <span className="font-mono text-xs text-muted-foreground">{r.symbol ?? "—"}</span>
-              </button>
+              <ResearchRunItem key={r.run_id} run={r} onOpen={(id) => void openReport(id)} />
             ))}
           </div>
         )}

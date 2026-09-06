@@ -4,8 +4,104 @@ import { test } from "node:test";
 import "../src/finance/register.ts";
 import { DebateError, advanceDebate, getDebate, renderDossier, resetDebates, startDebate, type ChatFn } from "../src/debate.ts";
 import { currentPlugin } from "../src/plugin.ts";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { ChatError, chatSend } from "../src/chat.ts";
 
 const ENV = (evidence: Record<string, unknown>[]) => ({ script: "t", evidence });
+
+for (const agent of ["claude", "codebuddy"] as const) {
+  test(`${agent} 经真实聊天路由跑完五阶段辩论，不混用来源`, async (t) => {
+    resetDebates();
+    const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), "vra-debate-local-"));
+    t.after(() => fs.rmSync(dataRoot, { recursive: true, force: true }));
+    const opts = { repoRoot: fileURLToPath(new URL("../../", import.meta.url)), dataRoot };
+    const id = `local-${agent}`;
+    startDebate({ id, symbol: "300308", sourceFingerprint: agent,
+      envelopes: [ENV([{ id: "ev-test", field: "sample", value: 1 }])], gaps: ["合成测试，不代表真实行情"] });
+    let count = 0;
+    for (let i = 0; i < 5; i++) {
+      const state = await advanceDebate(opts, { id, sourceFingerprint: agent }, async (message, session, signal) =>
+        (await chatSend({ ...opts, signal, persistent: false, localAgentRunner: async (actual, local) => {
+          assert.equal(actual, agent);
+          assert.equal(local.controlledMcp, undefined);
+          assert.match(local.userPrompt, /合成测试/);
+          count += 1;
+          return `第 ${count} 段：证据不足，需继续核实。`;
+        } }, { message, session, llm: { provider: `cli-${agent}` } })).reply);
+      assert.equal(state.stages[i]!.status, "done");
+    }
+    assert.equal(count, 5);
+    assert.equal(getDebate(id)?.outcome, "completed");
+  });
+}
+
+test("同名辩论不能覆盖在途状态，取消丢弃晚到结果并终止剩余阶段", async () => {
+  resetDebates();
+  const req = { id: "d-cancel", symbol: "300308", envelopes: [ENV([{ id: "ev-a", field: "value", value: 1 }])], gaps: [] };
+  startDebate(req);
+  const ctrl = new AbortController();
+  let release!: (value: string) => void;
+  let observed: AbortSignal | undefined;
+  const run = advanceDebate({ repoRoot: process.cwd(), signal: ctrl.signal }, { id: req.id }, async (_m, _s, signal) => {
+    observed = signal;
+    return await new Promise<string>(resolve => { release = resolve; });
+  });
+  try {
+    assert.throws(() => startDebate(req), (e: unknown) => e instanceof DebateError && e.code === "debate_exists");
+    assert.equal(getDebate(req.id)?.stages[0]?.status, "running");
+    assert.equal(observed, ctrl.signal);
+  } finally { ctrl.abort(); release("这个晚到结果不得接受"); }
+  const end = await run;
+  assert.equal(end.done, true);
+  assert.equal(end.outcome, "cancelled");
+  assert.ok(end.stages.every(s => s.status === "cancelled" && !s.text));
+  assert.deepEqual(getDebate(req.id), end);
+  const unchanged = await advanceDebate({ repoRoot: process.cwd() }, { id: req.id }, async () => { throw new Error("取消后不能再调模型"); });
+  assert.deepEqual(unchanged, end);
+});
+
+test("辩论取消保留已完成阶段；提前取消不占用阶段", async () => {
+  resetDebates();
+  const id = "d-partial-cancel";
+  startDebate({ id, symbol: "300308", envelopes: [ENV([{ value: 1 }])], gaps: [] });
+  await assert.rejects(advanceDebate({ repoRoot: process.cwd(), signal: AbortSignal.abort() }, { id }, async () => "不该调用"),
+    (e: unknown) => e instanceof DebateError && e.code === "cancelled");
+  assert.equal(getDebate(id)?.stages[0]?.status, "pending");
+  await advanceDebate({ repoRoot: process.cwd() }, { id }, async () => "已完成的内容");
+  const ctrl = new AbortController();
+  const end = await advanceDebate({ repoRoot: process.cwd(), signal: ctrl.signal }, { id }, async (_m, _s, signal) => {
+    assert.equal(signal, ctrl.signal);
+    ctrl.abort();
+    throw new Error("模拟底层响应取消");
+  });
+  assert.equal(end.outcome, "cancelled");
+  assert.equal(end.stages[0]?.status, "done");
+  assert.equal(end.stages[0]?.text, "已完成的内容");
+  assert.ok(end.stages.slice(1).every(s => s.status === "cancelled"));
+});
+
+test("底层停止未确认不得升级为已取消，余下阶段失败且不能继续调用模型", async () => {
+  for (const completed of [0, 1]) {
+    resetDebates();
+    const id = `shutdown-failed-${completed}`;
+    const opts = { repoRoot: process.cwd() };
+    startDebate({ id, symbol: "300308", envelopes: [ENV([{ value: 1 }])], gaps: [] });
+    if (completed) await advanceDebate(opts, { id }, async () => "已经完成的正文");
+    const ac = new AbortController();
+    const end = await advanceDebate({ ...opts, signal: ac.signal }, { id }, async () => {
+      ac.abort();
+      throw new ChatError("agent_shutdown_failed", "未能确认本地 Agent 进程已退出");
+    });
+    assert.equal(end.outcome, "failed");
+    assert.equal(end.done, true, "流程不再推进，不代表底层进程已经停止");
+    assert.ok(end.stages.slice(completed).every(x => x.status === "failed" && x.error?.includes("agent_shutdown_failed")));
+    if (completed) assert.equal(end.stages[0]?.text, "已经完成的正文");
+    assert.deepEqual(await advanceDebate(opts, { id }, async () => { throw new Error("不能继续调用"); }), end);
+  }
+});
 
 test("资料包:带上单位、资料期、证据 id 与读法护栏", () => {
   const { text, count } = renderDossier([

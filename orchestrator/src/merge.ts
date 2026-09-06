@@ -7,6 +7,7 @@ import path from "node:path";
 
 import type { RunConfig, RunStatus, Stage, StageStatus } from "./config.ts";
 import type { EngineCapabilities } from "./engine.ts";
+import type { ResearchFailureCode } from "./research_failure.ts";
 import { listFiles, readJsonIfExists, sha256File, writeJson } from "./fsutil.ts";
 
 export interface FetchEnvelope {
@@ -156,6 +157,8 @@ export interface Manifest {
   started_at: string;
   finished_at: string | null;
   status: RunStatus | "running";
+  /** User cancellation remains a failed/non-archivable run in the domain contract. */
+  cancelled?: boolean;
   stages: StageRecord[];
   codex_version: string;
   model: string | null;
@@ -193,6 +196,7 @@ export interface Manifest {
   exit_code: number;
   quote_decision?: string | null;
   final_errors?: string[];
+  failure_code?: ResearchFailureCode | null;
   provider: { name: string; wire_api: string; base_url: string | null; env_key: string; auth: string ; profile?: string | null; matrix_status?: string | null };
   /**
    * 引擎信息。`capabilities` 声明的是**执行保障等级**,与「产物是否通过校验」是两件事:

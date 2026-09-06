@@ -11,13 +11,32 @@ import { FinanceDeepTargetResolver } from "../src/finance/deep_target.ts";
 import { addReport } from "../src/report_library.ts";
 import { ProductTaskOperations, ReportTaskMaterials } from "../src/task_adapters.ts";
 import { TaskRouter } from "../src/task_router.ts";
-import type { ServiceContext } from "../src/service.ts";
+import { ServiceError, type ServiceContext } from "../src/service.ts";
 import { researchReportContext } from "../src/orchestrate.ts";
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), "vra-deep-engine-"));
 const ctx = (dataRoot: string): ServiceContext => ({ repoRoot: REPO, dataRoot,
   python: path.join(REPO, "..", ".venv", "bin", "python"), node: process.execPath, providerEnvKey: null });
+
+test("Deep 已知启动校验给出操作指引，但不透传异常正文", async (t) => {
+  const dataRoot = tmp();
+  t.after(() => fs.rmSync(dataRoot, { recursive: true, force: true }));
+  const route = await deepRoute(dataRoot, []);
+  for (const code of ["invalid_task_context", "path_symlink", "unknown"]) {
+    const backend: DeepResearchBackend = {
+      start() { throw new ServiceError(code, "/private/fake-user/auth.json private-canary"); },
+      status() { throw new Error("unused"); }, report() { throw new Error("unused"); },
+    };
+    const events = [];
+    for await (const event of new CodexDeepEngine({ ctx: ctx(dataRoot), materials: new FinanceDeepTargetResolver(dataRoot), backend }).run(route)) events.push(event);
+    assert.equal(events.at(-1)?.type, "failed");
+    const output = JSON.stringify(events);
+    assert.doesNotMatch(output, /private-canary|auth\.json/);
+    if (code === "invalid_task_context") assert.match(output, /关注点或圈选资料格式无效/);
+    else assert.match(output, /检查本地 Agent/);
+  }
+});
 
 async function deepRoute(dataRoot: string, reportIds: readonly string[], entity = "300308") {
   const task = {
@@ -44,7 +63,7 @@ test("Deep 适配器只启动现有 Codex 六阶段入口，并把任务与材�
     },
     status(runId) { return { run_id: runId, exists: false, status: null, exit_code: null, stages: [],
       evidence_count: null, calculation_count: null, finished_at: null, last_events: [], report: false, viewer: null }; },
-    report(runId) { return { run_id: runId, report: null, appendix: null }; },
+    report(runId) { return { run_id: runId, report: null, appendix: null, availability: "missing", run_status: null }; },
   };
   const events = [];
   for await (const event of new CodexDeepEngine({ ctx: ctx(dataRoot), materials: new FinanceDeepTargetResolver(dataRoot), backend }).run(route)) events.push(event);
@@ -124,7 +143,7 @@ test("Deep 恢复核对路由指纹，并把既有 manifest 状态投影成稳�
   const backend: DeepResearchBackend = {
     start(request) { status = { ...status, run_id: request.run_id! }; return { run_id: request.run_id!, run_dir: `runs/${request.run_id}`, log: "logs/x.log", pid: 9 }; },
     status() { return status; },
-    report(runId) { return { run_id: runId, report: "# 已完成", appendix: "附录" }; },
+    report(runId) { return { run_id: runId, report: "# 已完成", appendix: "附录", availability: "ready", run_status: "complete" }; },
   };
   const engine = new CodexDeepEngine({ ctx: ctx(dataRoot), materials: new FinanceDeepTargetResolver(dataRoot), backend });
   const started = [];
@@ -178,7 +197,7 @@ test("Deep 启动目录长期未出现时失败收口，非成功终态也不得
   const backend: DeepResearchBackend = {
     start(request) { status = { ...status, run_id: request.run_id! }; return { run_id: request.run_id!, run_dir: "runs/x", log: "logs/x", pid: 3 }; },
     status() { return status; },
-    report(runId) { return { run_id: runId, report: "# 未完整", appendix: null }; },
+    report(runId) { return { run_id: runId, report: "# 未完整", appendix: null, availability: "ready", run_status: "incomplete" }; },
   };
   const engine = new CodexDeepEngine({ ctx: ctx(dataRoot), materials: new FinanceDeepTargetResolver(dataRoot), backend, now: () => now });
   const started = [];

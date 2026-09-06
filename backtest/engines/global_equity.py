@@ -78,7 +78,8 @@ class GlobalEquityEngine(BaseEngine):
             return max(int(raw_size / 100) * 100, 0)
         if self.market == "ca":
             return float(math.floor(max(raw_size, 0.0)))
-        return round(max(raw_size, 0.0), 2)
+        # Target sizing must not round up into a cash deficit.
+        return math.floor(max(raw_size, 0.0) * 100) / 100
 
     def calc_commission(self, size: float, price: float, _direction: int, is_open: bool) -> float:
         """US: zero; HK: stamp tax + levies; Canada: configured broker rate.

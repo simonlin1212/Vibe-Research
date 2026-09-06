@@ -290,8 +290,8 @@ export function Settings() {
       </div>
 
       <div className="mb-4 grid gap-3 sm:grid-cols-2">
-        <GlassCard onClick={() => setMode("subscription")}
-          className={`cursor-pointer ${mode === "subscription" ? "ring-1 ring-primary/40" : "opacity-80"}`}>
+        <button type="button" onClick={() => setMode("subscription")} aria-pressed={mode === "subscription"}
+          className={`glass p-5 text-left ${mode === "subscription" ? "ring-1 ring-primary/60" : "hover:border-primary/40"}`}>
           <div className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-primary" />
             <h3 className="font-semibold">订阅接入</h3>
@@ -300,10 +300,10 @@ export function Settings() {
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
             自动检测本机已经安装并登录的 Agent，走对应订阅额度，<b className="text-foreground">免 API key</b>。
           </p>
-        </GlassCard>
+        </button>
 
-        <GlassCard onClick={() => setMode("api")}
-          className={`cursor-pointer ${mode === "api" ? "ring-1 ring-primary/40" : "opacity-80"}`}>
+        <button type="button" onClick={() => setMode("api")} aria-pressed={mode === "api"}
+          className={`glass p-5 text-left ${mode === "api" ? "ring-1 ring-primary/60" : "hover:border-primary/40"}`}>
           <div className="flex items-center gap-2">
             <KeyRound className="h-5 w-5 text-primary" />
             <h3 className="font-semibold">API 接入</h3>
@@ -312,7 +312,7 @@ export function Settings() {
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
             填自己的 key：DeepSeek / MiMo / 智谱 / Kimi / 通义 / OpenAI / 任意兼容端点。
           </p>
-        </GlassCard>
+        </button>
       </div>
 
       <GlassCard className="mb-4">

@@ -25,6 +25,7 @@ import "../src/finance/register.ts";   // 测试文件也是入口:插件要先�
 import { appendHookLog } from "../src/hooks.ts";
 import { loadRegistry } from "../src/registry.ts";
 import { mergeEvidence } from "../src/merge.ts";
+import { LocalAgentError } from "../src/local_agent_runtime.ts";
 const TS = "2026-08-21T10:00:00+08:00";
 const ev = (id: string, field: string, value: unknown, extra: Record<string, unknown> = {}) => ({ id, symbol: "300308", market: "SZ", field, value, unit: "元", currency: "CNY",
   period: "2026-08-21", as_of: "2026-08-21", source: "tencent", endpoint: "qt", fetched_at: TS, adjustment: "none", raw_ref: null, ...extra });
@@ -161,13 +162,211 @@ function goodAgent(stage: Stage, _attempt: number, cfg: RunConfig): void {
   if (stage === "risk") writeJson(path.join(R, "stages", "risk.json"), { stage, status: "complete", ...base, counter_evidence: [{ claim: "c", counter: "x", evidence_ids: [QUOTE.price] }],
     decision_points: [{ what_would_change: "a", next_data_point: "b" }, { what_would_change: "a", next_data_point: "b" }, { what_would_change: "a", next_data_point: "b" }], source_conflicts: [] });
   if (stage === "report") {
-    fs.writeFileSync(path.join(R, "report.md"), `# 测试(SZ:300308)研究报告 · 状态:complete\n## 结论摘要\n- ok\n## 事实\n- 现价 943 元(${QUOTE.price})\n## 推断\n## 估值\n- 扣非×4 PE 1.5 倍(${cid(20)})\n## 风险与反证\n## 裁决点\n## 数据缺口\n`);
-    writeJson(path.join(R, "stages", "report.json"), { stage, status: "complete", ...base, evidence_ids: [QUOTE.price], calculation_ids: [cid(20)] });
+    fs.writeFileSync(path.join(R, "report.md"), `# 测试(SZ:300308)研究报告 · 状态:complete\n\n> PE 分位口径：当前值来源 tencent；历史序列来源 tencent；跨来源或不同财务口径的分位仅供对照，不代表同源精确比较。[${cid(23)}]\n\n## 结论摘要\n- ok\n## 事实\n- 现价 943 元(${QUOTE.price})\n## 推断\n## 估值\n- 扣非×4 PE 1.5 倍(${cid(20)})\n## 风险与反证\n## 裁决点\n## 数据缺口\n`);
+    writeJson(path.join(R, "stages", "report.json"), { stage, status: "complete", ...base, evidence_ids: [QUOTE.price], calculation_ids: [cid(20), cid(23)] });
   }
 }
 
 const okVerify = () => ({ ok: true, errors: [], warnings: [] });
 const deps = (runner: AgentRunner, fetchRunner: FetchExecutor) => ({ runner, fetchRunner, verify: okVerify, sdkVersion: () => ({ version: "fake 0.0", binary: null }) });
+
+test("同步最终校验后仍先检查取消，再开始归档", async () => {
+  const repo = tmpRepo();
+  const cfg = makeConfig({ symbol: "300308", repoRoot: repo, runId: "cancel-finalization", hooksEnabled: false, endpointScope: "core" });
+  const ac = new AbortController();
+  const runner = new FakeRunner(goodAgent, cfg);
+  let closing = 0;
+  try {
+    await assert.rejects(runResearch(cfg, { ...deps(runner, fakeFetch()), signal: ac.signal,
+      beginFinalization: () => { closing += 1; ac.abort(new Error("用户取消研究")); },
+    }, ["profile"]), /用户取消研究/);
+    assert.equal(closing, 1);
+    assert.equal(runner.logs.some((e) => ["viewer.written", "knowledge.archived", "report.ready", "run.finished"].includes(e.type)), false);
+    const manifest = JSON.parse(fs.readFileSync(path.join(cfg.runDir, "manifest.json"), "utf8"));
+    assert.equal(manifest.cancelled, true);
+    const events = fs.readFileSync(path.join(cfg.runDir, "events.jsonl"), "utf8").trim().split("\n").map(line => JSON.parse(line));
+    const finished = events.filter(e => e.type === "research.finished").at(-1);
+    assert.equal(finished?.status, "cancelled");
+    assert.equal(manifest.stages[0].status, "complete");
+  } finally { fs.rmSync(repo, { recursive: true, force: true }); }
+});
+
+test("取消发生在取数后时不调用模型、不归档，保留取消终态", async () => {
+  const repo = tmpRepo();
+  const cfg = makeConfig({ symbol: "300308", repoRoot: repo, runId: "cancel-fetch", hooksEnabled: false, endpointScope: "core" });
+  const ac = new AbortController();
+  const runner = new FakeRunner(goodAgent, cfg);
+  const fetcher: FetchExecutor = (...args) => {
+    const result = fakeFetch()(...args);
+    ac.abort(new Error("用户取消研究"));
+    return result;
+  };
+  try {
+    await assert.rejects(runResearch(cfg, { ...deps(runner, fetcher), signal: ac.signal }), /用户取消研究/);
+    assert.equal(runner.calls.length, 0);
+    const manifest = JSON.parse(fs.readFileSync(path.join(cfg.runDir, "manifest.json"), "utf8"));
+    assert.equal(manifest.status, "failed");
+    assert.equal(manifest.cancelled, true);
+    assert.ok(manifest.finished_at);
+    assert.equal(manifest.knowledge_archived ?? null, null);
+    assert.ok(fs.existsSync(path.join(cfg.runDir, "fetch", "_ledger.json")));
+  } finally { fs.rmSync(repo, { recursive: true, force: true }); }
+});
+
+test("模型返回后收到取消不重试、不开始下一阶段；已完成阶段仍在", async () => {
+  const repo = tmpRepo();
+  const ac = new AbortController();
+  const cfg = makeConfig({ symbol: "300308", repoRoot: repo, runId: "cancel-turn", hooksEnabled: false, endpointScope: "core" });
+  const runner = new FakeRunner((stage, attempt, config) => {
+    goodAgent(stage, attempt, config);
+    if (stage === "financials") ac.abort(new Error("用户取消研究"));
+  }, cfg);
+  try {
+    await assert.rejects(runResearch(cfg, { ...deps(runner, fakeFetch()), signal: ac.signal }), /用户取消研究/);
+    assert.deepEqual(runner.calls.map((call) => call.stage), ["profile", "financials"]);
+    const m = JSON.parse(fs.readFileSync(path.join(cfg.runDir, "manifest.json"), "utf8"));
+    assert.equal(m.cancelled, true);
+    assert.equal(m.stages[0].stage, "profile"); assert.equal(m.stages[0].status, "complete");
+    assert.equal(fs.existsSync(path.join(cfg.runDir, "report.md")), false);
+  } finally { fs.rmSync(repo, { recursive: true, force: true }); }
+});
+
+test("Codex 阶段取消传入 SDK 且不误报超时", async () => {
+  const repo = tmpRepo();
+  const ac = new AbortController();
+  const cfg = makeConfig({ symbol: "300308", repoRoot: repo, runId: "cancel-sdk", hooksEnabled: false, endpointScope: "core" });
+  const fakeCodex = () => ({ startThread: () => ({ id: "t", runStreamed: async (_prompt: string, options: { signal: AbortSignal }) => {
+    ac.abort(new Error("用户取消研究"));
+    assert.equal(options.signal.aborted, true);
+    throw options.signal.reason;
+  } }) }) as never;
+  try {
+    const result = await new CodexRunner(cfg, path.join(cfg.runDir, "events.jsonl"), fakeCodex).runTurn("profile", 1, "x", undefined, ac.signal);
+    assert.equal(result.failed, "用户取消研究");
+  } finally { fs.rmSync(repo, { recursive: true, force: true }); }
+});
+
+test("Codex 保留流里的额度原因，不被随后 worker 退出错误覆盖", async () => {
+  const repo = tmpRepo();
+  const cfg = makeConfig({ symbol: "300308", repoRoot: repo, runId: "quota-sdk", hooksEnabled: false, endpointScope: "core" });
+  const fakeCodex = () => ({ startThread: () => ({ id: "t", runStreamed: async () => ({
+    events: (async function* () {
+      try { yield { type: "error", message: "You've hit your usage limit for GPT-5.3-Codex-Spark" }; }
+      finally { throw new Error("Codex SDK worker exited 1: Reading prompt from stdin"); }
+    })(),
+  }) }) }) as never;
+  try {
+    const out = await new CodexRunner(cfg, path.join(cfg.runDir, "events.jsonl"), fakeCodex).runTurn("profile", 1, "x");
+    assert.match(out.failed ?? "", /usage limit/);
+  } finally { fs.rmSync(repo, { recursive: true, force: true }); }
+});
+
+for (const [failure, code, attempts] of [
+  ["You've hit your usage limit", "quota", 1],
+  ["401 Unauthorized", "authentication", 1],
+  ["turn 超时(1000 ms)", "timeout", 2],
+  ["429 Too Many Requests", "rate_limit", 2],
+] as const) test(`研究 ${code} 停在故障阶段并保留之前产物`, async () => {
+  const repo = tmpRepo();
+  const cfg = makeConfig({ symbol: "300308", repoRoot: repo, runId: `stop-${code}`, hooksEnabled: false, endpointScope: "core", maxRetries: 1 });
+  class FailingRunner extends FakeRunner {
+    override async runTurn(stage: Stage, attempt: number, prompt: string): Promise<TurnOutcome> {
+      const out = await super.runTurn(stage, attempt, prompt);
+      return { ...out, failed: stage === "financials" ? failure : null };
+    }
+  }
+  const runner = new FailingRunner((stage, attempt, cfg) => {
+    if (stage === "profile") goodAgent(stage, attempt, cfg);
+  }, cfg);
+  try {
+    const result = await runResearch(cfg, deps(runner, fakeFetch()));
+    assert.equal(result.status, "failed");
+    assert.equal(result.manifest.failure_code, code);
+    assert.deepEqual(runner.calls.map(c => c.stage), ["profile", ...Array(attempts).fill("financials")]);
+    assert.deepEqual(result.manifest.stages.map(s => s.status), ["complete", "failed"]);
+    assert.ok(fs.existsSync(path.join(cfg.runDir, "stages/profile.json")));
+    assert.ok(result.manifest.evidence_count > 0);
+    assert.equal(result.manifest.knowledge_archived, null);
+    assert.deepEqual(validateManifest(result.manifest), []);
+  } finally { fs.rmSync(repo, { recursive: true, force: true }); }
+});
+
+test("超时与不可修复的取数契约同时出现，不继续后续阶段", async () => {
+  const repo = tmpRepo();
+  const cfg = makeConfig({ symbol: "300308", repoRoot: repo, runId: "mixed-failure", hooksEnabled: false, endpointScope: "core", maxRetries: 1 });
+  class TimeoutRunner extends FakeRunner {
+    override async runTurn(stage: Stage, attempt: number, prompt: string): Promise<TurnOutcome> {
+      return { ...await super.runTurn(stage, attempt, prompt), failed: "turn 超时(1000 ms)" };
+    }
+  }
+  const runner = new TimeoutRunner(goodAgent, cfg);
+  const fetcher: FetchExecutor = async (...args) => {
+    const ledger = await fakeFetch()(...args);
+    const file = path.join(cfg.runDir, "fetch/fetch_quote.json");
+    const envelope = JSON.parse(fs.readFileSync(file, "utf8"));
+    envelope.fetched_at = 123;
+    writeJson(file, envelope);
+    ledger.fetch_quote.sha256 = sha256File(file);
+    return ledger;
+  };
+  try {
+    const result = await runResearch(cfg, deps(runner, fetcher));
+    assert.equal(result.status, "failed");
+    assert.equal(result.manifest.failure_code, "timeout");
+    assert.deepEqual(runner.calls.map(c => c.stage), ["profile"]);
+    assert.ok(result.manifest.final_errors?.some(e => e.includes("不符契约")));
+  } finally { fs.rmSync(repo, { recursive: true, force: true }); }
+});
+
+test("一次超时后成功恢复，继续后续阶段且不残留失败标签", async () => {
+  const repo = tmpRepo();
+  const cfg = makeConfig({ symbol: "300308", repoRoot: repo, runId: "recovered-timeout", hooksEnabled: false, endpointScope: "core", maxRetries: 1 });
+  class RecoveringRunner extends FakeRunner {
+    override async runTurn(stage: Stage, attempt: number, prompt: string): Promise<TurnOutcome> {
+      return { ...await super.runTurn(stage, attempt, prompt), failed: stage === "profile" && attempt === 1 ? "timeout" : null };
+    }
+  }
+  try {
+    const result = await runResearch(cfg, deps(new RecoveringRunner(goodAgent, cfg), fakeFetch()));
+    assert.equal(result.status, "complete");
+    assert.equal(result.manifest.failure_code, undefined);
+    assert.equal(result.manifest.stages[0].attempts, 2);
+    assert.equal(result.manifest.stages.length, 6);
+  } finally { fs.rmSync(repo, { recursive: true, force: true }); }
+});
+
+for (const isAgent of [true, false]) test(`异常只分类执行器，不误认来源错误 (${isAgent})`, async () => {
+  const repo = tmpRepo();
+  const cfg = makeConfig({ symbol: "300308", repoRoot: repo, runId: `exception-${isAgent}`, hooksEnabled: false, endpointScope: "core" });
+  class ThrowingRunner extends FakeRunner {
+    override async runTurn(): Promise<TurnOutcome> { throw new LocalAgentError("agent_not_authenticated", "登录失效"); }
+  }
+  const fetcher: FetchExecutor = () => { throw new Error("数据源 429 timeout"); };
+  try {
+    await assert.rejects(runResearch(cfg, deps(new ThrowingRunner(goodAgent, cfg), isAgent ? fakeFetch() : fetcher)));
+    const m = JSON.parse(fs.readFileSync(path.join(cfg.runDir, "manifest.json"), "utf8"));
+    assert.equal(m.failure_code, isAgent ? "authentication" : undefined);
+    assert.equal(m.final_errors.some((s: string) => s.startsWith("execution:authentication:")), isAgent);
+  } finally { fs.rmSync(repo, { recursive: true, force: true }); }
+});
+
+test("成稿执行失败但遗留正文校验通过，最终仍失败且不归入知识库", async () => {
+  const repo = tmpRepo();
+  const cfg = makeConfig({ symbol: "300308", repoRoot: repo, runId: "report-worker-failed", hooksEnabled: false, endpointScope: "core", maxRetries: 0 });
+  class ReportFailure extends FakeRunner {
+    override async runTurn(stage: Stage, attempt: number, prompt: string): Promise<TurnOutcome> {
+      const out = await super.runTurn(stage, attempt, prompt);
+      return { ...out, failed: stage === "report" ? "worker exited unexpectedly" : null };
+    }
+  }
+  try {
+    const result = await runResearch(cfg, deps(new ReportFailure(goodAgent, cfg), fakeFetch()));
+    assert.equal(result.manifest.stages.at(-1)?.validator_ok, true);
+    assert.equal(result.manifest.stages.at(-1)?.status, "failed");
+    assert.equal(result.status, "failed");
+    assert.equal(result.manifest.knowledge_archived, null);
+  } finally { fs.rmSync(repo, { recursive: true, force: true }); }
+});
 
 test("happy path:六阶段一次通过 → complete,exit 0,manifest 过 schema", async () => {
   const repo = tmpRepo();
@@ -327,9 +526,9 @@ test("合规 gate 命中 → 重写 → 复验通过 → complete;报告首行�
   assert.ok(runner.logs.some((l) => l.type === "report.status_normalized"));
 });
 
-test("gate 重写 turn 失败 → report 阶段 failed → 运行 failed(即使旧文件能过校验)", async () => {
+for (const failure of ["stream error: 模拟", "timeout", "usage limit"]) test(`gate 重写失败保留原因，即使正文已修好 (${failure})`, async () => {
   const repo = tmpRepo();
-  const cfg = makeConfig({ symbol: "300308", market: "SZ", repoRoot: repo, runId: "t4b", python: "false", maxRetries: 0, gateRetries: 1 });
+  const cfg = makeConfig({ symbol: "300308", market: "SZ", repoRoot: repo, runId: "t4b", python: "false", maxRetries: 0, gateRetries: 3 });
   const tempted: Behaviour = (stage, attempt, c) => {
     if (attempt < 100) goodAgent(stage, attempt, c);
     const rp = path.join(c.runDir, "report.md");
@@ -339,7 +538,7 @@ test("gate 重写 turn 失败 → report 阶段 failed → 运行 failed(即使�
   class FailingRewrite extends FakeRunner {
     override async runTurn(stage: Stage, attempt: number, prompt: string): Promise<TurnOutcome> {
       const o = await super.runTurn(stage, attempt, prompt);
-      return attempt >= 100 ? { ...o, failed: "stream error: 模拟" } : o;
+      return attempt >= 100 ? { ...o, failed: failure } : o;
     }
   }
   const r = await runResearch(cfg, deps(new FailingRewrite(tempted, cfg), fakeFetch()));
@@ -347,6 +546,7 @@ test("gate 重写 turn 失败 → report 阶段 failed → 运行 failed(即使�
   assert.equal(r.manifest.stages.find((s) => s.stage === "report")?.status, "failed");
   assert.equal(r.status, "failed");
   assert.equal(r.exitCode, 3);
+  assert.equal(r.manifest.failure_code, failure === "timeout" ? "timeout" : failure === "usage limit" ? "quota" : undefined);
 });
 
 test("agent 篡改取数文件(连同磁盘账本) → 内存账本识破 → 阶段 failed → 运行 failed;agent 自写 raw 文件同样被识破", async () => {

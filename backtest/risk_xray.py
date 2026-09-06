@@ -27,6 +27,7 @@ import numpy as np
 import pandas as pd
 
 from backtest.validation import _json_safe
+from backtest.metrics import downside_deviation
 
 MIN_HISTORY_DAYS = 30
 PERIODS_PER_YEAR = 252
@@ -189,8 +190,7 @@ def _concentration(w: np.ndarray) -> dict[str, Any]:
 
 def _volatility(port: pd.Series, ppy: int) -> dict[str, Any]:
     vol = float(port.std(ddof=1)) if len(port) > 1 else None
-    downside = port[port < 0]
-    downside_dev = float(downside.std(ddof=1)) if len(downside) > 1 else None
+    downside_dev = downside_deviation(port)
     return {
         "daily_vol": _finite(vol),
         "annualized_vol": _finite(vol * math.sqrt(ppy)) if vol is not None else None,

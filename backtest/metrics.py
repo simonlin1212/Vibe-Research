@@ -235,6 +235,41 @@ def bar_returns(close: Any, *, label: str = "") -> Any:
     return ret.replace([np.inf, -np.inf], np.nan).fillna(0.0)
 
 
+def equal_weight_hold_curve(close: pd.DataFrame) -> pd.Series:
+    """Initial equal cash sleeves, invested once at each symbol's first quote.
+
+    Missing quotes keep the last valuation; before a symbol's first quote its
+    sleeve remains cash. No daily weight resets, fees or dividend cash credits.
+    """
+    if close.empty or close.shape[1] == 0:
+        return pd.Series(1.0, index=close.index)
+    sleeves = []
+    for symbol in close.columns:
+        prices = close[symbol]
+        available = prices.dropna()
+        if available.empty or not np.isfinite(available.to_numpy(dtype=float)).all() or available.iloc[0] <= 0:
+            raise ValueError(f"Cannot value held benchmark for {symbol}: invalid entry or price")
+        sleeves.append(prices.ffill().div(float(available.iloc[0])).fillna(1.0))
+    return pd.concat(sleeves, axis=1).mean(axis=1)
+
+
+def downside_deviation(returns: Any) -> Optional[float]:
+    """RMS shortfall from target zero, including nonnegative observations.
+
+    Definition: Rollinger & Hoffman, Sortino: A Sharper Ratio (CME-hosted).
+    Negative-only standard deviation incorrectly treats constant losses as safe.
+    """
+    values = np.asarray(returns, dtype=float)
+    if values.size == 0 or not np.isfinite(values).all():
+        return None
+    shortfall = np.minimum(values, 0.0)
+    scale = float(np.max(np.abs(shortfall)))
+    if scale == 0:
+        return 0.0
+    # Scale before squaring to avoid overflow for large finite returns.
+    return float(scale * np.sqrt(np.mean((shortfall / scale) ** 2)))
+
+
 def buy_and_hold_return(close: Any) -> Optional[float]:
     """Total buy-and-hold return as a price relative, not a compounded product.
 
@@ -523,7 +558,7 @@ def calc_metrics(
             ann_ret = float("inf")
     # ``Series.std()`` uses ddof=1, so a single-observation return series
     # (e.g. a one-bar backtest) yields NaN and poisons the Sharpe ratio.
-    # Guard the small sample the same way ``downside_std`` is guarded below.
+    # Guard the small sample explicitly.
     vol = float(port_ret.std()) if len(port_ret) > 1 and returns_finite else 0.0
     sharpe = (
         float(port_ret.mean() / (vol + 1e-10) * np.sqrt(bpy))
@@ -545,14 +580,13 @@ def calc_metrics(
     calmar = ann_ret / abs(max_dd) if abs(max_dd) > 1e-10 else 0.0
 
     # Sortino
-    if returns_finite:
-        downside = port_ret[port_ret < 0]
-        downside_std = float(downside.std()) if len(downside) > 1 else 1e-10
-        sortino = float(port_ret.mean() / (downside_std + 1e-10) * np.sqrt(bpy))
-    else:
-        sortino = 0.0
-    if not np.isfinite(sortino):
-        sortino = 0.0
+    downside = downside_deviation(port_ret)
+    sortino = (
+        float(port_ret.mean() / downside * np.sqrt(bpy))
+        if downside is not None and downside > 0 else None
+    )
+    if sortino is not None and not np.isfinite(sortino):
+        sortino = None
 
     trade_stats = win_rate_and_stats(trades)
 
@@ -579,7 +613,7 @@ def calc_metrics(
         excess = total_ret - bench_return
         aligned_bench = bench_ret.reindex(port_ret.index).fillna(0.0)
         active_ret = port_ret - aligned_bench
-        # Same ddof=1 small-sample guard as ``vol`` / ``downside_std`` so the
+        # Same ddof=1 small-sample guard as ``vol`` so the
         # information ratio stays finite for a single-observation series.
         active_std = float(active_ret.std()) if len(active_ret) > 1 and returns_finite else 0.0
         ir = (
@@ -609,7 +643,7 @@ def calc_metrics(
         "max_drawdown": max_dd,
         "sharpe": sharpe,
         "calmar": round(calmar, 4),
-        "sortino": round(sortino, 4),
+        "sortino": round(sortino, 4) if sortino is not None else None,
         "win_rate": trade_stats["win_rate"],
         "profit_loss_ratio": trade_stats["profit_loss_ratio"],
         "profit_factor": trade_stats["profit_factor"],
@@ -631,7 +665,7 @@ def _empty_metrics(initial_cash: float) -> Dict[str, Any]:
     return {
         "final_value": initial_cash,
         "total_return": 0, "annual_return": 0, "max_drawdown": 0,
-        "sharpe": 0, "calmar": 0, "sortino": 0,
+        "sharpe": 0, "calmar": 0, "sortino": None,
         "win_rate": 0, "profit_loss_ratio": 0, "profit_factor": 0,
         "max_consecutive_loss": 0, "avg_holding_days": 0, "trade_count": 0,
         "benchmark_return": 0, "excess_return": 0, "information_ratio": 0,

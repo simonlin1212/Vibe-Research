@@ -560,7 +560,8 @@ export function validateReport(run: RunView, expectedStatus?: RunStatus): Valida
   //    `applicable=false` = 本次没有带 display 的 calc(旧运行 / 纯取数运行)→ 不适用,不判失败。
   const symbolOf = () => { for (const e of run.evidence.values()) { const s = (e as { symbol?: unknown }).symbol; if (typeof s === "string" && s && s !== "MARKET") return s; } return undefined; };
   const fid = checkNumberFidelity(run.report, run.evidence as never, run.calcById as never, symbolOf(),
-                                  quotedHistory((st) => run.stage(st as never) as never));
+                                  quotedHistory((st) => run.stage(st as never) as never),
+                                  currentPlugin().lexicon, currentPlugin().fidelityExcludedSections);
   if (fid.missingDisplay) {
     // 引用了 calc 结果却一个带 display 的都没有 = calc 侧缺陷。静默跳过等于把这条防线关掉。
     errors.push("report.md 引用的 calc 里有**成功结果没写 display**(该版本本应写),数字忠实度对这些结果无法校验");

@@ -8,6 +8,7 @@ import {
   LocalAgentError, claudeArgs, codeBuddyArgs, codexLoginProgress, findExecutable, parseClaudeOutput,
   executableInvocation, normalizeLocalAgentTimeoutMs, parseCodeBuddyOutput, probeClaude, probeCodeBuddy, probeCodex, runLocalAgent,
   startCodexLogin, terminateActiveLocalAgentProcesses, workBuddyCliCandidates,
+  localAgentInput,
 } from "../src/local_agent_runtime.ts";
 
 test("六阶段订阅 Agent 保留显式 20 分钟超时，不被适配器暗中截短", () => {
@@ -49,12 +50,14 @@ function fakeCodeBuddy(): { dir: string; bin: string } {
 const a=process.argv.slice(2);
 if(a[0]==='--version'){console.log('2.143.1 (CodeBuddy Code)');process.exit(0)}
 if(a[0]==='--help'){
+  if(process.env.FAKE_COLD_HELP==='1') Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,5500);
   const required='--tools --strict-mcp-config --mcp-config --setting-sources --input-format --output-format --system-prompt --json-schema --max-turns --agent --permission-mode --subagent-permission-mode';
   console.log(process.env.FAKE_OLD_HELP==='1'?'--output-format':required+(process.env.FAKE_LEGACY_HELP==='1'?'':' --no-session-persistence'));
   process.exit(0)
 }
 let input='';process.stdin.setEncoding('utf8');process.stdin.on('data',x=>input+=x);process.stdin.on('end',()=>{
   if(a.includes('--input-format=stream-json')){
+    if(process.env.FAKE_COLD_AUTH==='1') Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,5500);
     const req=JSON.parse(input.trim());
     const account=process.env.FAKE_NOT_LOGGED==='1'?null:{userId:'secret-user',token:'secret-token',userName:'hidden@example.com'};
     console.log(JSON.stringify({type:'control_response',response:{subtype:'success',request_id:req.request_id,response:{account}}}));
@@ -64,6 +67,7 @@ let input='';process.stdin.setEncoding('utf8');process.stdin.on('data',x=>input+
   const profiles=['HOME','USERPROFILE','APPDATA','LOCALAPPDATA'].every(k=>!process.env['FAKE_BASE_'+k]||process.env[k]!==process.env['FAKE_BASE_'+k]);
   const result={result:input+'|api='+Boolean(process.env.CODEBUDDY_API_KEY)+'|token='+Boolean(process.env.CODEBUDDY_AUTH_TOKEN)+'|base='+Boolean(process.env.CODEBUDDY_BASE_URL)+'|tools='+a.slice(a.indexOf('--tools'),a.indexOf('--tools')+2).join(':')+'|memory='+process.env.CODEBUDDY_DISABLE_AUTO_MEMORY+'|ephemeral='+Boolean(process.env.FAKE_BASE_HOME&&process.env.HOME!==process.env.FAKE_BASE_HOME)+'|profiles='+profiles+'|noSession='+a.includes('--no-session-persistence')+'|permission='+a[a.indexOf('--permission-mode')+1]};
   if(process.env.FAKE_ECHO_MCP_ENV==='1') result.result+='|wait='+process.env.CODEBUDDY_WAIT_FOR_MCP_SERVERS_ENABLED+'|prewait='+process.env.CODEBUDDY_FIRST_RUN_MCP_PREWAIT_TIMEOUT_MS;
+  if(process.env.FAKE_IMAGE_INPUT==='1') result.result+='|input_format='+a[a.indexOf('--input-format')+1]+'|builtin_tools='+a[a.indexOf('--tools')+1]+'|model_override='+a.includes('--model');
   console.log(JSON.stringify(process.env.FAKE_LEGACY_HELP==='1'?[{type:'message'},result]:result));
 });
 `);
@@ -129,12 +133,13 @@ if(process.env.TEST_IS_CHILD==='1'){
 `);
   try {
     const env = { TEST_PARENT_PID_FILE: parentPidFile, TEST_CHILD_PID_FILE: childPidFile };
-    assert.equal(startCodexLogin(bin, codexHome, env, { timeoutMs: 1_500 }).state, "started");
-    for (let i = 0; i < 100 && (!fs.existsSync(parentPidFile) || !fs.existsSync(childPidFile)); i += 1) {
+    const started = Date.now();
+    assert.equal(startCodexLogin(bin, codexHome, env, { timeoutMs: 6_000 }).state, "started");
+    for (let i = 0; i < 500 && (!fs.existsSync(parentPidFile) || !fs.existsSync(childPidFile)); i += 1) {
       await new Promise((r) => setTimeout(r, 10));
     }
     assert.ok(fs.existsSync(parentPidFile) && fs.existsSync(childPidFile), "父子进程都应真实启动");
-    await new Promise((r) => setTimeout(r, 1_600));
+    await new Promise((r) => setTimeout(r, Math.max(0, 6_100 - (Date.now() - started))));
     const parentPid = Number(fs.readFileSync(parentPidFile, "utf8"));
     const childPid = Number(fs.readFileSync(childPidFile, "utf8"));
     assert.throws(() => process.kill(parentPid, 0), /ESRCH/, "父进程应先响应 TERM 退出");
@@ -279,6 +284,18 @@ test("CodeBuddy 官方控制探针只返回版本与登录布尔，不泄露账�
   } finally { fs.rmSync(f.dir, { recursive: true, force: true }); }
 });
 
+test("CodeBuddy 冷启动超过五秒不应误报登录检测失败", async () => {
+  const f = fakeCodeBuddy();
+  try {
+    for (const flag of ["FAKE_COLD_HELP", "FAKE_COLD_AUTH"]) {
+      const status = await probeCodeBuddy({ CODEBUDDY_BIN: f.bin, PATH: "", [flag]: "1" });
+      assert.equal(status.status, "ready", flag);
+      assert.equal(status.authenticated, true);
+      assert.doesNotMatch(JSON.stringify(status), /secret-user|secret-token|hidden@example/);
+    }
+  } finally { fs.rmSync(f.dir, { recursive: true, force: true }); }
+});
+
 test("CodeBuddy 订阅调用走 stdin，移除 API / token / 自定义端点并关闭自动记忆", async () => {
   const f = fakeCodeBuddy();
   try {
@@ -346,6 +363,24 @@ test("CodeBuddy JSON 输出兼容 result / response / structured_output 与数�
   assert.equal(parseCodeBuddyOutput('{"structured_output":{"ok":true}}'), '{"ok":true}');
   assert.equal(parseCodeBuddyOutput('[{"response":"第一条"},{"result":"最后一条"}]'), "最后一条");
   assert.throws(() => parseCodeBuddyOutput("not json"), (e: unknown) => e instanceof LocalAgentError && e.code === "agent_bad_output");
+});
+
+test("WorkBuddy 原生图片仅进入 stdin 用户消息，不当文件路径或切换模型", async () => {
+  const f = fakeCodeBuddy();
+  try {
+    const images = [{ name: "01_测试.png", data: "aW1hZ2U=", mimeType: "image/png" }];
+    const packet = JSON.parse(localAgentInput("codebuddy", "转写", images));
+    assert.equal(packet.type, "user");
+    assert.deepEqual(packet.message.content[2], { type: "image", source: { type: "base64", media_type: "image/png", data: "aW1hZ2U=" } });
+    const output = await runLocalAgent("codebuddy", { systemPrompt: "转写", userPrompt: "转写", userImages: images,
+      env: { CODEBUDDY_BIN: f.bin, PATH: "", FAKE_IMAGE_INPUT: "1" } });
+    assert.match(output, /aW1hZ2U=/);
+    assert.match(output, /\|input_format=stream-json\|builtin_tools=\|model_override=false/);
+    assert.equal(localAgentInput("codebuddy", "plain"), "plain");
+    assert.throws(() => localAgentInput("claude", "x", images), /图片附件/);
+    assert.throws(() => localAgentInput("codebuddy", "x", [{ ...images[0]!, data: "file:///private" }]), /图片附件/);
+    assert.throws(() => localAgentInput("codebuddy", "x", [{ ...images[0]!, mimeType: "text/plain" }]), /图片附件/);
+  } finally { fs.rmSync(f.dir, { recursive: true, force: true }); }
 });
 
 test("CodeBuddy 未登录即使 CLI 以 exit 0 返回纯文本，也要归类为登录失效", async () => {

@@ -80,7 +80,7 @@ def main() -> None:
         return
 
     # 附上确定性的 display（界面照抄它，不自己格式化 —— 否则四舍五入口径又会分叉）
-    attach_display(result)
+    result = attach_display(result)
     print(json.dumps({"ok": True, "fn": fn, "result": result}, ensure_ascii=False, allow_nan=False))
 
 

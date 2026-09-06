@@ -44,13 +44,15 @@ const CODEX_LOGIN_FAILURE_TTL_MS = 60 * 1_000;
 const codexLoginJobs = new Map<string, CodexLoginProgress>();
 
 /** Windows 没有 POSIX 进程组；taskkill /T 是对应的整棵进程树终止语义。 */
-function signalProcessTree(child: { pid?: number; kill: (signal?: NodeJS.Signals) => boolean }, signal: NodeJS.Signals): void {
+function signalProcessTree(child: { pid?: number; kill: (signal?: NodeJS.Signals) => boolean }, signal: NodeJS.Signals): boolean {
   try {
     if (process.platform === "win32" && child.pid) {
-      spawnSync("taskkill.exe", ["/PID", String(child.pid), "/T", ...(signal === "SIGKILL" ? ["/F"] : [])], { windowsHide: true, stdio: "ignore" });
+      const result = spawnSync("taskkill.exe", ["/PID", String(child.pid), "/T", ...(signal === "SIGKILL" ? ["/F"] : [])], { windowsHide: true, stdio: "ignore", timeout: 5000 });
+      return !result.error && result.status === 0;
     } else if (child.pid) process.kill(-child.pid, signal);
-    else child.kill(signal);
-  } catch { /* 整棵已经退出 */ }
+    else return child.kill(signal);
+    return true;
+  } catch (e) { return (e as NodeJS.ErrnoException).code === "ESRCH"; }
 }
 
 /**
@@ -427,6 +429,10 @@ const REQUIRED_CODEBUDDY_FLAGS = [
   "--permission-mode", "--subagent-permission-mode",
 ] as const;
 
+// WorkBuddy's bundled CLI cold start can exceed five seconds even for --help.
+// Give each read-only probe a bounded startup window; timeout is not logout.
+const CODEBUDDY_PROBE_TIMEOUT_MS = 15_000;
+
 interface CodeBuddyAccount {
   userId: string;
   token: string;
@@ -542,7 +548,7 @@ async function codeBuddyAccount(bin: string, env: NodeJS.ProcessEnv, legacyEphem
     };
     const timer = setTimeout(() => {
       terminate(new Error("CodeBuddy auth probe timed out"));
-    }, 5_000);
+    }, CODEBUDDY_PROBE_TIMEOUT_MS);
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (chunk: string) => {
       stdout += chunk;
@@ -591,10 +597,10 @@ async function codeBuddyAccount(bin: string, env: NodeJS.ProcessEnv, legacyEphem
 async function inspectCodeBuddy(bin: string, env: NodeJS.ProcessEnv): Promise<{ version: string | null; runtime: CodeBuddyRuntime }> {
   const runEnv = codeBuddySubscriptionEnv(env);
   const versionCall = executableInvocation(bin, ["--version"], runEnv);
-  const v = await execFileAsync(versionCall.file, versionCall.args, { env: runEnv, timeout: 5_000, maxBuffer: 64 * 1024 });
+  const v = await execFileAsync(versionCall.file, versionCall.args, { env: runEnv, timeout: CODEBUDDY_PROBE_TIMEOUT_MS, maxBuffer: 64 * 1024 });
   const version = oneLine(v.stdout);
   const helpCall = executableInvocation(bin, ["--help"], runEnv);
-  const h = await execFileAsync(helpCall.file, helpCall.args, { env: runEnv, timeout: 5_000, maxBuffer: 192 * 1024 });
+  const h = await execFileAsync(helpCall.file, helpCall.args, { env: runEnv, timeout: CODEBUDDY_PROBE_TIMEOUT_MS, maxBuffer: 192 * 1024 });
   const help = String(h.stdout);
   if (!REQUIRED_CODEBUDDY_FLAGS.every((flag) => help.includes(flag))) {
     throw new LocalAgentError("agent_cli_too_old", "CodeBuddy 版本过旧，缺少受限对话所需的安全参数");
@@ -639,12 +645,14 @@ export async function probeCodeBuddy(env: NodeJS.ProcessEnv = process.env): Prom
 export interface RunLocalAgentOptions {
   systemPrompt: string;
   userPrompt: string;
+  /** WorkBuddy native upload blocks; bytes already validated by the ingest boundary. Never file paths. */
+  userImages?: Array<{ name: string; data: string; mimeType: string }>;
   outputSchema?: unknown;
   signal?: AbortSignal;
   env?: NodeJS.ProcessEnv;
   timeoutMs?: number;
   /**
-   * Deep 研究专用：关掉所有内建工具，只开放这一个显式 MCP 白名单。
+   * Deep 研究或资料转写：关掉所有内建工具，只开放这一个显式 MCP 白名单。
    * 配置只含本地可执行文件与运行目录，不得放密钥。
    */
   controlledMcp?: {
@@ -655,6 +663,22 @@ export interface RunLocalAgentOptions {
     allowedTools: string[];
     maxTurns?: number;
   };
+}
+
+export function localAgentInput(agent: LocalAgentId, prompt: string, images?: RunLocalAgentOptions["userImages"]): string {
+  if (!images?.length) return prompt;
+  if (agent !== "codebuddy" || images.length > 10 || images.some((im) =>
+    typeof im.name !== "string" || !im.name || im.name.length > 200 ||
+    !["image/png", "image/jpeg", "image/webp", "image/gif"].includes(im.mimeType) ||
+    typeof im.data !== "string" || !im.data || !/^[A-Za-z0-9+/]+={0,2}$/.test(im.data)) ||
+    images.reduce((sum, im) => sum + im.data.length, 0) > 32 * 1024 * 1024) {
+    throw new LocalAgentError("agent_bad_image", "图片附件格式或大小不受支持");
+  }
+  return JSON.stringify({ type: "user", message: { role: "user", content: [
+    { type: "text", text: prompt },
+    ...images.flatMap((im) => [{ type: "text", text: `上传图片 source_file=${JSON.stringify(im.name)}` },
+      { type: "image", source: { type: "base64", media_type: im.mimeType, data: im.data } }]),
+  ] } }) + "\n";
 }
 
 /** 可单测的参数生成器。普通对话无工具；Deep 只开放显式受控 MCP。 */
@@ -788,6 +812,7 @@ export async function runLocalAgent(agent: LocalAgentId, opts: RunLocalAgentOpti
     throw new LocalAgentError("agent_busy", `本机 Agent 已有 ${MAX_ACTIVE_LOCAL_AGENTS} 个任务在运行，请稍后再试`);
   }
   const baseEnv = opts.env ?? process.env;
+  const input = localAgentInput(agent, opts.userPrompt, opts.userImages);
   const bin = findExecutable(command, baseEnv);
   if (!bin) throw new LocalAgentError("agent_not_installed", `本机未安装 ${label}`);
   // CodeBuddy 能力与登录探针是异步的；先占槽位，避免多个请求同时通过上面的容量检查。
@@ -837,6 +862,7 @@ export async function runLocalAgent(agent: LocalAgentId, opts: RunLocalAgentOpti
     const args = agent === "claude"
       ? claudeArgs(opts.systemPrompt, opts.outputSchema, opts.controlledMcp)
       : codeBuddyArgs(opts.systemPrompt, opts.outputSchema, codeBuddyRuntime!.legacyEphemeralHome, opts.controlledMcp);
+    if (opts.userImages?.length) args.push("--input-format", "stream-json");
     const launch = executableInvocation(bin, args, runEnv);
     const child = spawn(launch.file, launch.args, {
       cwd: tmpDir,
@@ -870,13 +896,16 @@ export async function runLocalAgent(agent: LocalAgentId, opts: RunLocalAgentOpti
       cleanup();
       fn();
     };
+    let closed = false;
+    let treeSignalled = false;
     const signalTree = (signal: NodeJS.Signals) => {
-      signalProcessTree(child, signal);
+      treeSignalled = signalProcessTree(child, signal) || treeSignalled;
     };
     const processTreeAlive = (): boolean => {
       if (process.platform === "win32") return child.exitCode === null;
       if (!child.pid) return false;
-      try { process.kill(-child.pid, 0); return true; } catch { return false; }
+      try { process.kill(-child.pid, 0); return true; }
+      catch (e) { return (e as NodeJS.ErrnoException).code !== "ESRCH"; }
     };
     const terminate = (error: LocalAgentError) => {
       if (settled || terminationError) return;
@@ -890,7 +919,8 @@ export async function runLocalAgent(agent: LocalAgentId, opts: RunLocalAgentOpti
       hardKillTimer = setTimeout(() => {
         signalTree("SIGKILL");
         killFallbackTimer = setTimeout(() => {
-          finish(() => reject(terminationError!));
+          const confirmed = closed && !processTreeAlive() && (process.platform !== "win32" || treeSignalled);
+          finish(() => reject(confirmed ? terminationError! : new LocalAgentError("agent_shutdown_failed", `${label} 进程树退出未确认，不能视为已取消`)));
         }, 2_000);
         killFallbackTimer.unref();
       }, 2_000);
@@ -918,13 +948,14 @@ export async function runLocalAgent(agent: LocalAgentId, opts: RunLocalAgentOpti
       if (Buffer.byteLength(stderr, "utf8") < maxErr) stderr += chunk.toString("utf8");
     });
     child.on("error", () => {
-      if (terminationError) return finish(() => reject(terminationError!));
+      if (terminationError) return; // close + tree verification owns acknowledgement
       finish(() => reject(new LocalAgentError("agent_start_failed", `${label} 启动失败`)));
     });
     child.on("close", (code) => {
+      closed = true;
       if (terminationError) {
         // 直接 child 退出不代表它派生的进程也退出；组还活着就保留 KILL timer。
-        if (processTreeAlive()) return;
+        if (processTreeAlive() || (process.platform === "win32" && !treeSignalled)) return;
         return finish(() => reject(terminationError!));
       }
       if (code !== 0) return finish(() => reject(failureMessage(agent, stdout, stderr, code)));
@@ -939,6 +970,6 @@ export async function runLocalAgent(agent: LocalAgentId, opts: RunLocalAgentOpti
         }
       });
     });
-    child.stdin.end(opts.userPrompt, "utf8");
+    child.stdin.end(input, "utf8");
   });
 }

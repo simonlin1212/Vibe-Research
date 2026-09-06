@@ -7,6 +7,35 @@ import test from "node:test";
 import { LocalAgentStageAgent } from "../src/engines/local_agent_stage_agent.ts";
 import { LocalAgentError } from "../src/local_agent_runtime.ts";
 
+test("订阅阶段把用户取消信号传给真实运行适配器", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "vra-local-cancel-"));
+  try {
+    for (const agent of ["claude", "codebuddy"] as const) {
+      const ac = new AbortController();
+      let received: AbortSignal | undefined;
+      const runner = new LocalAgentStageAgent({ agent, runId: "cancel", runDir: root,
+        repoRoot: root, python: "python3", eventsPath: path.join(root, "events.jsonl"), timeoutMs: 1000,
+        complete: async (_agent, options) => { received = options.signal; return "{}"; } });
+      await runner.runTurn("profile", 1, "x", undefined, ac.signal);
+      assert.equal(received, ac.signal);
+      ac.abort();
+      assert.equal(received?.aborted, true);
+    }
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test("进程树退出未确认必须冒泡，不能被取消检查盖成成功取消", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "vra-local-stop-fail-"));
+  try {
+    const ac = new AbortController();
+    const runner = new LocalAgentStageAgent({ agent: "claude", runId: "stop-fail", runDir: root,
+      repoRoot: root, python: "python3", eventsPath: path.join(root, "events.jsonl"), timeoutMs: 1000,
+      complete: async () => { ac.abort(new Error("用户取消研究")); throw new LocalAgentError("agent_shutdown_failed", "未确认"); } });
+    await assert.rejects(runner.runTurn("profile", 1, "x", undefined, ac.signal),
+      (e: unknown) => e instanceof LocalAgentError && e.code === "agent_shutdown_failed");
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
 test("本机订阅 Agent 每阶段只得到五个受控 MCP 工具，并如实记账产物变更", async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "vra-local-stage-"));
   const runDir = path.join(root, "run");

@@ -206,7 +206,8 @@ export async function runStartup(
   const api = spawn(process.execPath, ["orchestrator/src/api.ts", "--port", "8765", "--host", "127.0.0.1"], {
     cwd: repoRoot, env, detached, stdio: "inherit",
   });
-  const ui = spawn("npm", ["run", "dev", "--prefix", "desktop", "--", "--host", "127.0.0.1"], {
+  // 绑定策略交给 Vite：默认回环；用户显式 VRA_LAN=1 时才开放 UI，API 仍绑回环。
+  const ui = spawn("npm", ["run", "dev", "--prefix", "desktop"], {
     cwd: repoRoot, env, detached, stdio: "inherit",
   });
   let apiLaunchError: Error | null = null;

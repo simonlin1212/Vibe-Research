@@ -10,6 +10,24 @@ import pytest
 REPO = Path(__file__).resolve().parents[2]
 
 
+def test_catalog_names_actual_request_fields():
+    from backtest.cli import _catalog
+    from backtest.gate import Plan, plan_backtest
+
+    catalog = _catalog()
+    schema = catalog["input_schema"]
+    assert schema["required"] == ["codes", "start", "end"]
+    assert schema["properties"]["codes"]["type"] == "array"
+    assert set(schema["properties"]) == {
+        "codes", "start", "end", "style", "strategy", "params", "initial_cash", "allow_short",
+    }
+    example = catalog["example_request"]
+    plan = plan_backtest(**{k: v for k, v in example.items() if k not in ("strategy", "params")})
+    assert isinstance(plan, Plan)
+    assert plan.codes == ["AAPL"]
+    assert plan.initial_cash == 100000
+
+
 @pytest.mark.parametrize("mode,reason", [
     ("failed", "测试取数端点超时"),
     ("empty", "区间内一根 bar 都没有"),

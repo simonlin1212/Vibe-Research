@@ -14,7 +14,10 @@ exposure caps that work with every optimizer, not only the bounds baked into
 
 The layer runs on the optimizer's output frame (signed weights, one row per
 rebalance date). Magnitudes are adjusted and signs are preserved, so
-long/short books work too. Constraints apply in config order, and the layer
+long/short books work too. Constraints apply in config order over bounded passes;
+the returned weights must satisfy every constraint simultaneously. This is
+feasibility enforcement, not a closest-portfolio optimizer. A nonconvergent or
+unfunded combination raises ValueError instead of returning violated bounds. The layer
 only acts on names that are already active: it reshapes allocations, it
 never opens or closes positions. Off by default, so existing configs behave
 exactly as before.
@@ -57,6 +60,9 @@ class MaxWeight:
     def __init__(self, cap: float) -> None:
         self.cap = cap
 
+    def satisfied(self, w: np.ndarray, codes: Sequence[str]) -> bool:
+        return bool(np.all(w <= self.cap + _TOL))
+
     def apply(self, w: np.ndarray, codes: Sequence[str]) -> np.ndarray:
         del codes  # per-name rule, codes unused
         w = w.astype(float).copy()
@@ -80,15 +86,20 @@ class MinWeight:
     The lift is funded pro-rata by the names above the floor (each gives
     up weight in proportion to how far it sits above the floor), so gross
     exposure is preserved. If the book cannot fund the floor
-    (floor * n_active > gross), the date degrades to equal weights.
+    (floor * n_active > gross), raise instead of returning below-floor weights.
     """
 
     def __init__(self, floor: float) -> None:
         self.floor = floor
 
+    def satisfied(self, w: np.ndarray, codes: Sequence[str]) -> bool:
+        return bool(np.all(w >= self.floor - _TOL))
+
     def apply(self, w: np.ndarray, codes: Sequence[str]) -> np.ndarray:
         del codes
         w = w.astype(float).copy()
+        if self.floor * np.count_nonzero(w > _EPS) > float(w.sum()) + _TOL:
+            raise ValueError("min_weight floor cannot be funded without increasing gross exposure")
         for _ in range(_MAX_PASSES):
             below = (w > _EPS) & (w < self.floor - _TOL)
             if not below.any():
@@ -97,8 +108,7 @@ class MinWeight:
             above = w > self.floor + _TOL
             avail = float((w[above] - self.floor).sum())
             if avail <= _TOL:
-                n = len(w)
-                return np.full(n, w.sum() / n) if n else w
+                raise ValueError("min_weight floor cannot be funded")
             w[below] = self.floor
             w[above] -= (w[above] - self.floor) / avail * need
         return w
@@ -116,6 +126,10 @@ class GroupExposure:
     def __init__(self, groups: Mapping[str, str], caps: Mapping[str, float]) -> None:
         self.groups: Dict[str, str] = dict(groups)
         self.caps: Dict[str, float] = dict(caps)
+
+    def satisfied(self, w: np.ndarray, codes: Sequence[str]) -> bool:
+        return all(float(w[[i for i, c in enumerate(codes) if self.groups.get(c) == group]].sum()) <= cap + _TOL
+                   for group, cap in self.caps.items())
 
     def apply(self, w: np.ndarray, codes: Sequence[str]) -> np.ndarray:
         w = w.astype(float).copy()
@@ -191,6 +205,8 @@ def apply_constraints_frame(
     """
     if not constraints:
         return frame
+    if not np.isfinite(frame.to_numpy(dtype=float)).all():
+        raise ValueError("constraint input weights must be finite")
     out = frame.copy()
     for dt in frame.index:
         row = frame.loc[dt]
@@ -199,7 +215,15 @@ def apply_constraints_frame(
             continue
         signs = np.sign(row[codes].to_numpy(dtype=float))
         mags = np.abs(row[codes].to_numpy(dtype=float))
-        for con in constraints:
-            mags = con.apply(mags, codes)
+        gross = float(mags.sum())
+        for _ in range(_MAX_PASSES):
+            for con in constraints:
+                mags = con.apply(mags, codes)
+            if not np.isfinite(mags).all() or np.any(mags <= 0) or float(mags.sum()) > gross + _TOL:
+                raise ValueError("constraint combination produced invalid weights")
+            if all(con.satisfied(mags, codes) for con in constraints):
+                break
+        else:
+            raise ValueError("constraint combination did not converge to jointly valid weights")
         out.loc[dt, codes] = signs * mags
     return out

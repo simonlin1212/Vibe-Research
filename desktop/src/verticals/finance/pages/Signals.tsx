@@ -241,7 +241,7 @@ function GpuRentPanel() {
         {
           name: "已结算月实际（区间中点）", type: "line" as const, data: actualData,
           symbol: "circle", symbolSize: 7, lineStyle: { width: 2 },
-          itemStyle: { color: "#2dd4bf" }, connectNulls: false,
+          itemStyle: { color: "#8095b5" }, connectNulls: false,
         },
         {
           name: "市场预期中位", type: "line" as const, data: expectedData,

@@ -21,6 +21,7 @@ import { FinanceHomeAgent } from "@/components/ui/FinanceAiDock";
 import { Disclaimer } from "@/components/ui/Disclaimer";
 import { useAiRuntime } from "@/hooks/useAiRuntime";
 import { useAiPage } from "../../../core/ai/pageContext";
+import { HomeOverview } from "../components/HomeOverview";
 
 type Feature = {
   to: string;
@@ -71,21 +72,20 @@ export function Home() {
 
   return (
     <div>
-      <section className="relative overflow-hidden rounded-3xl border border-primary/20 bg-gradient-to-br from-primary/[0.11] via-card/60 to-card/25 px-6 py-6 shadow-[0_24px_80px_-52px_hsl(var(--primary)/0.7)] sm:px-8">
-        <div className="pointer-events-none absolute -right-16 -top-24 h-64 w-64 rounded-full bg-primary/10 blur-3xl" />
+      <section className="mb-7 py-2">
         <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="inline-flex items-center gap-2 text-[11px] font-semibold tracking-wide text-primary">
               <Sparkles className="h-3.5 w-3.5" /> {agentEnabled ? "Vibe Research Agent 已开启" : "模型直连模式"}
             </div>
-            <h1 className="mt-3 text-3xl font-black tracking-tight sm:text-4xl">本地金融研究 Agent</h1>
+            <h1 className="workspace-title mt-3">研究，从全局开始。</h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
               {agentEnabled ? "看市场、做研究、留证据。Agent 驱动完整流程，AI 来源自由接入。" : "当前直接连接所选模型；确定性数据功能照常可用，深度任务需要重新开启 Agent。"}
             </p>
           </div>
           <Link
             to="/settings"
-            className="inline-flex shrink-0 items-center gap-2 self-start rounded-xl border border-primary/30 bg-primary/[0.10] px-4 py-2.5 text-sm font-semibold text-primary transition-colors hover:bg-primary/[0.18] sm:self-center"
+            className="inline-flex shrink-0 items-center gap-2 self-start rounded border border-border bg-card px-4 py-2.5 text-xs font-medium text-primary transition-colors hover:border-primary/50 sm:self-center"
           >
             <Settings className="h-4 w-4" />
             {modelReady ? "AI 已接入" : "接入 AI"}
@@ -93,6 +93,8 @@ export function Home() {
           </Link>
         </div>
       </section>
+
+      <HomeOverview />
 
       <div className="mt-5">
         <FinanceHomeAgent />
@@ -107,7 +109,7 @@ export function Home() {
           <span className="text-xs text-muted-foreground">点击即达</span>
         </div>
 
-        <div className="divide-y divide-border/50 rounded-2xl border border-border/60 bg-card/25 px-4 sm:px-5">
+        <div className="glass divide-y divide-border px-4 sm:px-5">
           {GROUPS.map((group) => (
             <div key={group.title} className="grid gap-2 py-3 sm:grid-cols-[6.5rem_1fr] sm:items-center">
               <h3 className="text-xs font-semibold text-muted-foreground">{group.title}</h3>

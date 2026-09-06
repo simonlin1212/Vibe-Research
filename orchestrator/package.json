@@ -1,6 +1,6 @@
 {
   "name": "vibe-research-orchestrator",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "private": true,
   "description": "薄编排器:用官方 Codex TS SDK 驱动六阶段研究状态机 + validator + 合规 gate(零 fork)",
   "type": "module",
