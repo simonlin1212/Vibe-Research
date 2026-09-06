@@ -368,6 +368,32 @@ export function checkNumberFidelity(report: string, evById: Map<string, Evidence
   const quotedText = quoted.join("\n");
   const secs = reportSections(report);
   let total = 0, exact = 0, anyDisplay = false, shouldHaveDisplay = 0;
+  // 违规提示用:全量"display / 数值"索引。校验时数字必须绑**同行引用的 id**(纪律不变),
+  // 但报违规时告诉 agent"这个数其实存在于 X 的 display / 值里,把 X 补进同行引用即可"——
+  // 9 万 token 上下文里自己找要翻 800 条 evidence,提示一下是 1 token 的事(2026-09-05 600519
+  // run: report 收敛 9→3→1,最后 1 个就是 5.47% 漏引 calc-e45da3 的 display,数本身全对)。
+  const displayOwner = (raw: string): string | null => {
+    const n = normDisp(raw);
+    for (const [id, rec] of calcById) {
+      for (const r of resultProjection(rec.output)) {
+        if (r.display && r.status === "ok" && normDisp(r.display) === n) return id;
+      }
+    }
+    return null;
+  };
+  // evidence 数值归属:val 与某条 evidence 的数值叶子相等(含 元→亿/万、小数→% 量纲)但没引它。
+  // 容差 2e-5 相对 = 覆盖"亿元 2 位小数"的展示舍入(445.1688 亿 → 445.17 亿,相对差 2.7e-6);
+  // 这只是**提示**(不放松校验):校验该拦的还是拦,提示给错也只是让 agent 多看一个 id。
+  const valueOwner = (val: number): string | null => {
+    const scaled = [val, val * 1e8, val * 1e4, val / 1e8, val / 1e4, val * 100];
+    for (const [id, e] of evById) {
+      const v = e.value;
+      if (typeof v === "number" && Number.isFinite(v)) {
+        if (scaled.some((s) => Math.abs(s - v) <= Math.abs(v) * 2e-5 + 1e-9)) return id;
+      }
+    }
+    return null;
+  };
   const violations: string[] = [];        // display 纪律相关(引用了 calc 的行)—— 受 applicable 门控
   const evidenceViolations: string[] = []; // 纯 evidence 行 —— **与 display 无关,始终上报**
   for (const [sec, lines] of Object.entries(secs)) {
@@ -467,7 +493,12 @@ export function checkNumberFidelity(report: string, evById: Map<string, Evidence
         // 🔴 两类违规必须分开:`applicable`(本次有没有 display)只能决定**display 纪律**适不适用,
         //    决定不了"引了一个真实 ev-id 却写了别的数"要不要报 —— 那与 display 无关。
         //    合在一起的后果:旧 calc 运行 / 纯取数运行里,事实表写错数字完全不会被报出来(Codex fidelity-r2 P1)。
-        (calcIds.length ? violations : evidenceViolations).push(`[${sec}] ${t.raw} ← ${line.slice(0, 80)}`);
+        // 提示(不放松校验):数字若实际存在于**未引用**的 calc display / evidence 值里,
+        //  直接告诉 agent 该引哪个 id —— 把"违规"变成 1 token 可执行的修复指令,
+        //  而不是让它在 9 万 token 上下文里自己翻 800 条 evidence。
+        const hint = displayOwner(raw) ?? (neg ? null : valueOwner(val)) ?? (signed ? valueOwner(-val) : null);
+        const msg = `[${sec}] ${t.raw} ← ${line.slice(0, 80)}` + (hint ? ` 【数字真实存在,只是没引用:补引 ${hint}】` : " 【数字不在任何已引用证据/计算中:改写或补正确引用】");
+        (calcIds.length ? violations : evidenceViolations).push(msg);
       }
     }
   }
