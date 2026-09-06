@@ -49,6 +49,9 @@ jobs:
           npm ci --prefix desktop
       - name: Install Python dependencies
         run: python -m pip install pytest -r .agents/skills/data-access/scripts/requirements.txt
+      - name: Windows synthetic process diagnostics
+        if: runner.os == 'Windows'
+        run: node scripts/windows-ci-diagnostics.mjs
       - name: Orchestrator full suite and typecheck
         if: runner.os != 'Windows'
         run: |

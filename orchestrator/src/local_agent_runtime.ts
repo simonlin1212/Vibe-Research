@@ -542,9 +542,9 @@ async function codeBuddyAccount(bin: string, env: NodeJS.ProcessEnv, legacyEphem
       hardKillTimer = setTimeout(() => {
         signalProcessTree(child, "SIGKILL");
         killFallbackTimer = setTimeout(() => finish(() => reject(terminationError!)), 2_000);
-        killFallbackTimer.unref();
+        // Keep shutdown acknowledgement alive even after the child closes its pipes.
       }, 500);
-      hardKillTimer.unref();
+      // This bounded timer owns the still-pending probe promise.
     };
     const timer = setTimeout(() => {
       terminate(new Error("CodeBuddy auth probe timed out"));
@@ -922,9 +922,9 @@ export async function runLocalAgent(agent: LocalAgentId, opts: RunLocalAgentOpti
           const confirmed = closed && !processTreeAlive() && (process.platform !== "win32" || treeSignalled);
           finish(() => reject(confirmed ? terminationError! : new LocalAgentError("agent_shutdown_failed", `${label} 进程树退出未确认，不能视为已取消`)));
         }, 2_000);
-        killFallbackTimer.unref();
+        // Do not let Node exit while this shutdown acknowledgement is pending.
       }, 2_000);
-      hardKillTimer.unref();
+      // The detached child may close before its descendants; keep the bounded wait alive.
     };
     const onAbort = () => {
       terminate(new LocalAgentError("agent_cancelled", `${label} 请求已取消`));
