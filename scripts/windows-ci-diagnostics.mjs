@@ -14,7 +14,10 @@ try {
   const script = path.join(dir, 'fake.cjs'), bin = path.join(dir, 'fake.ps1');
   fs.writeFileSync(script, "console.log(JSON.stringify({args:process.argv.slice(2)}));process.exit(7);\n");
   fs.writeFileSync(bin, `& '${quote(process.execPath)}' '${quote(script)}' @args\r\nexit $LASTEXITCODE\r\n`);
-  for (const [label, env] of [['full', process.env], ['minimal', { PATH: '' }]]) {
+  const clean = { ...process.env };
+  delete clean.PSModulePath;
+  const bootstrap = { PATH: '', SystemRoot: process.env.SystemRoot };
+  for (const [label, env] of [['full', process.env], ['clean-modules', clean], ['minimal', { PATH: '' }], ['bootstrap', bootstrap]]) {
     const launch = executableInvocation(bin, ['--help', 'two words'], env);
     emit(label, spawnSync(launch.file, launch.args, { env, encoding: 'utf8', timeout: 10000 }));
   }
@@ -28,6 +31,9 @@ try {
   }));
   emit('acl-encoded', spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', Buffer.from(acl, 'utf16le').toString('base64')], {
     env: { ...process.env, VRA_PRIVATE_FILE: file }, encoding: 'utf8', timeout: 10000,
+  }));
+  emit('acl-clean-modules', spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', acl], {
+    env: { ...clean, VRA_PRIVATE_FILE: file }, encoding: 'utf8', timeout: 10000,
   }));
 } finally {
   fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
