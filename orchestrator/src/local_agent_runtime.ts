@@ -882,8 +882,10 @@ export async function runLocalAgent(agent: LocalAgentId, opts: RunLocalAgentOpti
     let killFallbackTimer: NodeJS.Timeout | null = null;
 
     const cleanup = () => {
-      fs.rmSync(tmpDir, { recursive: true, force: true });
       opts.signal?.removeEventListener("abort", onAbort);
+      // Windows may briefly retain a handle after process close. Retry within a
+      // fixed bound; a persistent cleanup failure must never become success.
+      fs.rmSync(tmpDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     };
     const finish = (fn: () => void) => {
       if (settled) return;
@@ -893,7 +895,11 @@ export async function runLocalAgent(agent: LocalAgentId, opts: RunLocalAgentOpti
       if (killFallbackTimer) clearTimeout(killFallbackTimer);
       activeLocalAgents = Math.max(0, activeLocalAgents - 1);
       untrackLocalAgentProcess(child);
-      cleanup();
+      try { cleanup(); }
+      catch {
+        reject(new LocalAgentError("agent_cleanup_failed", `${label} 临时工作区清理失败，请检查本机文件权限`));
+        return;
+      }
       fn();
     };
     let closed = false;

@@ -38,8 +38,12 @@ exit 0
 `;
 
 function windowsAcl(script: string, file: string): { status: number | null; error?: Error } {
+  const env: NodeJS.ProcessEnv = { ...process.env, VRA_PRIVATE_FILE: path.resolve(file) };
+  // A parent PowerShell 7 process exports its module search path. Windows
+  // PowerShell 5.1 cannot load those Security modules; use its own defaults.
+  for (const key of Object.keys(env)) if (key.toLowerCase() === "psmodulepath") delete env[key];
   const result = spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script], {
-    env: { ...process.env, VRA_PRIVATE_FILE: path.resolve(file) }, encoding: "utf8", windowsHide: true, timeout: 10_000,
+    env, encoding: "utf8", windowsHide: true, timeout: 10_000,
   });
   return { status: result.status, error: result.error };
 }

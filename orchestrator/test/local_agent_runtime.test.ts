@@ -4,6 +4,13 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
+// Minimal fixture environments still need Windows' OS/profile bootstrap values.
+// Do not inherit API keys, OAuth tokens or model-provider configuration.
+const PLATFORM_ENV: NodeJS.ProcessEnv = process.platform === "win32"
+  ? Object.fromEntries(Object.entries(process.env).filter(([key]) =>
+    /^(SystemRoot|windir|ComSpec|PATHEXT|TEMP|TMP|USERPROFILE|APPDATA|LOCALAPPDATA|PROGRAMDATA|PROGRAMFILES|PROGRAMFILES\(X86\)|HOMEDRIVE|HOMEPATH)$/i.test(key)))
+  : {};
+
 import {
   LocalAgentError, claudeArgs, codeBuddyArgs, codexLoginProgress, findExecutable, parseClaudeOutput,
   executableInvocation, normalizeLocalAgentTimeoutMs, parseCodeBuddyOutput, probeClaude, probeCodeBuddy, probeCodex, runLocalAgent,
@@ -28,7 +35,7 @@ function fakeNodeExecutable(dir: string, name: string, source: string): string {
   const bin = path.join(dir, `${name}.ps1`);
   fs.writeFileSync(script, source);
   const quote = (s: string) => s.replaceAll("'", "''");
-  fs.writeFileSync(bin, `& '${quote(process.execPath)}' '${quote(script)}' @args\r\nexit $LASTEXITCODE\r\n`);
+  fs.writeFileSync(bin, `$ErrorActionPreference = 'Stop'\r\n& '${quote(process.execPath)}' '${quote(script)}' @args\r\nexit $LASTEXITCODE\r\n`);
   return bin;
 }
 
@@ -91,11 +98,11 @@ if(a[0]==='login'){
 }
 `);
   try {
-    const before = await probeCodex(bin, codexHome, { TEST_LAUNCH_FILE: launchFile });
+    const before = await probeCodex(bin, codexHome, { ...PLATFORM_ENV, TEST_LAUNCH_FILE: launchFile });
     assert.equal(before.status, "not_authenticated");
 
-    const first = startCodexLogin(bin, codexHome, { TEST_LAUNCH_FILE: launchFile });
-    const duplicate = startCodexLogin(bin, codexHome, { TEST_LAUNCH_FILE: launchFile });
+    const first = startCodexLogin(bin, codexHome, { ...PLATFORM_ENV, TEST_LAUNCH_FILE: launchFile });
+    const duplicate = startCodexLogin(bin, codexHome, { ...PLATFORM_ENV, TEST_LAUNCH_FILE: launchFile });
     assert.equal(first.state, "started");
     assert.equal(duplicate.state, "pending", "同一个产品 home 不能同时弹出两个登录流程");
     assert.equal(codexLoginProgress(codexHome)?.state, "pending");
@@ -106,7 +113,7 @@ if(a[0]==='login'){
     const launched = JSON.parse(fs.readFileSync(launchFile, "utf8")) as { home: string; args: string[] };
     assert.equal(launched.home, codexHome);
     assert.deepEqual(launched.args, ["login"]);
-    const after = await probeCodex(bin, codexHome, { TEST_LAUNCH_FILE: launchFile });
+    const after = await probeCodex(bin, codexHome, { ...PLATFORM_ENV, TEST_LAUNCH_FILE: launchFile });
     assert.equal(after.status, "ready");
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
@@ -132,7 +139,7 @@ if(process.env.TEST_IS_CHILD==='1'){
 }
 `);
   try {
-    const env = { TEST_PARENT_PID_FILE: parentPidFile, TEST_CHILD_PID_FILE: childPidFile };
+    const env = { ...PLATFORM_ENV, TEST_PARENT_PID_FILE: parentPidFile, TEST_CHILD_PID_FILE: childPidFile };
     const started = Date.now();
     assert.equal(startCodexLogin(bin, codexHome, env, { timeoutMs: 6_000 }).state, "started");
     for (let i = 0; i < 500 && (!fs.existsSync(parentPidFile) || !fs.existsSync(childPidFile)); i += 1) {
@@ -184,7 +191,7 @@ test("本机 Claude 探针只返回版本与登录布尔，不泄露账号", asy
   const f = fakeClaude();
   try {
     assert.equal(findExecutable("claude", { CLAUDE_BIN: f.bin, PATH: "" }), f.bin);
-    const status = await probeClaude({ CLAUDE_BIN: f.bin, PATH: "" });
+    const status = await probeClaude({ ...PLATFORM_ENV, CLAUDE_BIN: f.bin, PATH: "" });
     assert.equal(status.status, "ready");
     assert.equal(status.version, "2.1.226 (Claude Code)");
     assert.ok(!JSON.stringify(status).includes("hidden@example.com"));
@@ -194,11 +201,11 @@ test("本机 Claude 探针只返回版本与登录布尔，不泄露账号", asy
 test("Claude 探针不把 API/云平台认证冒充订阅，旧版 CLI 也不点亮", async () => {
   const f = fakeClaude();
   try {
-    const api = await probeClaude({ CLAUDE_BIN: f.bin, PATH: "", FAKE_AUTH_METHOD: "api_key" });
+    const api = await probeClaude({ ...PLATFORM_ENV, CLAUDE_BIN: f.bin, PATH: "", FAKE_AUTH_METHOD: "api_key" });
     assert.equal(api.status, "not_authenticated");
-    const bedrock = await probeClaude({ CLAUDE_BIN: f.bin, PATH: "", FAKE_API_PROVIDER: "bedrock" });
+    const bedrock = await probeClaude({ ...PLATFORM_ENV, CLAUDE_BIN: f.bin, PATH: "", FAKE_API_PROVIDER: "bedrock" });
     assert.equal(bedrock.status, "not_authenticated");
-    const old = await probeClaude({ CLAUDE_BIN: f.bin, PATH: "", FAKE_OLD_HELP: "1" });
+    const old = await probeClaude({ ...PLATFORM_ENV, CLAUDE_BIN: f.bin, PATH: "", FAKE_OLD_HELP: "1" });
     assert.equal(old.status, "probe_failed");
   } finally { fs.rmSync(f.dir, { recursive: true, force: true }); }
 });
@@ -208,7 +215,7 @@ test("Claude 订阅调用走 stdin，并移除会静默改计费方的 Anthropic
   try {
     const out = await runLocalAgent("claude", {
       systemPrompt: "规则", userPrompt: "USER_SECRET_PROMPT",
-      env: {
+      env: { ...PLATFORM_ENV,
         CLAUDE_BIN: f.bin, PATH: process.env.PATH, ANTHROPIC_API_KEY: "must-not-forward",
         CLAUDE_CODE_OAUTH_TOKEN: "official-subscription-token",
       },
@@ -271,15 +278,15 @@ test("CodeBuddy 官方控制探针只返回版本与登录布尔，不泄露账�
   const f = fakeCodeBuddy();
   try {
     assert.equal(findExecutable("codebuddy", { CODEBUDDY_BIN: f.bin, PATH: "" }), f.bin);
-    const status = await probeCodeBuddy({ CODEBUDDY_BIN: f.bin, PATH: "" });
+    const status = await probeCodeBuddy({ ...PLATFORM_ENV, CODEBUDDY_BIN: f.bin, PATH: "" });
     assert.equal(status.status, "ready");
     assert.equal(status.version, "2.143.1 (CodeBuddy Code)");
     assert.ok(!JSON.stringify(status).includes("hidden@example.com"));
     assert.ok(!JSON.stringify(status).includes("secret-token"));
 
-    const loggedOut = await probeCodeBuddy({ CODEBUDDY_BIN: f.bin, PATH: "", FAKE_NOT_LOGGED: "1" });
+    const loggedOut = await probeCodeBuddy({ ...PLATFORM_ENV, CODEBUDDY_BIN: f.bin, PATH: "", FAKE_NOT_LOGGED: "1" });
     assert.equal(loggedOut.status, "not_authenticated");
-    const old = await probeCodeBuddy({ CODEBUDDY_BIN: f.bin, PATH: "", FAKE_OLD_HELP: "1" });
+    const old = await probeCodeBuddy({ ...PLATFORM_ENV, CODEBUDDY_BIN: f.bin, PATH: "", FAKE_OLD_HELP: "1" });
     assert.equal(old.status, "probe_failed");
   } finally { fs.rmSync(f.dir, { recursive: true, force: true }); }
 });
@@ -288,7 +295,7 @@ test("CodeBuddy 冷启动超过五秒不应误报登录检测失败", async () =
   const f = fakeCodeBuddy();
   try {
     for (const flag of ["FAKE_COLD_HELP", "FAKE_COLD_AUTH"]) {
-      const status = await probeCodeBuddy({ CODEBUDDY_BIN: f.bin, PATH: "", [flag]: "1" });
+      const status = await probeCodeBuddy({ ...PLATFORM_ENV, CODEBUDDY_BIN: f.bin, PATH: "", [flag]: "1" });
       assert.equal(status.status, "ready", flag);
       assert.equal(status.authenticated, true);
       assert.doesNotMatch(JSON.stringify(status), /secret-user|secret-token|hidden@example/);
@@ -301,7 +308,7 @@ test("CodeBuddy 订阅调用走 stdin，移除 API / token / 自定义端点并�
   try {
     const out = await runLocalAgent("codebuddy", {
       systemPrompt: "规则", userPrompt: "USER_SECRET_PROMPT",
-      env: {
+      env: { ...PLATFORM_ENV,
         CODEBUDDY_BIN: f.bin, PATH: process.env.PATH,
         CODEBUDDY_API_KEY: "must-not-forward", CODEBUDDY_AUTH_TOKEN: "must-not-forward",
         CODEBUDDY_BASE_URL: "https://custom.invalid", CODEBUDDY_MODEL: "other-model",
@@ -316,7 +323,7 @@ test("CodeBuddy Deep 首轮等待唯一 MCP，并维持订阅环境隔离", asyn
   try {
     const out = await runLocalAgent("codebuddy", {
       systemPrompt: "规则", userPrompt: "读取运行文件",
-      env: { CODEBUDDY_BIN: f.bin, PATH: process.env.PATH, FAKE_ECHO_MCP_ENV: "1" },
+      env: { ...PLATFORM_ENV, CODEBUDDY_BIN: f.bin, PATH: process.env.PATH, FAKE_ECHO_MCP_ENV: "1" },
       controlledMcp: {
         serverName: "vra", command: process.execPath, args: ["/app/run_tools_mcp.ts"],
         env: { VRA_RUN_DIR: "/data/runs/r1" }, allowedTools: ["mcp__vra__list_run_files"], maxTurns: 8,
@@ -337,14 +344,14 @@ test("WorkBuddy 桌面端旧 CLI 复用现有订阅登录，但回答只在一�
     const baseAppData = path.join(baseProfile, "AppData", "Roaming");
     const baseLocalAppData = path.join(baseProfile, "AppData", "Local");
     fs.mkdirSync(baseHome);
-    const status = await probeCodeBuddy({
+    const status = await probeCodeBuddy({ ...PLATFORM_ENV,
       CODEBUDDY_BIN: f.bin, PATH: process.env.PATH, HOME: baseHome,
       FAKE_BASE_HOME: baseHome, FAKE_LEGACY_HELP: "1",
     });
     assert.equal(status.status, "ready");
     const out = await runLocalAgent("codebuddy", {
       systemPrompt: "规则", userPrompt: "USER_SECRET_PROMPT",
-      env: {
+      env: { ...PLATFORM_ENV,
         CODEBUDDY_BIN: f.bin, PATH: process.env.PATH, HOME: baseHome,
         USERPROFILE: baseProfile, APPDATA: baseAppData, LOCALAPPDATA: baseLocalAppData,
         FAKE_BASE_HOME: baseHome, FAKE_BASE_USERPROFILE: baseProfile,
@@ -373,7 +380,7 @@ test("WorkBuddy 原生图片仅进入 stdin 用户消息，不当文件路径或
     assert.equal(packet.type, "user");
     assert.deepEqual(packet.message.content[2], { type: "image", source: { type: "base64", media_type: "image/png", data: "aW1hZ2U=" } });
     const output = await runLocalAgent("codebuddy", { systemPrompt: "转写", userPrompt: "转写", userImages: images,
-      env: { CODEBUDDY_BIN: f.bin, PATH: "", FAKE_IMAGE_INPUT: "1" } });
+      env: { ...PLATFORM_ENV, CODEBUDDY_BIN: f.bin, PATH: "", FAKE_IMAGE_INPUT: "1" } });
     assert.match(output, /aW1hZ2U=/);
     assert.match(output, /\|input_format=stream-json\|builtin_tools=\|model_override=false/);
     assert.equal(localAgentInput("codebuddy", "plain"), "plain");
@@ -389,7 +396,7 @@ test("CodeBuddy 未登录即使 CLI 以 exit 0 返回纯文本，也要归类为
     await assert.rejects(
       () => runLocalAgent("codebuddy", {
         systemPrompt: "规则", userPrompt: "hello",
-        env: { CODEBUDDY_BIN: f.bin, PATH: process.env.PATH, FAKE_EXEC_NOT_LOGGED: "1" },
+        env: { ...PLATFORM_ENV, CODEBUDDY_BIN: f.bin, PATH: process.env.PATH, FAKE_EXEC_NOT_LOGGED: "1" },
       }),
       (e: unknown) => e instanceof LocalAgentError && e.code === "agent_not_authenticated",
     );
@@ -418,7 +425,7 @@ setInterval(()=>{},1000);
         // 全量测试并行启动大量 Node 子进程；1 秒可能在假进程真正获得调度前就到期，
         // 那只测到了机器负载，不是“已启动的顽固进程树能否被清理”。
         systemPrompt: "规则", userPrompt: "等待", timeoutMs: 5_000,
-        env: {
+        env: { ...PLATFORM_ENV,
           CLAUDE_BIN: bin, PATH: process.env.PATH,
           TEST_PARENT_PID_FILE: parentPidFile, TEST_CHILD_PID_FILE: childPidFile,
         },
@@ -442,7 +449,7 @@ setInterval(()=>{},1000);
 `);
   const running = runLocalAgent("claude", {
     systemPrompt: "规则", userPrompt: "等待", timeoutMs: 60_000,
-    env: { CLAUDE_BIN: bin, PATH: process.env.PATH, TEST_PID_FILE: pidFile },
+    env: { ...PLATFORM_ENV, CLAUDE_BIN: bin, PATH: process.env.PATH, TEST_PID_FILE: pidFile },
   });
   try {
     for (let i = 0; i < 100 && !fs.existsSync(pidFile); i += 1) await new Promise((resolve) => setTimeout(resolve, 20));
@@ -454,18 +461,40 @@ setInterval(()=>{},1000);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
+test("临时目录清理失败应拒绝请求，不抛出未捕获异常或把任务悬空", async () => {
+  const f = fakeClaude();
+  const original = fs.rmSync;
+  let retained: fs.PathLike | undefined;
+  fs.rmSync = ((target, options) => {
+    if (String(target).includes(`${path.sep}vra-claude-`)) {
+      retained = target;
+      throw Object.assign(new Error("synthetic permission failure"), { code: "EPERM" });
+    }
+    return original(target, options);
+  }) as typeof fs.rmSync;
+  try {
+    await assert.rejects(runLocalAgent("claude", {
+      systemPrompt: "规则", userPrompt: "测试", env: { ...process.env, CLAUDE_BIN: f.bin },
+    }), (e: unknown) => e instanceof LocalAgentError && e.code === "agent_cleanup_failed");
+  } finally {
+    fs.rmSync = original;
+    if (retained) original(retained, { recursive: true, force: true, maxRetries: 5 });
+    original(f.dir, { recursive: true, force: true, maxRetries: 5 });
+  }
+});
+
 test("一次性任务也受本机 Agent 全局并发上限约束，不能绕过会话表无限启动", async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "vra-busy-claude-"));
   const bin = fakeNodeExecutable(dir, "claude", `setInterval(()=>{},1000);\n`);
   const controllers = Array.from({ length: 4 }, () => new AbortController());
   const runs = controllers.map((ac) => runLocalAgent("claude", {
     systemPrompt: "规则", userPrompt: "等待", signal: ac.signal,
-    env: { CLAUDE_BIN: bin, PATH: process.env.PATH },
+    env: { ...PLATFORM_ENV, CLAUDE_BIN: bin, PATH: process.env.PATH },
   }));
   try {
     await assert.rejects(
       () => runLocalAgent("claude", {
-        systemPrompt: "规则", userPrompt: "第五个", env: { CLAUDE_BIN: bin, PATH: process.env.PATH },
+        systemPrompt: "规则", userPrompt: "第五个", env: { ...PLATFORM_ENV, CLAUDE_BIN: bin, PATH: process.env.PATH },
       }),
       (e: unknown) => e instanceof LocalAgentError && e.code === "agent_busy",
     );

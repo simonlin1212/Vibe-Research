@@ -17,8 +17,9 @@ try {
   const clean = { ...process.env };
   delete clean.PSModulePath;
   const bootstrap = { PATH: '', SystemRoot: process.env.SystemRoot };
-  for (const [label, env] of [['full', process.env], ['clean-modules', clean], ['minimal', { PATH: '' }], ['bootstrap', bootstrap]]) {
-    const launch = executableInvocation(bin, ['--help', 'two words'], env);
+  const profile = Object.fromEntries(Object.entries(process.env).filter(([key]) => /^(SystemRoot|windir|ComSpec|PATHEXT|TEMP|TMP|USERPROFILE|APPDATA|LOCALAPPDATA|PROGRAMDATA|PROGRAMFILES|PROGRAMFILES\(X86\)|HOMEDRIVE|HOMEPATH)$/i.test(key)));
+  for (const [label, env] of [['full', process.env], ['clean-modules', clean], ['minimal', { PATH: '' }], ['bootstrap', bootstrap], ['profile', { ...profile, PATH: '' }]]) {
+    const launch = executableInvocation(bin, ['--help', 'two words', '', '{"x":"测试"}'], env);
     emit(label, spawnSync(launch.file, launch.args, { env, encoding: 'utf8', timeout: 10000 }));
   }
   const source = fs.readFileSync(new URL('../orchestrator/src/fsutil.ts', import.meta.url), 'utf8');
