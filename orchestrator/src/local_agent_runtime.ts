@@ -322,7 +322,7 @@ export function findExecutable(bin: string, env: NodeJS.ProcessEnv = process.env
   for (const candidate of candidates) {
     try {
       // npm 在 Windows 通常同时生成 claude.cmd 与 claude.ps1。优先返回可由
-      // powershell.exe -File 安全传参的 ps1；不要把含提示词的 argv 拼进 cmd.exe 命令串。
+      // 可解析 Node 入口的 npm ps1；不要把提示词送入 cmd.exe 或旧 PowerShell 的参数重解析。
       const ext = path.extname(candidate).toLowerCase();
       const ps1 = platform === "win32" && [".cmd", ".bat"].includes(ext) ? candidate.slice(0, -ext.length) + ".ps1" : candidate;
       fs.accessSync(ps1, platform === "win32" ? fs.constants.F_OK : fs.constants.X_OK);
@@ -332,6 +332,25 @@ export function findExecutable(bin: string, env: NodeJS.ProcessEnv = process.env
     }
   }
   return null;
+}
+
+/** Mirrors npm read-cmd-shim's $basedir target lookup, restricted to Node shims.
+ * The chosen installed CLI is trusted executable code, not a sandbox boundary.
+ * Bypass PowerShell 5.1's native-argument rewriting (empty args / JSON quotes).
+ */
+function npmNodeEntry(bin: string): string | null {
+  try {
+    const stat = fs.statSync(bin);
+    if (!stat.isFile() || stat.size > 64 * 1024) return null;
+    const source = fs.readFileSync(bin, "utf8").replace(/\r\n/g, "\n");
+    if (!source.startsWith("#!/usr/bin/env pwsh\n") ||
+      !source.includes("$basedir=Split-Path $MyInvocation.MyCommand.Definition -Parent\n")) return null;
+    const targets = [...source.matchAll(/&\s+"(?:\$basedir\/)?node\$exe"\s+"\$basedir\/([^"\r\n]+)"\s+\$args\b/g)].map((m) => m[1]!);
+    if (!targets.length || new Set(targets).size !== 1 || /[$`]/.test(targets[0]!) || !/\.[cm]?js$/i.test(targets[0]!)) return null;
+    const entry = path.resolve(path.dirname(bin), targets[0]!);
+    if (!fs.statSync(entry).isFile()) return null;
+    return entry;
+  } catch { return null; }
 }
 
 export function executableInvocation(
@@ -348,11 +367,9 @@ export function executableInvocation(
     if ([".cmd", ".bat"].includes(ext)) throw new LocalAgentError("agent_start_failed", "Windows CLI 缺少安全的 PowerShell 启动器");
     return { file: bin, args };
   }
-  const windowsRoot = env.SystemRoot ?? env.SYSTEMROOT ?? env.WINDIR;
-  const powershell = windowsRoot
-    ? path.win32.join(windowsRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
-    : "powershell.exe";
-  return { file: powershell, args: ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", bin, ...args] };
+  const entry = npmNodeEntry(bin);
+  if (!entry) throw new LocalAgentError("agent_windows_wrapper_unsupported", "Windows 仅支持原生 CLI 或标准 npm Node 启动器，请重新安装官方 CLI");
+  return { file: process.execPath, args: [entry, ...args] };
 }
 
 function oneLine(value: unknown): string | null {
@@ -815,6 +832,8 @@ export async function runLocalAgent(agent: LocalAgentId, opts: RunLocalAgentOpti
   const input = localAgentInput(agent, opts.userPrompt, opts.userImages);
   const bin = findExecutable(command, baseEnv);
   if (!bin) throw new LocalAgentError("agent_not_installed", `本机未安装 ${label}`);
+  // Reject unsupported wrappers before reserving a slot or creating a workspace.
+  executableInvocation(bin, [], baseEnv);
   // CodeBuddy 能力与登录探针是异步的；先占槽位，避免多个请求同时通过上面的容量检查。
   activeLocalAgents += 1;
   let codeBuddyRuntime: CodeBuddyRuntime | null = null;

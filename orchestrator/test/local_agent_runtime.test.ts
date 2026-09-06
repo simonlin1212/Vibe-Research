@@ -33,9 +33,8 @@ function fakeNodeExecutable(dir: string, name: string, source: string): string {
   }
   const script = path.join(dir, `${name}.cjs`);
   const bin = path.join(dir, `${name}.ps1`);
-  fs.writeFileSync(script, source);
-  const quote = (s: string) => s.replaceAll("'", "''");
-  fs.writeFileSync(bin, `$ErrorActionPreference = 'Stop'\r\n& '${quote(process.execPath)}' '${quote(script)}' @args\r\nexit $LASTEXITCODE\r\n`);
+  fs.writeFileSync(script, `#!/usr/bin/env node\n${source}`);
+  fs.writeFileSync(bin, `#!/usr/bin/env pwsh\n$basedir=Split-Path $MyInvocation.MyCommand.Definition -Parent\n& "node$exe" "$basedir/${name}.cjs" $args\nexit $LASTEXITCODE\n`);
   return bin;
 }
 
