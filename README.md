@@ -9,7 +9,7 @@
 
 <p align="center">
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-yellow"></a>
-  <a href="https://github.com/simonlin1212/Vibe-Research/releases/tag/v1.1.0"><img alt="公开版本 v1.1.0" src="https://img.shields.io/badge/release-v1.1.0-F35D2B"></a>
+  <a href="CHANGELOG.md"><img alt="源码版本 v1.2.0" src="https://img.shields.io/badge/source-v1.2.0-F35D2B"></a>
   <img alt="UI" src="https://img.shields.io/badge/UI-React%20%2B%20Vite-646cff">
   <img alt="Agent 默认关闭" src="https://img.shields.io/badge/Agent-opt--in-555">
   <img alt="Codex Harness" src="https://img.shields.io/badge/runtime-Codex%20Harness-black">
@@ -65,11 +65,11 @@
 
 ## 这是什么
 
-当前版本：**v1.1.0**。已同步 v1.0.4 基线及后继 Issue/PR 修复，新增多模型订阅接入、双引擎体验、界面升级与 Mac 独立客户端。
+当前源码版本 **v1.2.0**，基于已公开的 v1.1.0：保留多模型订阅接入、双引擎体验与新版界面；暂时撤下 Mac 客户端，只维护源码 + 本地浏览器工作台，方便使用自己的 Agent 改造开发。
 
-**[Mac 安装包与更新说明](https://github.com/simonlin1212/Vibe-Research/releases/tag/v1.1.0)**（Apple Silicon / M 系列，macOS 13+）。下载 `VibeResearch-1.1.0-M40-mac-arm64.dmg`，不要把 GitHub 自动生成的 Source code 压缩包当作安装包；附件以 Release 页面实际发布内容为准。
+本次更新源码，不提供新版安装包；GitHub 已有 v1.1.0 Release 和历史安装包保留作历史版本。
 
-源码版本 **1.1.0**，Mac 构建号 **40**。App 已完成 Developer ID 签名、Apple 公证，以及从最终 DMG 复制安装后的工具调用和重启验证；DMG 容器另行签名。另一台 Mac、Windows 及完整供应商矩阵验证仍有缺口，详见 [M40 验收记录](docs/发布候选与隐私验收_M40_2026-09-07.md)。旧 M38 候选为 **1.0.4 / build 37**，不再作为本次交付包。
+运行与开发方式见下方[快速开始](#快速开始)，撤回范围及旧客户端数据说明见[源码交付说明](docs/source-delivery.md)。
 
 Vibe Research 是一个**本地金融研究工作台**。第一次打开时只需要决定 AI 从哪里来：使用已经登录的
 Claude Code / WorkBuddy（CodeBuddy）订阅、完成产品专用的 Codex 登录，或者填写自己的模型 API。连接成功后默认普通对话，需要研究时开启 Agent，普通
@@ -101,19 +101,17 @@ Qwen Code 与 DeepSeek CLI 当前仍需各自的 API key，也归入 API 接入�
 
 ## 与上一公开版本对比
 
-对照基线为 [v1.0.4 发布说明](https://github.com/simonlin1212/Vibe-Research/releases/tag/v1.0.4)及[该标签的 README](https://github.com/simonlin1212/Vibe-Research/blob/v1.0.4/README.md)，核对日期为 2026-09-07。右列为本次 v1.1.0 的功能与交付范围。
+对照基线为 [v1.0.4 发布说明](https://github.com/simonlin1212/Vibe-Research/releases/tag/v1.0.4)及[该标签的 README](https://github.com/simonlin1212/Vibe-Research/blob/v1.0.4/README.md)。右列为 v1.2.0 源码工作台；相对 v1.1.0 的变化见 [CHANGELOG](CHANGELOG.md)。
 
-| 方面 | 上一公开版 v1.0.4 | v1.1.0 |
+| 方面 | 历史公开版 v1.0.4 | v1.2.0 源码版 |
 |---|---|---|
-| 使用形态 | 开源源码 + 本地浏览器工作台 | 保留源码运行；增加 Apple Silicon Mac 独立客户端，内置运行环境 |
+| 使用形态 | 开源源码 + 本地浏览器工作台 | 源码 + 本地浏览器工作台；暂撤 Mac 安装壳，便于 Agent 改造 |
 | 订阅接入 | Codex、Claude Code，另有 API 接入 | 增加 WorkBuddy / CodeBuddy；首页快速测试，显示实际已保存来源 |
 | 首页与日常对话 | 已有首页 Agent 和研究栏目 | 普通对话默认开启、Agent 按需启用；保留左侧栏目，首页收拢为五类入口；统一橙色深浅主题 |
 | 聊天工具 | Claude 订阅对话关闭工具和联网 | 开启 Agent 后可搜索、读网页、取数和计算；后台研究经确认启动，回复显示实际工具记录 |
 | 持仓与自选股 | 代码录入、本地台账、行情刷新 | 增加截图／表格转写草稿，人工核对后确认保存 |
 | 研究体验 | 已有六阶段研究、证据校验、研报库、辩论和回测 | 保留并完善这些能力，增强报告与来源面板、运行中止、刷新恢复及来源绑定 |
-| 安装与引擎 | Codex 0.149.0；Mac / Linux 文档需分别启动两端 | 引擎验证至 0.153.4；源码提供 setup/start，Mac 客户端无需另装 Node、Python、Codex |
-
-Mac App 已完成正式签名、Apple 公证与票据装订；DMG 是包含该 App 的签名容器，并未单独公证。另一台干净 Mac、Windows 实机及完整供应商矩阵仍有验证边界，见[当前边界](#当前边界)。
+| 安装与引擎 | Codex 0.149.0；Mac / Linux 文档需分别启动两端 | 引擎保留 0.153.4；setup 安装依赖，start 一次启动两端 |
 
 ## 功能
 
@@ -152,11 +150,11 @@ Mac App 已完成正式签名、Apple 公证与票据装订；DMG 是包含该 A
 
 ## 快速开始
 
-### Mac 独立客户端
+### 从源码运行
 
-从 [v1.1.0 Release](https://github.com/simonlin1212/Vibe-Research/releases/tag/v1.1.0) 下载 Mac DMG，打开后将 App 拖到 Applications，再从应用程序启动。适用于 Apple Silicon / macOS 13+，内含 Node、Python 和 Codex 引擎，无需另装这些运行环境。M40 App 已完成 Developer ID 签名、Apple 公证、票据验证和本机复制安装验证；另一台干净 Mac 仍待验收。详见 [M40 验收记录](docs/发布候选与隐私验收_M40_2026-09-07.md)。
+macOS、Windows 和 Linux 都使用下面的源码流程。页面仍在本机运行，不是把私人研究上传到网站。首次使用需要先安装 Node.js、Python 和 Git，再初始化项目。
 
-维护者可按 [Mac 构建说明](packaging/macos/README.md) 生成本地测试包。首次打开需在 App 内连接自己的 AI；不会沿用浏览器中的接入设置。替换应用不会删除已有研报和台账，用户数据保存在 `~/.vibe-research-desktop`。以下步骤适用于从源码运行。
+让开发 Agent 打开克隆下来的仓库即可改造页面与功能。`desktop/` 是浏览器前端目录，并非 Mac 客户端；修改代码后按[开发与测试](#开发与测试)验证。
 
 ### 环境要求
 
@@ -172,7 +170,7 @@ Mac App 已完成正式签名、Apple 公证与票据装订；DMG 是包含该 A
 
 ### 安装依赖
 
-> 以下为源码运行流程。希望直接安装的 Mac 用户可使用上面的安装包。已有源码副本的用户请先备份自己的数据，再更新代码并执行 setup，不必重新克隆。
+> 已有源码副本请先备份自己的数据，再更新代码并执行 setup，不必重新克隆。旧 Mac 客户端数据不会自动迁入源码工作区；不要删除 `~/.vibe-research-desktop`，也不要把它提交到仓库。
 
 Windows（PowerShell / CMD）：
 
@@ -261,7 +259,7 @@ node orchestrator/src/run.ts \
 ## 工作方式
 
 ```text
-Mac 独立窗口 / 浏览器工作台
+本地浏览器工作台
 首页 Agent · 复盘 · 资讯 · 个股研究 · 回测 · 资料库
         │
         ▼
@@ -331,7 +329,6 @@ HTTP 传输不加密，API key 和研究资料可能在网络上明文传输。�
 | 路径 | 作用 |
 |---|---|
 | `desktop/` | React + Vite 本地浏览器 UI |
-| `packaging/macos/` | Mac 独立窗口、运行环境打包与签名工具 |
 | `orchestrator/` | Agent 编排、validator、API、MCP、对话、资料库与报告归档 |
 | `backtest/` | 确定性回测引擎与工具入口 |
 | `calc/` | 确定性计算库 |
@@ -369,25 +366,25 @@ npm run build --prefix desktop
 .venv/bin/python -m pytest .agents/skills/data-access/scripts/tests -q
 ```
 
-最近本机验收记录（2026-09-07，M40；文档更新不改变下列测试的范围）：
+最近本机验收记录（2026-09-09，v1.2.0 源码版）：
 
-- orchestrator：Node 22 与 Node 26 串行均 **851 项：850 通过、1 项 Windows ACL 专项跳过**；类型检查通过。历史并发测试的等待超时记录仍保留，不以串行结果抹掉。
-- desktop：**82/82**，类型检查与生产构建通过；Python（计算库、回测、数据脚本）：**754/754**。
-- Mac：签名工具测试 **4/4**、原生窗口检查 **21/21**；M40 最终安装副本通过验签、票据与 Gatekeeper 检查，真实工具调用及重启恢复已验。
-- 当前证据与未覆盖范围见 [M40 发布与隐私验收](docs/发布候选与隐私验收_M40_2026-09-07.md)。核心范围六阶段成功不等于完整取数范围、每个数据源和所有模型均成功。
-- 增量修复分批通过独立审计；测试数和 Apple 公证均不是整仓无遗漏或全平台可发布的证明。
+- orchestrator：Node 26 串行 **853 项：852 通过、1 项 Windows ACL 专项跳过**；类型检查通过。历史并发测试的等待超时记录仍保留，不以串行结果抹掉。
+- desktop：**84/84**，类型检查与生产构建通过；Python（计算库、回测、数据脚本）：**754/754**。
+
+- 当前修复、浏览器验证和隐私检查见 [v1.2.0 Issue / PR 处理记录](docs/issue-pr-triage-v1.2.0.md)。本轮未重跑真实模型、全部外部取数端点或 Windows 实机。
+- 增量修复通过独立审计与复审；交付调整见[源码交付说明](docs/source-delivery.md)。历史业务验证保留在 [M40 验收](docs/发布候选与隐私验收_M40_2026-09-07.md)，不当作本版全业务验收。
 
 项目约定：每个环节完成后先测试，再做 Codex 独立审计、逐条核实、修复和复审；审计完成前不把
 该环节称为“建成”，也不提交或推送。
 
 ## 当前边界
 
-- 本次提供源码 + 浏览器 UI，以及 Apple Silicon Mac App 安装包。App 已签名、公证，DMG 已签名。没有 Windows EXE 或 Intel Mac 安装包验收结论。
+- 本分支只提供源码 + 本地浏览器 UI，暂不提供新的 Mac 客户端或安装包构建工具；GitHub 历史 Release 尚未调整。
 - MiMo API 已完成从空配置到真实业务报告的端到端验证；其他第三方模型仍需使用者自己的 key，
   没有真实跑过兼容矩阵的模板不会标成“已实测”。
 - Windows 11 原生支持已接入：PowerShell 初始化/启动脚本、Windows 路径与进程处理、受控研究工具链，
   CI 配置包含 `windows-latest` / `macos-latest` / `ubuntu-latest`，Windows 使用选定的跨平台契约测试，并非全部后端测试。仍未在 Windows 实机验收，也尚未验证正常退出后的 Job Object 子进程回收保证。Windows 10 仅按 Codex 上游能力尽力兼容。
-- Mac 公证验证了分发签名与 Apple 安全检查，不替代另一台干净 Mac 的首次安装、全模型接入和外部数据源验收。端点登记在册也不保证第三方服务随时可用。
+- 源码运行需要本机依赖环境；端点登记在册不保证第三方服务随时可用。
 
 ## 更新日志
 

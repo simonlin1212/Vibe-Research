@@ -42,16 +42,27 @@ export function numbersOf(ids: string[], evById: Map<string, EvidenceItem>, calc
  *     不是 37.397700293773134。把两者混进同一个池,就等于把"照抄原始浮点"这条纪律废掉。
  */
 /**
- * **inputs + output.details** 里的数值 —— 允许整数绑定的"中间量"池。
+ * **inputs + output.details** 里的数值 —— 可按指定容差绑定的"中间量"池。
  *
- * 🔴 关键是**排除 `output.value` 本身**:否则 display 是 "37.00 倍" 时,报告写 "37 倍"
+ * 🔴 排除顶层及嵌套结果形对象的 `value`:否则 display 是 "37.00 倍" 时,报告写 "37 倍"
  * 会绕过逐字照抄(Codex fidelity-r2 P1)。
  * ⚠️ 也不能收窄到只剩 inputs:四锚这类结果的锚点(30)住在 `output.details.anchors` 里、
  * inputs 是空的,只认 inputs 会把"30 倍锚"这种**正当写法**误拦(实测被测试抓到)。
  */
 export function intermediateNumbersOf(ids: string[], calcById: Map<string, CalcRecord>): number[] {
   const nums = inputNumbersOf(ids, calcById);
-  const leaves = (v: unknown, depth = 0) => { if (depth > 4) return; if (typeof v === "number" && Number.isFinite(v)) nums.push(v); else if (Array.isArray(v)) v.forEach((x) => leaves(x, depth + 1)); else if (v && typeof v === "object") Object.values(v).forEach((x) => leaves(x, depth + 1)); };
+  const leaves = (v: unknown, depth = 0): void => {
+    if (depth > 4) return;
+    if (typeof v === "number" && Number.isFinite(v)) nums.push(v);
+    else if (Array.isArray(v)) v.forEach((x) => leaves(x, depth + 1));
+    else if (v && typeof v === "object") {
+      // 与 resultProjection 使用同一形状判据；情景子结果不是可豁免的中间量。
+      const isResult = "status" in v && "value" in v && "unit" in v;
+      for (const [key, value] of Object.entries(v)) {
+        if (key !== "display" && !(isResult && key === "value")) leaves(value, depth + 1);
+      }
+    }
+  };
   for (const id of ids) {
     const o = calcById.get(id)?.output;
     if (o && typeof o === "object") leaves((o as Record<string, unknown>).details);
@@ -67,8 +78,8 @@ export function inputNumbersOf(ids: string[], calcById: Map<string, CalcRecord>)
 }
 
 const SCALES = [1, 1e4, 1e8, 100, 0.01, 1e-4, 1e-8];
-export function numberBound(token: number, pool: number[]): boolean {
-  return pool.some((v) => SCALES.some((s) => { const w = v * s; if (!Number.isFinite(w)) return false; const tol = Math.max(Math.abs(token) * 2e-3, 5e-3); return Math.abs(w - token) <= tol || Math.abs(Math.round(w * 100) / 100 - token) <= tol; }));
+export function numberBound(token: number, pool: number[], relTol = 2e-3): boolean {
+  return pool.some((v) => SCALES.some((s) => { const w = v * s; if (!Number.isFinite(w)) return false; const tol = Math.max(Math.abs(token) * relTol, relTol * 2.5); return Math.abs(w - token) <= tol || Math.abs(Math.round(w * 100) / 100 - token) <= tol; }));
 }
 /** 一行里需要证据支撑的数字:排除日期 / 年份 / FY / 代码 / id 内数字 / 序号 / ×倍数记号 / 小整数计数 */
 
@@ -487,14 +498,10 @@ export function checkNumberFidelity(report: string, evById: Map<string, Evidence
         //    加了符号边界后若不给这条路径补 `-token`,正当写法反而被拦(这是 r3 修复引入的,r4 抓到)。
         if (quotedText && (quotedIncludes(quotedText, raw) || quotedIncludes(quotedText, String(val))
             || (signed && (quotedIncludes(quotedText, `-${t.raw}`) || quotedIncludes(quotedText, String(-t.n)))))) { exact++; continue; }
-        // 整数:只能绑 calc 的**输入 / 中间量**("30 倍锚"这类),**不能绑 output.value** ——
-        // 否则 display 是 "37.00 倍" 时,报告写 "37 倍" 会绕过逐字照抄(Codex fidelity-r2 P1)。
-        // 年 / 期 单位除外:"消化 30 年"里的 30 是锚(倍)不是年数,放行等于放过一个真错误。
-        if (!decimal && !/^(年|期)$/.test(unit) && numberBound(val, intermediateNumbersOf(calcIds, calcById))) { exact++; continue; }
-        // 小数:**只能绑 calc 的输入,不能绑输出**(见 inputNumbersOf 的说明),且必须精确命中不走量纲缩放。
-        // 这样"表格里并列输入"能过,而"照抄输出原始浮点 37.397700293773134"仍然违规。
-        if (decimal && !/^(年|期)$/.test(unit)
-            && inputNumbersOf(calcIds, calcById).some((v) => Math.abs(v - val) <= Math.max(Math.abs(val) * 1e-9, 1e-9))) { exact++; continue; }
+        // PR #42: 输入和 details 中间量可舍入、换算单位；不纳入 output.value。
+        // 小数用紧容差，不能把 27.30 改写为 27.35；主结果仍必须照抄 display。
+        // 年/期不走此豁免，避免把倍数锚误绑成年数。
+        if (!/^(年|期)$/.test(unit) && numberBound(val, intermediateNumbersOf(calcIds, calcById), decimal ? 1e-6 : 2e-3)) { exact++; continue; }
         // 🔴 两类违规必须分开:`applicable`(本次有没有 display)只能决定**display 纪律**适不适用,
         //    决定不了"引了一个真实 ev-id 却写了别的数"要不要报 —— 那与 display 无关。
         //    合在一起的后果:旧 calc 运行 / 纯取数运行里,事实表写错数字完全不会被报出来(Codex fidelity-r2 P1)。

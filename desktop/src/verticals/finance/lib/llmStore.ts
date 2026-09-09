@@ -126,12 +126,14 @@ export function saveUserLlm(cfg: LlmConfig, capability?: { directSupported: bool
     .every(key => (previous.source[key] ?? "") === (cfg[key] ?? ""));
   const directSupported = capability?.directSupported ?? false;
   const directReason = capability?.directReason ?? "请重新测试连接后查看直连能力";
-  localStorage.setItem(LLM_KEY, JSON.stringify({
+  const serialized = JSON.stringify({
     schemaVersion: 2, source: cfg,
     // 新连接默认普通对话，不继承上一来源的 Agent 开关。能力标记仍仅代表 API 直连验证。
     executionMode: sameSource ? previous.executionMode : "direct", modePreferenceVersion: 1,
     directSupported, directReason,
-  } satisfies AiRuntimeConfig));
+  } satisfies AiRuntimeConfig);
+  localStorage.setItem(LLM_KEY, serialized);
+  if (localStorage.getItem(LLM_KEY) !== serialized) throw new Error("AI 配置未能保存在当前浏览器，请检查存储权限后重试");
   notifyRuntimeChanged();
 }
 

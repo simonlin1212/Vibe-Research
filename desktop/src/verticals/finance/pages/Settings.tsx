@@ -5,7 +5,7 @@ import { useAiPage } from "../../../core/ai/pageContext";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Disclaimer } from "@/components/ui/Disclaimer";
 import { backend, friendlyAgentError, type LocalAgentStatus, type ProductInfo } from "@/lib/backend";
-import { API_MODELS, PROVIDER_BASE, SUBSCRIPTION_MODELS, isCliProvider, providerOfModel, type ProviderId } from "@/lib/ai-models";
+import { API_MODELS, PROVIDER_BASE, SUBSCRIPTION_MODELS, apiPresetForSaved, isCliProvider, providerOfModel, type ProviderId } from "@/lib/ai-models";
 import { clearLlm, loadUserLlm, saveLlm } from "@/lib/llm";
 import { LLM_KEY } from "@/lib/llmStore";
 import { AgentToggle } from "@/components/ui/AgentToggle";
@@ -81,7 +81,7 @@ export function Settings() {
     ? existing.model : (SUBSCRIPTION_MODELS[0]?.id ?? "");
   const [cliId, setCliId] = useState(existingCliId);
   const first = API_MODELS[0]!;   // 清单是编译期常量,非空
-  const [apiId, setApiId] = useState(existing && !existingIsCli ? existing.model : first.id);
+  const [apiId, setApiId] = useState(apiPresetForSaved(existing));
   const [baseURL, setBaseURL] = useState(existing && !existingIsCli ? existing.baseURL : (PROVIDER_BASE[first.provider] ?? ""));
   const [modelName, setModelName] = useState(existing && !existingIsCli ? existing.model : first.id);
   const [apiKey, setApiKey] = useState(existing && !existingIsCli ? existing.apiKey : "");

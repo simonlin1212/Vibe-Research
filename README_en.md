@@ -9,7 +9,7 @@
 
 <p align="center">
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-yellow"></a>
-  <a href="https://github.com/simonlin1212/Vibe-Research/releases/tag/v1.1.0"><img alt="Release v1.1.0" src="https://img.shields.io/badge/release-v1.1.0-F35D2B"></a>
+  <a href="CHANGELOG.md"><img alt="Source v1.2.0" src="https://img.shields.io/badge/source-v1.2.0-F35D2B"></a>
   <img alt="UI" src="https://img.shields.io/badge/UI-React%20%2B%20Vite-646cff">
   <img alt="Agent off by default" src="https://img.shields.io/badge/Agent-opt--in-555">
   <img alt="Codex Harness" src="https://img.shields.io/badge/runtime-Codex%20Harness-black">
@@ -65,11 +65,11 @@ Captured in an isolated, empty workspace with no AI connected and no private hol
 
 ## What it is
 
-Current version: **v1.1.0**. It includes the v1.0.4 baseline and subsequent Issue/PR fixes, with expanded subscription access, a dual-engine experience, an updated interface, and a standalone Mac client.
+The current source version is **v1.2.0**, based on the published v1.1.0. It retains subscription access, the dual-engine experience, and the updated interface. The Mac client is temporarily withdrawn; development now focuses on source code and the local browser workbench so users can customize it with their own agents.
 
-**[Mac installer and release notes](https://github.com/simonlin1212/Vibe-Research/releases/tag/v1.1.0)** (Apple Silicon / M-series, macOS 13+). Download `VibeResearch-1.1.0-M40-mac-arm64.dmg`, not GitHub's automatically generated Source code archives. Available downloads are listed on the published release page.
+This is a source-code update, with no new installer. The existing GitHub v1.1.0 Release and installer assets remain available as historical versions.
 
-Source version **1.1.0**, Mac build **40**. The App is Developer ID-signed and Apple-notarized. Tool calls and restart persistence were verified after copying it from the final DMG; the DMG container is separately signed. Validation on another Mac, Windows, and the complete provider matrix remains outstanding. See the [M40 acceptance record (Chinese)](docs/发布候选与隐私验收_M40_2026-09-07.md). The older M38 candidate is **1.0.4 / build 37** and is not the installer for this release.
+See [Quick start](#quick-start) below and the [source delivery notes](docs/source-delivery.md) (Chinese) for the withdrawal scope and existing client data.
 
 Vibe Research is a **local financial research workbench**. On first launch, the user makes one decision: connect an
 existing Claude Code / WorkBuddy (CodeBuddy) subscription, complete the product-specific Codex login, or provide a model API. After the connection succeeds, Vibe Research
@@ -102,19 +102,19 @@ their own API key.
 
 ## Comparison with the previous public release
 
-The baseline is the [v1.0.4 release](https://github.com/simonlin1212/Vibe-Research/releases/tag/v1.0.4) and [README at that tag](https://github.com/simonlin1212/Vibe-Research/blob/v1.0.4/README.md), checked on September 7, 2026. The right column describes the features and delivery scope of v1.1.0.
+The baseline is the [v1.0.4 release](https://github.com/simonlin1212/Vibe-Research/releases/tag/v1.0.4) and [README at that tag](https://github.com/simonlin1212/Vibe-Research/blob/v1.0.4/README.md), checked on September 7, 2026. The right column describes v1.2.0 source delivery. Changes since v1.1.0 are listed in the [CHANGELOG](CHANGELOG.md).
 
-| Area | Previous public v1.0.4 | v1.1.0 |
+| Area | Historical public v1.0.4 | v1.2.0 source |
 |---|---|---|
-| Delivery | Open-source code and a local browser workbench | Retains source setup; adds a standalone Apple Silicon Mac client with bundled runtimes |
+| Delivery | Open-source code and a local browser workbench | Source code and a local browser workbench; the Mac wrapper is temporarily withdrawn to simplify agent-assisted customization |
 | Subscriptions | Codex and Claude Code, alongside API access | Adds WorkBuddy / CodeBuddy, quick connection tests on the home page, and the actual saved source label |
 | Home and everyday chat | Already included home Agent chat and research sections | Ordinary chat by default, opt-in Agent; keeps sidebar sections, groups home shortcuts into five categories, and unifies orange light/dark themes |
 | Chat tools | Claude subscription chat disabled tools and networking | With Agent enabled: search, public page reading, data, and calculations; background research requires confirmation and replies show actual tool calls |
 | Portfolio and watchlist | Symbol entry, local records, and quote refresh | Adds image/table transcription drafts that require review and explicit saving |
 | Research experience | Already included six-stage research, evidence validation, a document library, debate, and backtesting | Retains and refines these capabilities, with improved report/source panels, cancellation, refresh recovery, and source binding |
-| Setup and engine | Codex 0.149.0; Mac/Linux instructions started backend and UI separately | Engine verified at 0.153.4; source setup/start scripts; Mac client needs no separate Node, Python, or Codex installation |
+| Setup and engine | Codex 0.149.0; Mac/Linux instructions started backend and UI separately | Retains engine 0.153.4; setup installs dependencies and start launches both services |
 
-The Mac app has Developer ID signing, Apple notarization, and a stapled ticket. Its DMG is a signed container holding that app, not a separately notarized DMG. Another clean Mac, physical Windows hardware, and the full provider matrix remain outside current verification; see [boundaries](#current-boundaries).
+The comparison describes the v1.2.0 source-only revision; see [boundaries](#current-boundaries).
 
 ## Features
 
@@ -154,11 +154,11 @@ Temporary files for the current transcription are removed after success, failure
 
 ## Quick start
 
-### Standalone Mac client
+### Run from source
 
-Download the Mac DMG from the [v1.1.0 Release](https://github.com/simonlin1212/Vibe-Research/releases/tag/v1.1.0), open it, drag the App into Applications, then launch it from there. It supports Apple Silicon Macs running macOS 13 or later and bundles Node, Python, and the Codex engine. The M40 App has passed Developer ID signing, Apple notarization, ticket verification, and local copy-install checks. Validation on another clean Mac remains outstanding. See the [M40 acceptance record](docs/发布候选与隐私验收_M40_2026-09-07.md) (Chinese).
+macOS, Windows, and Linux all use the source workflow below. The workbench runs locally, not on a hosted research service. Install Node.js, Python, and Git before initializing the project.
 
-Maintainers can create a local test package using the [Mac build guide](packaging/macos/README.md). Connect your own AI account or API in the app on first launch; browser connection settings are not imported. Replacing the app preserves existing reports and ledger records in `~/.vibe-research-desktop`. The instructions below are for running from source.
+Open the cloned repository in your coding agent to customize pages and features. `desktop/` contains the browser frontend, not a native Mac client. Validate changes with the [development commands](#development-and-tests).
 
 ### Requirements
 
@@ -174,7 +174,7 @@ Maintainers can create a local test package using the [Mac build guide](packagin
 
 ### Install dependencies
 
-> These instructions run the product from source. Mac users who prefer direct installation can use the installer above. If you already have a source checkout, back up your data before updating the code and running setup; there is no need to clone again.
+> If you already have a source checkout, back up your data before updating the code and running setup; there is no need to clone again. Existing Mac client data is not migrated automatically. Keep `~/.vibe-research-desktop` intact and never commit it to a repository.
 
 Windows (PowerShell or Command Prompt):
 
@@ -270,7 +270,7 @@ A full run depends on data scope, model response times, and validation retries; 
 ## How it works
 
 ```text
-Standalone Mac window / browser workbench
+Local browser workbench
 Home agent · review · intelligence · company research · backtesting · document library
         │
         ▼
@@ -344,7 +344,6 @@ See [datasources/CATALOG.md](datasources/CATALOG.md) for the endpoint catalog.
 | Path | Purpose |
 |---|---|
 | `desktop/` | React + Vite local browser UI |
-| `packaging/macos/` | Standalone Mac window, runtime packaging, and signing tools |
 | `orchestrator/` | Agent orchestration, validators, API, MCP, chat, document library, and report archive |
 | `backtest/` | Deterministic backtest engine and tool entry point |
 | `calc/` | Deterministic calculation library |
@@ -384,27 +383,27 @@ npm run build --prefix desktop
 .venv/bin/python -m pytest .agents/skills/data-access/scripts/tests -q
 ```
 
-Latest local acceptance checks (September 7, 2026, M40; documentation edits do not change the scope of these checks):
+Latest local acceptance checks (September 9, 2026, v1.2.0 source edition):
 
-- orchestrator: serial runs on Node 22 and Node 26 each reported **851 tests: 850 passed, one Windows-only ACL test skipped**; typecheck passed. Historical concurrent-test wait timeouts remain disclosed rather than erased by the serial result.
-- desktop: **82/82**, with typecheck and production build passing; Python (calculation library, backtest, and data scripts): **754/754**.
-- Mac: signing-tool tests **4/4**, native-window checks **21/21**; the installed final M40 app passed signature, ticket, and Gatekeeper checks, plus live tool use and restart recovery.
-- Current evidence and limits are recorded in [M40 release and privacy validation](docs/发布候选与隐私验收_M40_2026-09-07.md) (Chinese). A successful core-scope six-stage run does not prove full-scope research, every data source, or every model works.
-- Incremental fixes passed independent audits. Neither test counts nor Apple notarization prove exhaustive correctness or release readiness on every platform.
+- orchestrator: the serial Node 26 run reported **853 tests: 852 passed, one Windows-only ACL test skipped**; typecheck passed. Historical concurrent-test wait timeouts remain disclosed rather than erased by the serial result.
+- desktop: **84/84**, with typecheck and production build passing; Python (calculation library, backtest, and data scripts): **754/754**.
+
+- Current fixes, browser checks, and privacy checks are recorded in the [v1.2.0 Issue / PR triage](docs/issue-pr-triage-v1.2.0.md) (Chinese). This round did not rerun live models, every external data endpoint, or physical Windows hardware.
+- Incremental fixes passed independent review and follow-up review; see the [source delivery notes](docs/source-delivery.md) (Chinese). Historical business validation remains in [M40 acceptance](docs/发布候选与隐私验收_M40_2026-09-07.md) (Chinese), not as full business acceptance of this revision.
 
 Project rule: test each completed component, run an independent Codex review, verify every finding, fix valid issues,
 and re-review. A component is not described as complete and is not committed or pushed before that loop closes.
 
 ## Current boundaries
 
-- This release includes source code, a browser UI, and an Apple Silicon Mac installer. The app is signed and notarized; the DMG is signed. There is no validated Windows EXE or Intel Mac installer.
+- This branch provides source code and a local browser UI only. It no longer includes native Mac client build tools. Historical GitHub Release assets have not been changed.
 - MiMo API has passed an end-to-end run from an empty configuration to a real business report. Other third-party
   providers still require the user's own keys and are not marked verified without real compatibility-matrix runs.
 - Native Windows 11 support includes PowerShell setup/start scripts, Windows path and process handling, and the
   controlled research toolchain. CI configuration includes `windows-latest`, `macos-latest`, and `ubuntu-latest`;
   Windows runs selected cross-platform contract tests, not the entire backend suite. Physical Windows hardware and a Job Object guarantee for child-process cleanup after normal exit have not been validated.
   Windows 10 is best-effort, following upstream Codex support.
-- Mac notarization validates distribution signing and Apple's security checks, not first installation on another clean Mac, every provider, or every external data source. A registered endpoint is not a guarantee of third-party uptime.
+- Running from source requires local dependencies. A registered endpoint is not a guarantee of third-party uptime.
 
 ## Changelog
 

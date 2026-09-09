@@ -86,5 +86,13 @@ export const AI_MODELS: ModelConfig[] = [
 export const SUBSCRIPTION_MODELS = AI_MODELS.filter((m) => isCliProvider(m.provider));
 export const API_MODELS = AI_MODELS.filter((m) => !isCliProvider(m.provider));
 
+/** A selectable preset is not the user's editable model name. Preserve provider identity on remount. */
+export function apiPresetForSaved(saved: { provider: string; model: string } | null): string {
+  if (!saved || isCliProvider(saved.provider)) return API_MODELS[0]!.id;
+  return API_MODELS.find((m) => m.provider === saved.provider && m.id === saved.model)?.id
+    ?? API_MODELS.find((m) => m.provider === saved.provider)?.id
+    ?? "custom";
+}
+
 export const modelById = (id: string): ModelConfig | undefined => AI_MODELS.find((m) => m.id === id);
 export const providerOfModel = (id: string): ProviderId => modelById(id)?.provider ?? "openai-compatible";

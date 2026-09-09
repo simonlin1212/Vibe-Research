@@ -1,6 +1,6 @@
 {
   "name": "vibe-research-desktop",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "description": "投研看板前端(投资垂类):与开源 Vibe-Research 同栈,便于搬运既有模块",
   "type": "module",
