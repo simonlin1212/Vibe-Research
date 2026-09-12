@@ -305,18 +305,84 @@ def dividend_history(code: str, page_size: int = 20) -> list[dict]:
 
 # ---------- 5.1 个股新闻 / 5.3 全球资讯 ----------
 def eastmoney_stock_news(code: str, page_size: int = 20) -> list[dict]:
-    """东财个股新闻(JSONP 搜索接口):[{title, content, time, source, url}]"""
+    """JSONP 主请求，失败或显式空列表时用浏览器请求形态重试一次。
+
+    参考 PR #43 / AkShare stock_news_em 的 callback、缓存参数及文章链接构造。
+    两路都是同一东财源，不是独立信源；不调用无 timeout 的 SDK，不携带 Cookie。
+    保留原始响应与行级引用，任一路失败且未取得新闻时显式报错。
+    """
+    from requests import RequestException
+
+    digits, _ = norm_ticker(code, stock_only=True)
+    if type(page_size) is not int or not 1 <= page_size <= 100:
+        raise ValueError("page_size 必须为 1..100 的整数")
+    outcomes = []
+    failed = False
+    for browser_profile in (False, True):
+        try:
+            rows = _stock_news_request(digits, page_size, browser_profile=browser_profile)
+        except (RequestException, ValueError) as exc:
+            # 不把第三方异常正文（可能含代理凭据）送入报告。
+            outcomes.append(f"请求失败（{type(exc).__name__}）")
+            failed = True
+            continue
+        if rows:
+            if browser_profile:
+                for row in rows:
+                    row["_fallback"] = outcomes[0]
+            return rows
+        outcomes.append("返回空列表")
+    if failed:
+        raise RuntimeError(f"东财个股新闻获取未完成：主请求{outcomes[0]}；备用请求{outcomes[1]}；不能判定为没有新闻")
+    return []
+
+
+def _stock_news_request(digits: str, page_size: int, *, browser_profile: bool) -> list[dict]:
+    """两种请求形态共用捕获、超时与严格解析，避免 SDK 全局 monkeypatch。"""
     import json as _json
     import re as _re
-    digits, _ = norm_ticker(code, stock_only=True)
+    import time
+    from datetime import date
+    from html import unescape
+
     inner = _json.dumps({"uid": "", "keyword": digits, "type": ["cmsArticleWebOld"], "client": "web", "clientType": "web", "clientVersion": "curr",
                          "param": {"cmsArticleWebOld": {"searchScope": "default", "sort": "default", "pageIndex": 1, "pageSize": page_size, "preTag": "", "postTag": ""}}}, separators=(",", ":"))
-    r = em("https://search-api-web.eastmoney.com/search/jsonp", params={"cb": "jQuery_news", "param": inner}, headers={"User-Agent": UA, "Referer": "https://so.eastmoney.com/"}, timeout=15, ext="js")
-    text = r.text
-    d = _json.loads(text[text.index("(") + 1: text.rindex(")")])
-    arts = (d.get("result") or {}).get("cmsArticleWebOld") or []
-    return [{"title": _re.sub(r"<[^>]+>", "", a.get("title", "")), "content": _re.sub(r"<[^>]+>", "", a.get("content", ""))[:200], "time": a.get("date", ""),
-             "source": a.get("mediaName", ""), "url": a.get("url", "")} for a in arts]
+    params = {"cb": "jQuery_news", "param": inner}
+    headers = {"User-Agent": UA, "Referer": "https://so.eastmoney.com/"}
+    if browser_profile:
+        stamp = str(time.time_ns() // 1_000_000)
+        params.update({"cb": f"jQuery35101792940631092459_{stamp}", "_": stamp})
+        headers.update({"Accept": "*/*", "Accept-Language": "zh-CN,zh;q=0.9",
+                        "Referer": f"https://so.eastmoney.com/news/s?keyword={digits}"})
+    r = em("https://search-api-web.eastmoney.com/search/jsonp", params=params, headers=headers, timeout=15, ext="js")
+    r.raise_for_status()
+    match = _re.fullmatch(_re.escape(params["cb"]) + r"\s*\((.*)\)\s*;?", r.text.strip(), _re.S)
+    if not match:
+        raise ValueError("东财新闻返回非预期 JSONP")
+    d = _json.loads(match.group(1))
+    result = d.get("result") if isinstance(d, dict) else None
+    arts = result.get("cmsArticleWebOld") if isinstance(result, dict) else None
+    if not isinstance(arts, list):
+        raise ValueError("东财新闻缺少文章列表")
+    rows = []
+    for a in arts[:page_size]:
+        if not isinstance(a, dict):
+            raise ValueError("东财新闻条目格式错误")
+        fields = {key: a.get(key) or "" for key in ("title", "content", "date", "mediaName", "url")}
+        if not all(isinstance(value, str) for value in fields.values()):
+            raise ValueError("东财新闻字段格式错误")
+        title = unescape(_re.sub(r"<[^>]+>", "", fields["title"])).strip()
+        if not title:
+            raise ValueError("东财新闻缺少标题")
+        date.fromisoformat(fields["date"][:10])  # 缺日期不能变成今天的新闻。
+        article_code = str(a.get("code", ""))
+        url = fields["url"]
+        if not url and _re.fullmatch(r"[0-9]{8,40}", article_code):
+            url = f"https://finance.eastmoney.com/a/{article_code}.html"
+        rows.append({"title": title, "content": unescape(_re.sub(r"<[^>]+>", "", fields["content"]))[:200],
+                     "time": fields["date"], "source": fields["mediaName"], "url": url,
+                     "_raw": getattr(r, "_vra_raw_ref", None)})
+    return rows
 
 
 def eastmoney_global_news(page_size: int = 50) -> list[dict]:

@@ -322,9 +322,13 @@ def em_dividend(result: list, ctx: dict) -> dict:
 # ---------- 东财:新闻 / 基本面 / 打板 / 监控 / 异动 / 人气 ----------
 def em_stock_news(result: list, ctx: dict) -> dict:
     if not result:
-        return empty("东财个股新闻为空")
+        return empty("东财个股新闻两次请求均返回空列表；仅表示本次搜索未返回条目，不代表该公司没有新闻")
     evs = text_items(ctx, result, field="news_title", title_key="title", date_key="time", key_of=lambda r: str(r.get("url") or r.get("title"))[:160], limit=int(ctx["args"].get("limit", 30)),
                      extra_keys=("source", "url", "content"))
+    fallback = next((r["_fallback"] for r in result if r.get("_fallback")), None)
+    if fallback:
+        return out(evs, extra={"count": len(result), "transport": "browser_jsonp", "fallback_reason": fallback},
+                   status="partial", degraded=f"主请求{fallback}；已用同一东财源的备用请求取得新闻，不代表独立信源交叉验证")
     return out(evs, extra={"count": len(result)})
 
 
