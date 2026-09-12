@@ -736,6 +736,22 @@ export function listRuns(ctx: ServiceContext, limit = 50): { run_id: string; sta
   });
 }
 
+/**
+ * 删除一次研究运行(整目录)。用户反馈"研究归档没有删除方法"(2026-09-06)。
+ * 安全边界:① run id 走 assertRunId(防路径穿越);② **进行中的 run 拒删**
+ * (manifest 无 finished_at / status=running)—— 正在写盘的目录 rm 会把
+ * 那次运行变成半截垃圾还占着模型额度;③ 目录不存在返回 404 语义,不抛。
+ */
+export function deleteRun(ctx: ServiceContext, runId: string): { run_id: string; deleted: boolean } {
+  const { id, dir } = runDirOf(ctx, runId);
+  if (!fs.existsSync(dir) || !fs.lstatSync(dir).isDirectory()) return { run_id: id, deleted: false };
+  const m = readJsonIfExists<Record<string, unknown>>(safePath(ctx, "runs", id, "manifest.json"));
+  const running = m && (m.status === "running" || m.finished_at == null);
+  if (running) throw new ServiceError("run_in_progress", "该研究还在进行中,等它跑完再删");
+  fs.rmSync(dir, { recursive: true, force: true });
+  return { run_id: id, deleted: true };
+}
+
 export function knowledgeRecall(ctx: ServiceContext, symbol: string, market: string): (Omit<KnowledgeRecall, "path"> & { path: string }) | null {
   const sym = assertSymbol(symbol, "cn6");
   const mk = assertMarket(market);

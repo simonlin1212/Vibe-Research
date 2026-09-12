@@ -445,6 +445,47 @@ async function runResearchInner(cfg: RunConfig, deps: Deps, onlyStages?: Stage[]
     if (stoppedFailure) { runner.log(stage, "research.execution_stopped", { code: stoppedFailure }); break; }
   }
 
+  // ── 阶段终复核(恢复路径)─────────────────────────────────────────────────────────────────────────
+  // Stop 钩子的"缺产物"预算可能在模型的最后一步"写 stage 文件"之前被烧尽(攒 N 轮 calc 才写
+  //  stage 文件是合规工作流),本轮被强制终止;而后续轮次常常把那个文件补写落盘且完全合法 ——
+  //  但主循环只校验"当前阶段的当前轮",前面阶段的记录就此定格,账本与磁盘脱节。
+  //  (2026-09-05 600519 run: financials/estimates 被判 failed,stage 文件却已在 16:45/16:46 落盘
+  //   且 status=complete,编排器从未回头认领。)
+  //  恢复的边界(两条,缺一会误伤安全语义):
+  //   1) 只认领"失败原因纯属收工时机"的阶段 —— rec.errors 里每条都是 Stop 终止/缺产物类;
+  //      行为违规(篡改 events.jsonl / 受保护产物)、turn 失败、取数契约违约导致的失败**不恢复**
+  //      (产物后来得再齐,违规事实不因此消失)。
+  //   2) 恢复校验 = validateStage + 受保护产物 + calc DAG 复核(与主循环同一套尺子),
+  //      但**不重跑 checkAgentTrace**:trace 是跨阶段累积的行为审计,主循环每阶段已判过,
+  //      这里重跑会把后续阶段的行为错误错算到前面阶段头上。
+  //  只"认领"已存在的合法产物,不降低任何校验标准,不凭空制造产物。report 阶段由下方 gate
+  //  重写循环复验,这里不碰(它还会走 normalizeReportStatus,口径不同)。
+  for (let i = 0; i < stageRecords.length - 1; i++) {
+    const rec = stageRecords[i];
+    if (rec.status === "complete" || rec.status === "skipped") continue;
+    if (!rec.errors.every((e) => e.startsWith("Stop 钩子终止本轮") || /缺少 stages\//.test(e))) {
+      runner.log(rec.stage, "stage.recover_rejected", { from: rec.status, reason: "失败原因含非收工时机类错误(行为违规 / turn 失败 / 契约违约),不恢复" });
+      continue;
+    }
+    const reRun = loadRun(cfg.runDir, ledger, planOf);
+    if (!reRun.stage(rec.stage)) continue; // 磁盘仍无产物 ⇒ 无物可认领,维持原判
+    let reRes: ValidationResult = validateStage(rec.stage, reRun);
+    const reProt = validateProtectedArtifacts(cfg.runDir, protectedNow());
+    if (!reProt.ok) reRes = { ok: false, errors: [...reRes.errors, ...reProt.errors], warnings: reRes.warnings };
+    if (reRes.ok && reRun.calcs.length) { const rv = deps.verify(cfg, reRun); if (!rv.ok) reRes = rv; }
+    if (!reRes.ok) { runner.log(rec.stage, "stage.recover_rejected", { from: rec.status, errors: reRes.errors.slice(0, 4) }); continue; }
+    const recovered = deriveStageStatus(rec.stage, true, false, reRun);
+    if (recovered !== rec.status) {
+      runner.log(rec.stage, "stage.recovered", { from: rec.status, to: recovered, attempts: rec.attempts });
+      rec.validator_ok = true;
+      rec.status = recovered;
+      rec.errors = [];
+      statusSoFar[rec.stage] = recovered;
+      manifest.stages = stageRecords;
+      persistManifest();
+    }
+  }
+
   // 合规 gate:报告阶段 validator 已含 gate;这里是独立的最终一道闸 + 重写循环(重写后全量复验 report 阶段)
   const reportPath = path.join(cfg.runDir, "report.md");
   if (cfg.scenario?.force_gate_hit && fs.existsSync(reportPath) && stagesToRun.includes(REPORT_STAGE)) {

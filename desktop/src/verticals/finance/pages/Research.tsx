@@ -58,6 +58,9 @@ export function Research() {
   /** 🔴 `null` = 还没取回；`[]` = 真的一次都没跑过。**两者不能混** ——
    *  接口挂了却渲染成"还没有研究运行",就是把故障说成了事实。 */
   const [runsErr, setRunsErr] = useState<string | null>(null);
+  /** 归档删除:正在删的 run_id / 删除错误(不写成空,避免把故障说成"删掉了") */
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const [delErr, setDelErr] = useState("");
   /** 轮询中断的原因。⚠️ 停掉轮询而不说话 = 页面永远停在"进行中"，开始按钮也一直禁用 */
   const [watchErr, setWatchErr] = useState<string | null>(null);
   /** 只认最后一次点击的运行：慢请求回来时不许覆盖已经切走的那一个 */
@@ -83,6 +86,20 @@ export function Research() {
     // 组件卸载要停掉轮询，否则它会在后台一直打接口
     return () => { wantRun.current = null; watchGeneration.current += 1; if (timer.current) window.clearInterval(timer.current); };
   }, []);
+
+  /** 删除一次研究运行(归档清理)。进行中的 run 由后端拒(run_in_progress),这里乐观刷新列表。 */
+  const removeRun = async (id: string) => {
+    if (deleting) return;
+    setDeleting(id); setDelErr("");
+    try {
+      await backend.deleteRun(id);
+      await loadRuns();
+    } catch (e) {
+      setDelErr(e instanceof ApiError ? e.message : String(e));
+    } finally {
+      setDeleting(null);
+    }
+  };
 
   /** 轮询一次运行的状态，直到它不再是 running */
   const watch = (id: string) => {
@@ -379,8 +396,10 @@ export function Research() {
         ) : (
           <div className="space-y-1.5">
             {runs.map((r) => (
-              <ResearchRunItem key={r.run_id} run={r} onOpen={(id) => void openReport(id)} />
+              <ResearchRunItem key={r.run_id} run={r} onOpen={(id) => void openReport(id)}
+                onDelete={(id) => void removeRun(id)} deleting={deleting === r.run_id} />
             ))}
+            {delErr && <p className="pt-1 text-xs text-destructive">删除失败：{delErr}</p>}
           </div>
         )}
       </GlassCard>

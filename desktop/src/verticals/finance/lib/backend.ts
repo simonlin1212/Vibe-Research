@@ -486,6 +486,9 @@ export const backend = {
     ),
 
   runs: (limit = 50) => call<RunListItem[]>(`/runs?limit=${limit}`),
+  /** 删除一次研究运行(归档清理)。后端对进行中的 run 回 run_in_progress,404 = 已不存在 */
+  deleteRun: (id: string) =>
+    call<{ run_id: string; deleted: boolean }>(`/runs/${encodeURIComponent(id)}`, { method: "DELETE" }),
   report: (id: string) =>
     call<{ run_id: string; report: string | null; appendix: string | null; availability: "ready" | "unvalidated" | "missing"; run_status: string | null }>(`/runs/${encodeURIComponent(id)}/report`),
 };
