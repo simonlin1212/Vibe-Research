@@ -15,6 +15,15 @@
   <img alt="Codex Harness" src="https://img.shields.io/badge/runtime-Codex%20Harness-black">
 </p>
 
+---
+
+**作者求职｜深圳 · 香港 · 远程**
+
+我是 Simon，专注于 AI Agent 与实用工具开发，正在寻找深圳、香港或远程工作机会。  
+欢迎联系：[simonlin0423@gmail.com](mailto:simonlin0423@gmail.com)。
+
+---
+
 <p align="center">
   <a href="https://viberesearch.wiki">官方网站</a> ·
   <a href="#界面预览">界面预览</a> ·
