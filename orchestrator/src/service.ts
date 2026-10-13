@@ -396,7 +396,7 @@ function runFetchProcess(
     // stdin 只在**真要喂东西**时才开管道:取数那条路一直是 "ignore",
     // 改成无条件 "pipe" 会让不读 stdin 的脚本在管道满时挂住。
     const child = spawn(cmd, argv, {
-      cwd: opts.cwd, env: opts.env,
+      cwd: opts.cwd, env: opts.env, windowsHide: true,
       stdio: [opts.input === undefined ? "ignore" : "pipe", "pipe", "pipe"],
     });
     if (opts.input !== undefined) {

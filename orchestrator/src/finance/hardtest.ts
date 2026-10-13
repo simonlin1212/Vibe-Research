@@ -458,7 +458,7 @@ export function runOne(repoRoot: string, python: string, runId: string, t: HardT
   const runDir = path.join(loadProductConfig(repoRoot).resolved.dataRoot, "runs", runId);
   return new Promise((resolve) => {
     const out = fs.openSync(logPath, "w");
-    const child = spawn(process.execPath, args, { cwd: repoRoot, stdio: ["ignore", out, out], detached: true }); // 独立进程组:超时可整组杀(含本机 Agent 子进程)
+    const child = spawn(process.execPath, args, { cwd: repoRoot, stdio: ["ignore", out, out], detached: true, windowsHide: true }); // 独立进程组:超时可整组杀(含本机 Agent 子进程)
     let timedOut = false;
     const timer = setTimeout(() => { timedOut = true; try { process.kill(-child.pid!, "SIGKILL"); } catch { child.kill("SIGKILL"); } }, 60 * 60_000);
     child.on("error", (e) => { clearTimeout(timer); fs.closeSync(out); resolve({ runDir, exit: null, log: logPath, timed_out: false, error: e.message }); });

@@ -720,6 +720,7 @@ async function codeBuddyAccount(bin: string, env: NodeJS.ProcessEnv, legacyEphem
       env,
       stdio: ["pipe", "pipe", "pipe"],
       shell: false,
+      windowsHide: true,
       detached: process.platform !== "win32",
     });
     const requestId = `vra_probe_${process.pid}_${Date.now()}`;
@@ -1442,6 +1443,7 @@ export async function runLocalAgent(agent: LocalAgentId, opts: RunLocalAgentOpti
     const launch = executableInvocation(bin, args, runEnv);
     child = spawn(launch.file, launch.args, {
       cwd: tmpDir,
+      windowsHide: true,
       env: runEnv,
       stdio: ["pipe", "pipe", "pipe"],
       // POSIX 下创建独立进程组。本机 Agent CLI 可能继续派生 node / shell 子进程；

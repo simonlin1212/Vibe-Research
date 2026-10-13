@@ -73,7 +73,7 @@ export function deriveRunStatus(input: { stages: StageRecord[]; gateOk: boolean;
 }
 
 function sh(cmd: string, args: string[], cwd: string): string {
-  try { return (spawnSync(cmd, args, { encoding: "utf8", cwd, timeout: 30_000 }).stdout || "").trim(); } catch { return ""; }
+  try { return (spawnSync(cmd, args, { encoding: "utf8", cwd, timeout: 30_000, windowsHide: true }).stdout || "").trim(); } catch { return ""; }
 }
 
 /** 运行目录必须在 <repo>/.local/runs/ 之下;已存在且非空 → 需 overwrite */

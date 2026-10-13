@@ -109,7 +109,7 @@ export function runBatch(opts: { symbols: string[]; market?: string; endpoints?:
     if (opts.noAgent) argv.push("--no-agent");
     if (opts.overwrite) argv.push("--overwrite");
     const t0 = Date.now();
-    const r = opts.runner ? opts.runner(argv, childEnv) : spawnSync(process.execPath, argv, { cwd: ctx.repoRoot, stdio: ["ignore", "inherit", "inherit"], env: childEnv });  // 最小环境:基础 + VRA_* + 本次大脑的登录上下文或 key
+    const r = opts.runner ? opts.runner(argv, childEnv) : spawnSync(process.execPath, argv, { cwd: ctx.repoRoot, stdio: ["ignore", "inherit", "inherit"], env: childEnv, windowsHide: true });  // 最小环境:基础 + VRA_* + 本次大脑的登录上下文或 key
     items.push(collectRun(runDir, symbol, runId, r.status, Date.now() - t0, undefined, t0));
     flush();  // 每跑完一个就落盘,中断也有部分汇总
   }

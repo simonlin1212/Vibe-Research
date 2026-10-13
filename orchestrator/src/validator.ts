@@ -683,7 +683,7 @@ export const verifyCalcs: CalcVerifier = (cfg, run) => {
     const cs = (r.inputs_refs ?? []).filter((x) => x.ref_type === "calculation").map((x) => x.ref_id);
     if (ev.length) args.push("--evidence", ...ev);
     if (cs.length) args.push("--calc", ...cs);
-    const p = spawnSync(cfg.python, [cli, r.function, ...args], { encoding: "utf8", cwd: cfg.repoRoot, env: fetchEnv(), timeout: 60_000, maxBuffer: 16 * 1024 * 1024 });
+    const p = spawnSync(cfg.python, [cli, r.function, ...args], { encoding: "utf8", cwd: cfg.repoRoot, env: fetchEnv(), timeout: 60_000, maxBuffer: 16 * 1024 * 1024, windowsHide: true });
     let out: CalcRecord | null = null;
     try { out = JSON.parse(p.stdout) as CalcRecord; } catch { errors.push(`${path.basename(c.file)} 复算失败:cli 无 JSON 输出(${(p.stderr || "").slice(0, 120)})`); continue; }
     if (p.status !== 0 && p.status !== 2) errors.push(`${path.basename(c.file)} 复算退出码 ${p.status}(应为 0 或 2)`);
