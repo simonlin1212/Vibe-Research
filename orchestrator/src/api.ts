@@ -16,7 +16,7 @@ import path from "node:path";
 
 import crypto from "node:crypto";
 
-import { IMPORT_MAX_TOTAL_BYTES, ServiceError, auditCheckHead, auditRegister, auditVerify, chatSend, compareRuns, llmProbe, translateHeadlines, evidenceAlerts, guidedToolTurn, listTools, runToolRequest, fetchEndpoint, ingestFiles, debateAdvance, debateStart, ledgerKinds, ledgerLabels, ledgerList, localAgents, productInfo, ledgerRemove, ledgerSnapshot, ledgerUpsert, pageQuery, getEvidence, credentialStatus, setCodeBuddyLocation, setCredential, getReport, knowledgeRecall, listEndpoints, listRuns, readRunFile, redact, reportDelete, reportDownload, reportPreview, reportUpload, reportsList, researchStatus, safePath, serviceContext, deleteRun, startResearch, thermoSeries, type ServiceContext } from "./service.ts";
+import { IMPORT_MAX_TOTAL_BYTES, ServiceError, auditCheckHead, auditRegister, auditVerify, chatSend, compareRuns, llmProbe, llmModels, translateHeadlines, evidenceAlerts, guidedToolTurn, listTools, runToolRequest, fetchEndpoint, ingestFiles, debateAdvance, debateStart, ledgerKinds, ledgerLabels, ledgerList, localAgents, productInfo, ledgerRemove, ledgerSnapshot, ledgerUpsert, pageQuery, getEvidence, credentialStatus, setCodeBuddyLocation, setCredential, getReport, knowledgeRecall, listEndpoints, listRuns, readRunFile, redact, reportDelete, reportDownload, reportPreview, reportUpload, reportsList, researchStatus, safePath, serviceContext, deleteRun, startResearch, thermoSeries, type ServiceContext } from "./service.ts";
 import { REPORT_MAX_BYTES } from "./report_library.ts";
 import { savedCredential } from "./saved_credentials.ts";
 import { NOFOLLOW_FLAG, restrictPrivateFile } from "./fsutil.ts";
@@ -312,6 +312,13 @@ export function createApiServer(ctx: ServiceContext, opts: { token: string; cook
           return send(res, 200, await llmProbe(ctx, b as never, signal));
         });
       }
+      // 设置页「获取可用模型」:按页面填的 Base URL + key 调 GET /models,只读不存
+      if (req.method === "POST" && url.pathname === "/llm-models") {
+        return await withRequestAbort(req, res, async (signal) => {
+          const b = await readBody(req);
+          return send(res, 200, await llmModels(ctx, b as never, signal));
+        });
+      }
       // 资料导入:上传截图 / 文本 → agent 转写成台账**草稿**(不直接落库,见 ingest.ts)。
       // base64 会把体积放大约 1/3,再留些余量给 JSON 外壳
       if (req.method === "POST" && url.pathname === "/import") {
@@ -444,7 +451,8 @@ export function createApiServer(ctx: ServiceContext, opts: { token: string; cook
         // 不改的判据是"有没有消费者因此行为不同":调用方(desktop backend.ts)一律读 `error` 码做分支,
         // 没有任何一处按 4xx/5xx 决定重试或告警;把四个码拆到三种状态只会让这组更不齐,
         // 而 `error` 码本身已经把原因说得比状态码细。要改就四个一起改,并同时改前端与文档。
-        return send(res, 400, { error: e.code, message: redact(e.message, 200) });
+        // detail = 设置页连接测试 / 获取模型列表的排查明细(服务层已抹 key),其它错误没有这个字段
+        return send(res, 400, { error: e.code, message: redact(e.message, 200), ...(e.detail ? { detail: redact(e.detail, 1000) } : {}) });
       }
       console.error(`[api] internal error: ${redact(e instanceof Error ? e.stack ?? e.message : String(e), 600)}`);
       return send(res, 500, { error: "internal" });

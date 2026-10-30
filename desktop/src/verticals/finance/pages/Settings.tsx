@@ -4,11 +4,12 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { useAiPage } from "../../../core/ai/pageContext";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Disclaimer } from "@/components/ui/Disclaimer";
-import { backend, friendlyAgentError, type LocalAgentStatus, type ProductInfo } from "@/lib/backend";
+import { ApiError, backend, friendlyAgentError, type LocalAgentStatus, type ProductInfo } from "@/lib/backend";
 import { API_MODELS, PROVIDER_BASE, SUBSCRIPTION_MODELS, apiPresetForSaved, isCliProvider, modelNameForPreset, providerOfModel, type ProviderId } from "@/lib/ai-models";
 import { clearLlm, loadUserLlm, saveLlm } from "@/lib/llm";
 import { LLM_KEY } from "@/lib/llmStore";
 import { testAndSaveAi } from "@/lib/aiConnection";
+import { EMPTY_MODEL_LIST, ModelListSession, type ModelListState } from "@/lib/modelList";
 import { useAiRuntime } from "@/hooks/useAiRuntime";
 import { UpdateSettingsCard } from "@/components/UpdateSettingsCard";
 import { SecContactCard } from "@/components/SecContactCard";
@@ -103,10 +104,39 @@ function WorkBuddyLocation({ status, onSave }: { status: LocalAgentStatus | unde
   );
 }
 
+/** 获取到的模型列表:可搜索,点一行填进 Model */
+function ModelPicker({ models, current, onPick }: { models: { id: string; name: string }[]; current: string; onPick: (id: string) => void }) {
+  const [q, setQ] = useState("");
+  const needle = q.trim().toLowerCase();
+  const shown = needle ? models.filter((m) => m.id.toLowerCase().includes(needle) || m.name.toLowerCase().includes(needle)) : models;
+  return (
+    <div className="mt-2 rounded-lg border border-border/60 bg-background/40 p-2">
+      {models.length > 8 && (
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={`在 ${models.length} 个模型里搜索`}
+          aria-label="搜索模型" className={`${INPUT} mb-2 py-1.5 text-xs`} />
+      )}
+      <div className="max-h-52 space-y-0.5 overflow-auto" role="listbox" aria-label="可用模型">
+        {shown.length === 0 && <p className="px-2 py-1.5 text-xs text-muted-foreground">没有匹配的模型</p>}
+        {shown.map((m) => {
+          const on = m.id === current.trim();
+          return (
+            <button key={m.id} type="button" role="option" aria-selected={on} onClick={() => onPick(m.id)}
+              className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left font-mono text-xs ${on ? "bg-primary/15 text-primary" : "hover:bg-muted/50"}`}>
+              <span className="min-w-0 flex-1 truncate">{m.id}</span>
+              {m.name !== m.id && <span className="truncate text-[10px] text-muted-foreground">{m.name}</span>}
+              {on && <Check className="h-3.5 w-3.5 shrink-0" />}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 /** 保存 / 清除 / 提示 —— 两档共用，分开写迟早只改一边 */
 function ActionRow(
-  { onSave, configured, onForget, msg, msgErr, busy }:
-  { onSave: () => void | Promise<void>; configured: boolean; onForget: () => void; msg: string; msgErr: string; busy: boolean },
+  { onSave, configured, onForget, msg, msgErr, busy, detail }:
+  { onSave: () => void | Promise<void>; configured: boolean; onForget: () => void; msg: string; msgErr: string; busy: boolean; detail?: string },
 ) {
   return (
     <div className="flex flex-wrap items-center gap-2 pt-1">
@@ -123,8 +153,20 @@ function ActionRow(
       )}
       {msg && <span className="text-xs text-primary">{msg}</span>}
       {msgErr && <span className="text-xs text-destructive">{msgErr}</span>}
+      {msgErr && detail && (
+        <details open className="w-full rounded-lg border border-destructive/30 bg-destructive/[0.05] p-2.5 text-xs">
+          <summary className="cursor-pointer font-medium text-destructive">错误详情（排查用）</summary>
+          <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-all font-mono text-[11px] leading-relaxed text-muted-foreground">{detail}</pre>
+          <p className="mt-1.5 text-[11px] text-muted-foreground">详情里的 API key 已被抹掉，可以放心截图或复制给别人看。</p>
+        </details>
+      )}
     </div>
   );
+}
+
+/** 报错的页面文案 + 排查明细。明细由后端给(已抹 key),拿不到时退回异常原文 */
+function failureOf(e: unknown): { text: string; detail: string } {
+  return { text: friendlyAgentError(e), detail: e instanceof ApiError ? e.detail : e instanceof Error ? e.message : String(e) };
 }
 
 export function Settings() {
@@ -148,6 +190,13 @@ export function Settings() {
   const [configured, setConfigured] = useState(Boolean(existing));
   const [msg, setMsg] = useState("");
   const [msgErr, setMsgErr] = useState("");
+  const [errDetail, setErrDetail] = useState("");
+  // 获取模型列表的状态由 ModelListSession 管:清除配置 / 换地址时作废在途请求,旧结果回来也不再显示
+  const [modelList, setModelList] = useState<ModelListState>(EMPTY_MODEL_LIST);
+  const modelsSession = useRef<ModelListSession | null>(null);
+  modelsSession.current ??= new ModelListSession(setModelList);
+  useEffect(() => () => modelsSession.current?.reset(), []);
+  const { loading: fetchingModels, models: fetchedModels, msg: modelsMsg, err: modelsErr, detail: modelsErrDetail } = modelList;
   const [testing, setTesting] = useState(false);
   const [rechecking, setRechecking] = useState(false);
   const refreshTail = useRef<Promise<void>>(Promise.resolve());
@@ -203,11 +252,14 @@ export function Settings() {
     const m = API_MODELS.find((x) => x.id === id);
     if (!m) return;
     setApiId(id); setModelName(modelNameForPreset(id)); setBaseURL(PROVIDER_BASE[m.provider] ?? "");
-    setMsg(""); setMsgErr("");
+    setMsg(""); setMsgErr(""); setErrDetail(""); resetModels();
   };
 
-  const say = (ok: string) => { setMsg(ok); setMsgErr(""); };
-  const oops = (bad: string) => { setMsg(""); setMsgErr(bad); };
+  /** 换了来源 / 地址 / key、或清除了配置:取消在途请求,清空上一份模型列表与提示 */
+  const resetModels = () => modelsSession.current?.reset();
+
+  const say = (ok: string) => { setMsg(ok); setMsgErr(""); setErrDetail(""); };
+  const oops = (bad: string, detail = "") => { setMsg(""); setMsgErr(bad); setErrDetail(detail); };
 
   const apiConfig = () => {
     if (!modelName.trim()) return oops("Model 不能空");
@@ -218,15 +270,34 @@ export function Settings() {
     return { provider: pv, baseURL: baseURL.trim(), apiKey: apiKey.trim(), model: modelName.trim() };
   };
 
+  /** 「获取可用模型」:按当前填的来源 / 地址 / key 问端点有哪些模型;只读,不保存任何配置 */
+  const fetchModelList = async () => {
+    const session = modelsSession.current!;
+    const pv = providerOfModel(apiId);
+    if (!apiKey.trim()) return session.fail("先填 API Key，才能向服务商获取模型列表");
+    if (!baseURL.trim() && pv === "openai-compatible") return session.fail("自填端点必须先给出 Base URL");
+    if (/[{<][A-Za-z_]/.test(baseURL)) return session.fail("Base URL 里还有占位符没替换（把 {…} 换成你自己的值）");
+    const llm = { provider: pv, baseURL: baseURL.trim(), apiKey: apiKey.trim() };
+    await session.start(llm.apiKey, (signal) => backend.llmModels(llm, signal), (e) => {
+      const detail = e instanceof ApiError ? e.detail : e instanceof Error ? e.message : String(e);
+      // 旧版后端没有 /llm-models,回的是 404 "not found":别被收口成笼统的"没连接成功"
+      if (e instanceof ApiError && e.code === "not found") {
+        return { text: "本机后端还是旧版本，没有「获取模型」接口。请停掉 scripts/start 后重新启动，再刷新本页。", detail };
+      }
+      return { text: friendlyAgentError(e), detail };
+    });
+  };
+
   const testAndSaveApi = async () => {
     const cfg = apiConfig();
     if (!cfg) return;
-    setTesting(true); setMsg(""); setMsgErr("");
+    setTesting(true); setMsg(""); setMsgErr(""); setErrDetail("");
     try {
       await testAndSaveAi(cfg, { read: () => localStorage.getItem(LLM_KEY), probe: backend.llmProbe, save: saveLlm });
       setConfigured(true); say("连接成功。AI 会按问题需要联网搜索、取数和计算。");
     } catch (e) {
-      oops(friendlyAgentError(e));
+      const f = failureOf(e);
+      oops(f.text, f.detail);
     } finally { setTesting(false); }
   };
 
@@ -235,11 +306,11 @@ export function Settings() {
     const detected = m ? agentOf(m.provider) : undefined;
     if (!m || !detected?.available) return oops(detected?.detail ?? (agentErr || "这台机器还没有检测到可用的本地 Agent"));
     const cfg = { provider: m.provider, baseURL: "", apiKey: "", model: m.id };
-    setTesting(true); setMsg(""); setMsgErr("");
+    setTesting(true); setMsg(""); setMsgErr(""); setErrDetail("");
     try {
       await testAndSaveAi(cfg, { read: () => localStorage.getItem(LLM_KEY), probe: backend.llmProbe, save: saveLlm });
       setConfigured(true); say(`「${m.name}」连接成功。AI 会按问题需要联网搜索、取数和计算。`);
-    } catch (e) { oops(friendlyAgentError(e)); }
+    } catch (e) { const f = failureOf(e); oops(f.text, f.detail); }
     finally { setTesting(false); }
   };
 
@@ -251,6 +322,9 @@ export function Settings() {
 
   const forget = () => {
     // 🔴 清不掉要说出来：吞掉异常的话界面写"已清除"、旧 key 还在，下一次提问照样发出去
+    // 在途的模型列表请求一并作废、列表与提示清空:不然它晚回来,会把用旧 key 取到的列表重新显示出来。
+    // 放在 try 之前:就算清除存储失败,也不该继续显示用这个 key 取到的东西。
+    resetModels();
     try {
       clearLlm();
       setApiKey(""); setConfigured(false); say("已清除。再次使用 AI 功能前需要重新连接。");
@@ -454,7 +528,7 @@ export function Settings() {
                 {rechecking ? "正在重新检测…" : "已在终端装好或登录？重新检测"}
               </button>
             )}
-            <ActionRow onSave={testAndSaveCli} configured={configured} onForget={forget} msg={msg} msgErr={msgErr} busy={testing} />
+            <ActionRow onSave={testAndSaveCli} configured={configured} onForget={forget} msg={msg} msgErr={msgErr} busy={testing} detail={errDetail} />
           </div>
         ) : (
           <div className="space-y-4 text-sm">
@@ -481,7 +555,7 @@ export function Settings() {
 
             <div>
               <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Base URL</label>
-              <input value={baseURL} onChange={(e) => { setBaseURL(e.target.value); setMsg(""); setMsgErr(""); }}
+              <input value={baseURL} onChange={(e) => { setBaseURL(e.target.value); setMsg(""); setMsgErr(""); setErrDetail(""); resetModels(); }}
                 placeholder="https://api.deepseek.com" className={`${INPUT} font-mono text-xs`} />
               {/* 百炼系模板留了占位让用户替换 —— 没替换后端会拒，这里先说清楚 */}
               {/[{<][A-Za-z_]/.test(baseURL) && (
@@ -489,20 +563,43 @@ export function Settings() {
               )}
             </div>
             <div>
-              <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Model</label>
-              <input value={modelName} onChange={(e) => { setModelName(e.target.value); setMsg(""); setMsgErr(""); }}
-                placeholder="模型名称" className={`${INPUT} font-mono text-xs`} />
-            </div>
-            <div>
               <label className="mb-1.5 block text-xs font-medium text-muted-foreground">API Key</label>
-              <input type="password" value={apiKey} onChange={(e) => { setApiKey(e.target.value); setMsg(""); setMsgErr(""); }}
+              <input type="password" value={apiKey} onChange={(e) => { setApiKey(e.target.value); setMsg(""); setMsgErr(""); setErrDetail(""); resetModels(); }}
                 placeholder="sk-…" className={`${INPUT} font-mono text-xs`} />
               <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
                 为避免每次重填，key 会保存在当前浏览器的本机配置中；它不是系统钥匙串，也不承诺加密。
                 只建议在可信的个人电脑使用，共享电脑用完请点击“忘记配置”。key 不进入仓库、后端配置、日志或研究产物。
               </p>
             </div>
-            <ActionRow onSave={testAndSaveApi} configured={configured} onForget={forget} msg={msg} msgErr={msgErr} busy={testing} />
+            <div>
+              <div className="mb-1.5 flex items-center justify-between gap-2">
+                <label className="block text-xs font-medium text-muted-foreground">Model</label>
+                <button type="button" onClick={() => void fetchModelList()} disabled={fetchingModels}
+                  className="inline-flex items-center gap-1 text-xs text-primary hover:underline disabled:cursor-wait disabled:opacity-60">
+                  <RefreshCw className={`h-3 w-3 ${fetchingModels ? "animate-spin" : ""}`} />
+                  {fetchingModels ? "正在获取…" : "获取可用模型"}
+                </button>
+              </div>
+              <input value={modelName} onChange={(e) => { setModelName(e.target.value); setMsg(""); setMsgErr(""); setErrDetail(""); }}
+                placeholder="模型名称（填好 Base URL 和 API Key 后可点右上角获取）" className={`${INPUT} font-mono text-xs`} />
+              {modelsMsg && <p className="mt-1.5 text-[11px] text-primary">{modelsMsg}</p>}
+              {modelsErr && (
+                <div className="mt-1.5 space-y-1.5">
+                  <p className="text-[11px] text-destructive">{modelsErr}</p>
+                  {modelsErrDetail && (
+                    <details open className="rounded-lg border border-destructive/30 bg-destructive/[0.05] p-2.5 text-xs">
+                      <summary className="cursor-pointer font-medium text-destructive">错误详情（排查用）</summary>
+                      <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-all font-mono text-[11px] leading-relaxed text-muted-foreground">{modelsErrDetail}</pre>
+                    </details>
+                  )}
+                </div>
+              )}
+              {fetchedModels && (
+                <ModelPicker models={fetchedModels} current={modelName}
+                  onPick={(id) => { setModelName(id); setMsg(""); setMsgErr(""); setErrDetail(""); }} />
+              )}
+            </div>
+            <ActionRow onSave={testAndSaveApi} configured={configured} onForget={forget} msg={msg} msgErr={msgErr} busy={testing} detail={errDetail} />
           </div>
         )}
       </GlassCard>

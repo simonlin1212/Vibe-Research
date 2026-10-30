@@ -30,15 +30,19 @@ import type { UpdateActionName, UpdateInfo } from "./update.ts";
 export class ApiError extends Error {
   readonly status: number;
   readonly code: string;
+  /** 排查明细(错误码 / HTTP 状态 / 上游原文,后端已抹 key)。目前只有「接入 AI」的连接测试与获取模型列表会带 */
+  readonly detail: string;
   constructor(
     message: string,
     status: number,
     code = "",
+    detail = "",
   ) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.code = code;
+    this.detail = detail;
   }
 }
 
@@ -62,7 +66,9 @@ const SAFE_AGENT_MESSAGE_CODES = new Set([
   "ai_not_configured", "agent_required", "agent_runtime_unsupported", "direct_provider_unsupported", "bad_execution_mode",
   "network_error", "http_error", "redirect", "bad_json", "upstream_error", "empty_choice",
   // 模型 API 拒绝 key / 限流 / 拒绝请求 / 地址跳转:文案是后端 publicApiFailure 写死的,不含上游原文
-  "api_key_rejected", "api_rate_limited", "api_request_rejected", "api_redirect",
+  "api_key_rejected", "api_rate_limited", "api_request_rejected", "api_redirect", "api_address_forbidden",
+  // 获取模型列表(设置页):文案是后端 llmModels 写死的
+  "models_failed", "models_unsupported", "bad_models_request",
   "confirmation_expired", "source_changed",
   // 远程访问模式的页面服务器(desktop/remote-access.ts)给的:链接失效 / 请求来源不对,文案是产品自己写的
   "access_required", "forbidden_origin",
@@ -95,7 +101,7 @@ export function friendlyAgentError(error: unknown): string {
 
 const isAgentPath = (path: string): boolean =>
   path === "/chat" || path.startsWith("/chat/") || path.startsWith("/tasks") || path === "/research" || path.startsWith("/debate") ||
-  path === "/import" || path === "/llm-probe" || path === "/translate-headlines" || path.startsWith("/guided-tool/");
+  path === "/import" || path === "/llm-probe" || path === "/llm-models" || path === "/translate-headlines" || path.startsWith("/guided-tool/");
 
 export type TaskMode = "auto" | "quick" | "deep";
 export type TaskRouteTarget = "deterministic" | "quick" | "deep";
@@ -221,7 +227,8 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
     init?.signal?.throwIfAborted();
     // fetch 只在网络层失败时抛。这里不能静默成空数据,否则页面把"连不上"渲染成"没有数据"
     if (agentPath) {
-      throw new ApiError("当前 AI 暂时没有连接成功。请到「接入 AI」检查当前连接后重试。", 0, "network");
+      throw new ApiError("当前 AI 暂时没有连接成功。请到「接入 AI」检查当前连接后重试。", 0, "network",
+        `浏览器没能连上本机后端(${path}):${e instanceof Error ? e.message : String(e)}`);
     }
     throw new ApiError(`连接不到编排器 API:${e instanceof Error ? e.message : String(e)}`, 0, "network");
   }
@@ -232,16 +239,18 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
   } catch {
     // 代理错误页是 HTML,直接 res.json() 会炸在 "Unexpected token <",把真正原因埋掉
     if (agentPath) {
-      throw new ApiError("当前 AI 暂时没有连接成功。请到「接入 AI」检查当前连接后重试。", res.status, "bad_response");
+      throw new ApiError("当前 AI 暂时没有连接成功。请到「接入 AI」检查当前连接后重试。", res.status, "bad_response",
+        `本机后端返回的不是 JSON(HTTP ${res.status}):${text.slice(0, 200)}`);
     }
     throw new ApiError(`返回不是 JSON:${text.slice(0, 120)}`, res.status, "bad_response");
   }
   if (!res.ok) {
-    const b = body as { error?: string; message?: string } | null;
+    const b = body as { error?: string; message?: string; detail?: string } | null;
     const code = b?.error ?? String(res.status);
     const raw = b?.message ?? b?.error ?? `HTTP ${res.status}`;
     const message = agentPath ? friendlyAgentError(new ApiError(raw, res.status, code)) : raw;
-    throw new ApiError(message, res.status, code === "turn_failed" && AGENT_AUTH_ERROR.test(raw) ? "agent_not_ready" : code);
+    throw new ApiError(message, res.status, code === "turn_failed" && AGENT_AUTH_ERROR.test(raw) ? "agent_not_ready" : code,
+      typeof b?.detail === "string" ? b.detail : `本机后端 ${path} 返回 HTTP ${res.status}，错误码 ${code}${b?.message ? `：${b.message}` : ""}${code === "not found" ? "\n后端还是旧版本（没有这个接口）：请停掉 scripts/start 后重新启动，再刷新页面。" : ""}`);
   }
   return body as T;
 }
@@ -451,6 +460,17 @@ export const backend = {
       signal,
     });
   },
+
+  /**
+   * 设置页「获取可用模型」:按页面填的 Base URL + key 取 GET /models。只读,不保存、不进对话。
+   * 失败的 ApiError 带 detail(HTTP 状态 / 上游原文,已抹 key),页面原样展示方便排查。
+   */
+  llmModels: async (llm: unknown, signal?: AbortSignal) =>
+    call<{ models: { id: string; name: string; contextWindow?: number; maxTokens?: number }[]; hidden?: number; url: string; duration_ms: number }>("/llm-models", {
+      method: "POST",
+      body: JSON.stringify({ llm }),
+      signal,
+    }),
 
   /** RSS 标题走专用受限转换入口，不借用会记上下文的自由对话。 */
   translateHeadlines: async (items: { id: string; title: string }[], signal?: AbortSignal, llm?: unknown) => {
