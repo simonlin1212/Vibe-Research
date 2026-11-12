@@ -2,6 +2,26 @@
 
 格式遵循 Keep a Changelog，并采用语义化版本。
 
+## [2.2.7] - 2026-11-12
+
+修 CodeBuddy 做研究大脑时每轮拿不到结果的问题（#59）；运行列表页点链接不再要求重新带 token；服务被停掉时不再留下 Agent 的临时工作区。沿用现有界面。
+
+### 修复
+
+- **CodeBuddy 做研究大脑时每轮 `agent_bad_output`**（#59，提交 `58e1265`）：CodeBuddy CLI 用 `--output-format json` 一次写出结果后立刻 `process.exit()`；stdout 是管道时 Node 在 macOS 上异步写，超过约 64 KB 的部分来不及写出就丢了，JSON 断在半截。研究阶段的输出远超这个大小，所以每轮都失败。现在 Claude Code / CodeBuddy 的回答先写进临时文件、进程结束后再读（普通文件同步写，退出不丢），4 MB 输出上限照旧；Codex 是逐行事件流，仍走管道。
+- **独立安装的 CodeBuddy CLI 不再被套上 WorkBuddy 精简包**（#59）：`CODEBUDDY_FORCE_LITE_WB_BUNDLE=1` 原来对所有 CodeBuddy 调用都设，npm 全局装的独立 CLI 会因此加载 WorkBuddy 专用的精简包。现在只给 WorkBuddy 桌面版自带的 CLI（按真实路径判断）。
+- **开着交互式 CodeBuddy 时提问直接退出**（与 vibe-astock #28 同一问题）：CLI 不带 `--port` 时会绑 `~/.codebuddy` 里记的固定端口，被交互会话占着就 `EADDRINUSE` 退出。现在 CLI 的帮助里列出 `--port` 时传 `--port 0`，让系统分配空闲端口；老版本没有这个参数就不传。
+- **运行列表页点链接要求重新带 token**（与 vibe-astock #27 同一处）：运行列表 `/ui` 和运行详情 `/ui/runs/:id` 的安全策略把页面放进了最严格的沙箱，点页面里的链接时浏览器当成跨站请求、不带登录 cookie，服务端拒绝。现在这两个页面允许同站跳转（仍不允许脚本），报告查看器保持原来更严的策略。
+- **服务被停掉时留下 Agent 临时工作区**：本机 Agent 还在回答时用 Ctrl+C 或系统信号停掉服务，原来只杀掉 Agent 进程，临时工作区（里面有回答原文、上传的图片）留在系统临时目录。现在退出前同步删掉。
+
+### 测试
+
+- 本机验证（2026-11-12，macOS）：后端全套 1301 项：1293 通过、8 跳过（Windows 实机专项）、0 失败；补上「停服务删临时工作区」后重跑本机 Agent 那组 74 项，69 通过、3 跳过，2 项按时间判断的用例在机器高负载时没等到假 CLI 启动，单独重跑通过；desktop 351/351，构建通过；前后端类型检查通过；mypy 检查 106 个文件通过。本轮没改 Python，Python 测试由 CI 跑。
+- 跨平台 CI（Ubuntu / macOS / Windows × Node 22 / 24）：修复提交 6 组全部通过，含 Python 测试。
+- 新增 7 条回归用例：假 CLI 一次写出 300 KB 后立刻 `process.exit()`（CodeBuddy、Claude 各一条）、写文件后超过 4 MB 仍按输出过大处理、独立 CLI 不设精简包、帮助里有无 `--port` 两种情况、运行页安全策略允许同站跳转且不许脚本、父服务收到 SIGTERM 时临时工作区被删掉。修复前都失败，修复后通过。
+- GPT-6.1 Sol 独立审查一轮：无问题（vibe-astock 同一套修复的审查报了 1 条「服务被停掉时临时文件可能留下」，两边一起修了，修复复核无问题）。
+- 没验证：没有可用的 CodeBuddy 订阅环境，没用真实 CodeBuddy CLI 跑深度研究；Windows 实机；外部取数端点与完整研究业务未重跑。
+
 ## [2.2.6] - 2026-10-29
 
 修复中文 Windows 上部分取数结果乱码。沿用现有界面。

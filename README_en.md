@@ -9,7 +9,7 @@
 
 <p align="center">
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-yellow"></a>
-  <a href="CHANGELOG.md"><img alt="Source v2.2.6" src="https://img.shields.io/badge/source-v2.2.6-F35D2B"></a>
+  <a href="CHANGELOG.md"><img alt="Source v2.2.7" src="https://img.shields.io/badge/source-v2.2.7-F35D2B"></a>
   <img alt="Markets: CN, US, HK" src="https://img.shields.io/badge/markets-CN%20%7C%20US%20%7C%20HK-0b7285">
   <img alt="168 data endpoints" src="https://img.shields.io/badge/data-168%20endpoints-2f9e44">
   <img alt="AI: Claude Code, Codex, WorkBuddy, or a model API" src="https://img.shields.io/badge/AI-Claude%20Code%20%7C%20Codex%20%7C%20WorkBuddy%20%7C%20API-black">
@@ -571,13 +571,19 @@ npm run build --prefix desktop
 .venv/bin/python -m pytest .agents/skills/data-access/scripts/tests -q
 ```
 
-Latest local acceptance checks (October 29, 2026, v2.2.6, on macOS):
+Latest local acceptance checks (November 12, 2026, v2.2.7, on macOS):
+
+- Full backend suite: **1,301 tests, 1,293 passed, 8 skipped, 0 failed**. After adding the workspace cleanup on shutdown, the 74 local-agent tests were rerun: 69 passed, 3 skipped, and 2 timing-based tests did not see the fake CLI start while the machine was under heavy load; both passed when rerun on their own. Desktop **351/351**, production build passed; frontend and backend type checks passed; mypy passed on 106 files. No Python code changed in this round; the Python tests ran in cross-platform CI (all 6 jobs passed).
+- The #59 fixes received one independent GPT-6.1 Sol review with no findings; the one P3 raised on the same fixes in vibe-astock was fixed in both repositories and re-checked with no findings. 7 new regression tests fail before the fix and pass after it; a fake CLI that writes 300 KB and exits immediately reproduces the truncation.
+- Not covered this round: a deep-research run with a real CodeBuddy CLI, live external data endpoints, a full research workflow, or physical Windows hardware.
+
+Previous release's local acceptance checks (October 29, 2026, v2.2.6, on macOS; historical record, excluded from this round's acceptance counts):
 
 - Full backend suite: **1295 tests: 1287 passed, eight skipped, zero failed**; desktop: **351/351**, with the production build passing; frontend and backend typechecks passed; Python (calc library 311, backtest 583, data scripts 582): **1476/1476**; mypy passed on 106 files.
 - The garbled-text fix had one independent GPT-6.1 Sol review: no P1, P2, or P3 findings. Three regression tests were added; all three failed before the fix and pass after it. With `PYTHONIOENCODING=gbk` simulating a Chinese Windows pipe, data-fetch output failed to decode as UTF-8 before the fix and shows Chinese correctly after it.
 - External data endpoints, complete research workflows, and physical Windows hardware were not rerun this round.
 
-Previous release's local acceptance checks (October 29, 2026, v2.2.5, on macOS; historical record, excluded from this round's acceptance counts):
+Historical local acceptance checks (October 29, 2026, v2.2.5, on macOS; excluded from this round's acceptance counts):
 
 - Full backend suite: **1294 tests: 1286 passed, eight skipped, zero failed**; desktop: **351/351**, with the production build passing; frontend and backend typechecks passed; Python (calc library 311, backtest 583, data scripts 580): **1474/1474**; mypy passed on 106 files.
 - The #56 fix had one independent GPT-6.1 Sol review: no P1, and the one P2 and one P3 finding were fixed; the affected tests and the real-machine check were rerun after the fixes. Five regression tests and one bundled-CLI path test were added.
@@ -621,7 +627,7 @@ See [CHANGELOG.md](CHANGELOG.md).
 
 The baseline is the [v1.2.0 release](https://github.com/simonlin1212/Vibe-Research/releases/tag/v1.2.0). All changes are listed in the [CHANGELOG](CHANGELOG.md).
 
-| Area | v1.2.0 | v2.2.6 |
+| Area | v1.2.0 | v2.2.7 |
 |---|---|---|
 | AI foundation | Bundled Codex Harness (Codex SDK 0.153.4) | No longer bundled; the three subscriptions call the official CLIs on the user's machine, and model APIs go straight to Chat Completions |
 | Codex subscription | Product-specific login (`.local/codex-home`) | The user's own Codex CLI signed in with `codex login` (ChatGPT account), on equal footing with Claude Code and WorkBuddy |

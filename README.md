@@ -9,7 +9,7 @@
 
 <p align="center">
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-yellow"></a>
-  <a href="CHANGELOG.md"><img alt="源码版本 v2.2.6" src="https://img.shields.io/badge/source-v2.2.6-F35D2B"></a>
+  <a href="CHANGELOG.md"><img alt="源码版本 v2.2.7" src="https://img.shields.io/badge/source-v2.2.7-F35D2B"></a>
   <img alt="市场：A 股、美股、港股" src="https://img.shields.io/badge/markets-CN%20%7C%20US%20%7C%20HK-0b7285">
   <img alt="168 个数据端点" src="https://img.shields.io/badge/data-168%20endpoints-2f9e44">
   <img alt="AI：Claude Code、Codex、WorkBuddy 或模型 API" src="https://img.shields.io/badge/AI-Claude%20Code%20%7C%20Codex%20%7C%20WorkBuddy%20%7C%20API-black">
@@ -568,13 +568,19 @@ npm run build --prefix desktop
 .venv/bin/python -m pytest .agents/skills/data-access/scripts/tests -q
 ```
 
-最近本机验收记录（2026-10-29，v2.2.6，macOS）：
+最近本机验收记录（2026-11-12，v2.2.7，macOS）：
+
+- 后端全套 **1301 项：1293 通过、8 跳过、0 失败**；补上「停服务删临时工作区」后重跑本机 Agent 那组 74 项，69 通过、3 跳过，2 项按时间判断的用例在机器高负载时没等到假 CLI 启动，单独重跑通过；desktop **351/351**，生产构建通过；前后端类型检查通过；mypy 检查 106 个文件通过。本轮没改 Python，Python 测试由跨平台 CI 跑（6 组通过）。
+- #59 等修复经 GPT-6.1 Sol 独立审查一轮：无问题；vibe-astock 同一套修复报的 1 条 P3 两边一起修了，复核无问题。新增 7 条回归用例，修复前都失败、修复后通过；用假 CLI 一次写出 300 KB 后立刻退出复现了截断。
+- 本轮没有用真实 CodeBuddy CLI 跑深度研究，未重跑外部取数端点、完整研究业务或 Windows 实机。
+
+上一版本机验收记录（2026-10-29，v2.2.6，macOS；历史记录，不并入本轮验收）：
 
 - 后端全套 **1295 项：1287 通过、8 跳过、0 失败**；desktop **351/351**，生产构建通过；前后端类型检查通过；Python（计算库 311、回测 583、数据脚本 582）**1476/1476**，mypy 检查 106 个文件通过。
 - 乱码修复经 GPT-6.1 Sol 独立审查一轮：无 P1 / P2 / P3。新增 3 条回归用例，修复前都失败、修复后通过；用 `PYTHONIOENCODING=gbk` 模拟中文 Windows 管道：修复前取数输出按 UTF-8 解码报错，修复后中文正常。
 - 本轮未重跑外部取数端点、完整研究业务或 Windows 实机。
 
-上一版本机验收记录（2026-10-29，v2.2.5，macOS；历史记录，不并入本轮验收）：
+历史本机验收记录（2026-10-29，v2.2.5，macOS；历史记录，不并入本轮验收）：
 
 - 后端全套 **1294 项：1286 通过、8 跳过、0 失败**；desktop **351/351**，生产构建通过；前后端类型检查通过；Python（计算库 311、回测 583、数据脚本 580）**1474/1474**，mypy 检查 106 个文件通过。
 - #56 修复经 GPT-6.1 Sol 独立审查一轮：无 P1，1 条 P2、1 条 P3 已修，修复后复验相关测试与真机检测。新增 5 条回归用例和 1 条内置 CLI 路径识别用例。
@@ -617,7 +623,7 @@ npm run build --prefix desktop
 
 对照基线为 [v1.2.0 发布说明](https://github.com/simonlin1212/Vibe-Research/releases/tag/v1.2.0)。完整变化见 [CHANGELOG](CHANGELOG.md)。
 
-| 方面 | v1.2.0 | v2.2.6 |
+| 方面 | v1.2.0 | v2.2.7 |
 |---|---|---|
 | AI 底座 | 内置 Codex Harness（Codex SDK 0.153.4） | 不再内置；三家订阅直接调用使用者本机的官方 CLI，模型 API 直接走 Chat Completions |
 | Codex 订阅 | 产品专用登录（`.local/codex-home`） | 使用者自己 `codex login`（ChatGPT 账号）的 Codex CLI，与 Claude Code、WorkBuddy 同级 |

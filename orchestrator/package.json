@@ -1,6 +1,6 @@
 {
   "name": "vibe-research-orchestrator",
-  "version": "2.2.6",
+  "version": "2.2.7",
   "private": true,
   "description": "研究编排器:六阶段研究状态机 + 收工检查 + validator + 合规 gate;大脑可选本机订阅 Agent(Claude Code / Codex CLI / WorkBuddy)或任意 Chat Completions 模型 API",
   "type": "module",

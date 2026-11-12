@@ -5,9 +5,9 @@ import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const VERSION = '2.2.6';
+const VERSION = '2.2.7';
 
-test('v2.2.6 source version is consistent across packages, locks, README badges and CHANGELOG', () => {
+test('v2.2.7 source version is consistent across packages, locks, README badges and CHANGELOG', () => {
   for (const dir of ['desktop', 'orchestrator']) {
     const pkg = JSON.parse(fs.readFileSync(path.join(root, dir, 'package.json'), 'utf8'));
     const lock = JSON.parse(fs.readFileSync(path.join(root, dir, 'package-lock.json'), 'utf8'));
