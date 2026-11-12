@@ -12,7 +12,7 @@
  *    而它们只有在"要让用户看到字一个个出来"时才值得。
  */
 import { maskKnownSecret } from "../agent_runner.ts";
-import { NON_PUBLIC_CODE, publicOnlyPost } from "../net_guard.ts";
+import { NON_PUBLIC_CODE, publicOnlyGet, publicOnlyPost } from "../net_guard.ts";
 import { remotePageBaseUrlError } from "../runtime_provider.ts";
 
 /** 一条对话消息。`tool` 角色用于把工具执行结果喂回模型。 */
@@ -120,6 +120,16 @@ export function publicApiFailure(error: DirectTransportError, rejectedHint: stri
   }
   if (error.code === "network_error") return { code: "turn_failed", message: "连不上模型 API。请检查网络与 Base URL 后重试。" };
   return { code: "turn_failed", message: "模型 API 暂时没有给出可用结果，请稍后重试或换一个模型。" };
+}
+
+/**
+ * 给「接入 AI」页排查用的诊断明细:错误码 + HTTP 状态 + 上游原文(已在传输层抹掉 key、截断)。
+ * 🔴 只给设置页的连接测试 / 获取模型列表用 —— 那里的端点和 key 都是用户此刻自己填的;
+ *    业务对话、研究产物、日志仍只用 publicApiFailure 的固定文案。
+ */
+export function apiFailureDetail(error: DirectTransportError, apiKey = ""): string {
+  const head = [`错误码 ${error.code}`, ...(error.status !== null ? [`HTTP ${error.status}`] : [])].join(" · ");
+  return `${head}\n${scrubSecrets(error.message, apiKey).slice(0, ERROR_BODY_CAP + 80)}`;
 }
 
 /** 上游返回体只取有限长度进错误消息:整包塞进去会把日志和事件流冲垮,也更容易把敏感内容带出去 */
@@ -322,4 +332,157 @@ export async function chatCompletion(req: ChatRequest): Promise<ChatReply> {
     usage: doc.usage ?? null,
     durationMs,
   };
+}
+
+/** 模型列表里的一行(设置页下拉框用):id 原样传给 Chat Completions,name 只给人看 */
+export interface ListedModel {
+  id: string;
+  name: string;
+  contextWindow?: number;
+  maxTokens?: number;
+}
+
+/** 模型列表回复的上限:地址是用户填的,读到的字节数超过就拒,不截断(截断的 JSON 解析不了) */
+const MAX_MODEL_LIST_BYTES = 4 * 1024 * 1024;
+
+/**
+ * `GET {baseURL}/models` 的地址。Base URL 已经是完整的 chat/completions 端点时(用户常直接贴文档里的完整地址),
+ * 先去掉这段再拼 /models;已经以 /models 结尾的不重复拼。
+ */
+export function modelListUrl(baseURL: string): string {
+  const base = baseURL.replace(/\/+$/, "").replace(/\/chat\/completions$/i, "");
+  return /\/models$/i.test(base) ? base : `${base}/models`;
+}
+
+const positiveInt = (...xs: unknown[]): number | undefined =>
+  xs.find((x): x is number => typeof x === "number" && Number.isInteger(x) && x > 0);
+const firstText = (...xs: unknown[]): string | undefined =>
+  xs.find((x): x is string => typeof x === "string" && x.length > 0);
+
+/**
+ * 解析模型列表:标准的 `data` 数组优先;部分网关给的是 `models` 对象(键 = 请求时用的模型名)。
+ * 单行缺 id 只跳过这一行,不让一行坏数据拖垮整张列表。
+ */
+export function parseModelList(body: unknown): ListedModel[] {
+  const doc = body as { data?: unknown; models?: unknown } | null;
+  let rows: { key?: string; raw: unknown }[];
+  if (Array.isArray(doc?.data)) rows = (doc.data as unknown[]).map((raw) => ({ raw }));
+  else if (Array.isArray(doc?.models)) rows = (doc.models as unknown[]).map((raw) => ({ raw }));
+  else if (doc?.models && typeof doc.models === "object") {
+    rows = Object.entries(doc.models as Record<string, unknown>)
+      .filter(([, raw]) => raw !== null && typeof raw === "object" && !Array.isArray(raw))
+      .map(([key, raw]) => ({ key, raw }));
+  } else {
+    throw new DirectTransportError("bad_listing", "模型列表里既没有 data 数组也没有 models 对象,这个端点不支持列出模型,请手动填写模型名", null, false);
+  }
+  const seen = new Set<string>();
+  const out: ListedModel[] = [];
+  for (const { key, raw } of rows) {
+    const e = (raw ?? {}) as Record<string, unknown>;
+    const limit = (e.limit ?? {}) as Record<string, unknown>;
+    const top = (e.top_provider ?? {}) as Record<string, unknown>;
+    const id = firstText(key, e.id, typeof raw === "string" ? raw : undefined);
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    const contextWindow = positiveInt(e.contextWindow, e.context_window, e.context_length, e.max_input_tokens, limit.context);
+    const maxTokens = positiveInt(e.maxOutputTokens, e.max_output_tokens, e.maxTokens, e.max_tokens, limit.output, top.max_completion_tokens);
+    out.push({
+      id, name: firstText(e.name, e.display_name, e.displayName) ?? id,
+      ...(contextWindow ? { contextWindow } : {}), ...(maxTokens ? { maxTokens } : {}),
+    });
+  }
+  return out;
+}
+
+/** 边读边数字节,超上限就停;声明的 content-length 超了直接不读 */
+async function readCapped(res: Response, cap: number): Promise<string> {
+  const declared = Number(res.headers.get("content-length") ?? Number.NaN);
+  const tooBig = () => new DirectTransportError("too_large", `模型列表超过 ${cap} 字节,不读取`, res.status, false);
+  if (Number.isFinite(declared) && declared > cap) { await res.body?.cancel().catch(() => {}); throw tooBig(); }
+  if (!res.body) return "";
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > cap) throw tooBig();
+      chunks.push(value);
+    }
+  } finally { await reader.cancel().catch(() => {}); }
+  return Buffer.concat(chunks).toString("utf8");
+}
+
+/**
+ * 成功返回的模型列表也要守住本次 key:网关可能在 id / 名称里回显它,页面会原样显示。
+ * - id 含 key(原样或 JSON 转义形态,以及通用密钥形态)→ **整行丢弃**。不改写 id:
+ *   抹掉后的 id 是另一个字符串,选中它发出去的就是一个服务商不认识、而界面上像是真的模型。
+ * - 名称只给人看 → 脱敏后保留。
+ * @returns 留下的模型,以及因为 id 含密钥而隐藏的行数(页面据此提示,不静默少几行)。
+ */
+export function guardListedModels(models: readonly ListedModel[], apiKey: string): { models: ListedModel[]; hidden: number } {
+  const kept: ListedModel[] = [];
+  let hidden = 0;
+  for (const m of models) {
+    if (scrubSecrets(m.id, apiKey) !== m.id) { hidden += 1; continue; }
+    kept.push({ ...m, name: scrubSecrets(m.name, apiKey) });
+  }
+  return { models: kept, hidden };
+}
+
+/**
+ * 列出端点提供的模型(OpenAI 兼容 `GET /models`,Bearer 鉴权)。只读,不存任何东西。
+ * 失败一律抛 DirectTransportError,错误消息里的上游原文已抹掉 key 并截断;
+ * 成功的列表经 guardListedModels 过滤 / 脱敏后才返回。
+ */
+export async function listModels(req: { baseURL: string; apiKey: string; timeoutMs: number; signal?: AbortSignal; publicOnly?: boolean }): Promise<{ models: ListedModel[]; hidden: number }> {
+  const url = modelListUrl(req.baseURL);
+  const timeout = new AbortController();
+  const timer = setTimeout(() => timeout.abort(), Math.max(1_000, req.timeoutMs));
+  const onExternalAbort = () => timeout.abort();
+  req.signal?.addEventListener("abort", onExternalAbort, { once: true });
+  if (req.signal?.aborted) timeout.abort();
+  const headers: Record<string, string> = { accept: "application/json", ...(req.apiKey ? { authorization: `Bearer ${req.apiKey}` } : {}) };
+  const publicOnly = req.publicOnly ?? publicOnlyByDefault(url);
+  let res: Response;
+  let raw: string;
+  try {
+    res = publicOnly
+      ? await publicOnlyGet(url, { headers, signal: timeout.signal })
+      : await fetch(url, { method: "GET", headers, signal: timeout.signal, redirect: "manual" });
+    if (res.type === "opaqueredirect" || (res.status >= 300 && res.status < 400)) {
+      res.body?.cancel().catch(() => {});
+      throw new DirectTransportError("redirect", `模型列表地址返回了跳转(${res.status}),未跟随;请填写最终地址`, res.status, false);
+    }
+    raw = await readCapped(res, MAX_MODEL_LIST_BYTES);
+  } catch (e) {
+    if (e instanceof DirectTransportError) throw e;
+    if ((e as { code?: unknown } | null)?.code === NON_PUBLIC_CODE) {
+      throw new DirectTransportError("forbidden_address",
+        `模型地址不是公网地址,远程访问模式下不允许连接:${scrubSecrets(e instanceof Error ? e.message : String(e), req.apiKey)}`, null, false);
+    }
+    const aborted = timeout.signal.aborted;
+    const cause = (e as { cause?: unknown } | null)?.cause;
+    const detail = scrubSecrets([e instanceof Error ? e.message : String(e), cause instanceof Error ? cause.message : ""].filter(Boolean).join(":"), req.apiKey);
+    throw new DirectTransportError(
+      aborted ? (req.signal?.aborted ? "cancelled" : "timeout") : "network_error",
+      aborted ? (req.signal?.aborted ? "请求已被取消" : `请求超时(${req.timeoutMs} 毫秒)`) : `无法连接 ${url}:${detail}`,
+      null, false,
+    );
+  } finally {
+    clearTimeout(timer);
+    req.signal?.removeEventListener("abort", onExternalAbort);
+  }
+  if (!res.ok) {
+    throw new DirectTransportError("http_error",
+      `${url} 返回 ${res.status}:${scrubBody(raw, req.apiKey).slice(0, ERROR_BODY_CAP)}`, res.status, false);
+  }
+  let parsed: unknown;
+  try { parsed = JSON.parse(raw); }
+  catch { throw new DirectTransportError("bad_json", `${url} 返回的不是合法 JSON:${scrubBody(raw, req.apiKey).slice(0, 200)}`, res.status, false); }
+  const doc = parsed as { error?: unknown } | null;
+  if (doc?.error) throw new DirectTransportError("upstream_error", `模型端点报错:${scrubValue(doc.error, req.apiKey).slice(0, ERROR_BODY_CAP)}`, res.status, false);
+  return guardListedModels(parseModelList(parsed), req.apiKey);
 }

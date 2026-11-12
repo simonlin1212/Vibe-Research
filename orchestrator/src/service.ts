@@ -22,8 +22,8 @@ import { researchFailure } from "./research_failure.ts";
 import { runAlerts, InsufficientRunsError, type AlertDiff } from "./alerts.ts";
 import { NOFOLLOW_FLAG, nowIso, readJson, readJsonIfExists } from "./fsutil.ts";
 import { ChatError, REPLY_TRUNCATED, applyGate, chatSend as chatSendCore, llmProbe as llmProbeCore, parseHeadlineTranslationReply, prepareHeadlineTranslation, translateHeadlines as translateHeadlinesCore, type ChatTurnResult, type HeadlineTranslationResult, type LlmProbeResult } from "./chat.ts";
-import { DirectTransportError, chatCompletion } from "./engines/direct_transport.ts";
-import { REQUEST_LLM_META_VAR, RUNTIME_KEY_VAR, assertExecutionMode, defaultLlm, requestLlmMeta, resolveDirectProvider, resolveRuntimeProvider, resolveSelectedRuntime, runtimeSourceFingerprint, RuntimeProviderError, templateMatrix, type LlmOverride, type DefaultSourceOptions } from "./runtime_provider.ts";
+import { DirectTransportError, apiFailureDetail, chatCompletion, listModels as listModelsCore, modelListUrl, scrubSecrets, type ListedModel } from "./engines/direct_transport.ts";
+import { REQUEST_LLM_META_VAR, RUNTIME_KEY_VAR, assertExecutionMode, defaultLlm, requestLlmMeta, resolveDirectProvider, resolveRuntimeProvider, resolveSelectedRuntime, runtimeSourceFingerprint, RuntimeProviderError, templateMatrix, type LlmOverride, type DefaultSourceOptions, type ResolvedApiProvider } from "./runtime_provider.ts";
 import { DebateError, MAX_DEBATE_MESSAGE, DEBATE_TURN_TIMEOUT_MS, advanceDebate, startDebate, type DebateState } from "./debate.ts";
 import { IngestError, MAX_TOTAL_BYTES, ingestFiles as ingestFilesCore, type IngestFileInput, type IngestResult } from "./ingest.ts";
 import { LedgerError, checkRecord as checkLedgerRecord, insertRecords as insertLedgerRecords, kinds as ledgerKindDefs, labels as ledgerLabelDefs, listRecordsChecked, listRecords as listRecordsOf, removeRecord as removeLedgerRecord, upsertRecord as upsertLedgerRecord, type LedgerIssue, type LedgerRecord } from "./ledger.ts";
@@ -61,7 +61,9 @@ export function serviceContext(opts: { repoRoot?: string; python?: string; env?:
 
 export class ServiceError extends Error {
   code: string;
-  constructor(code: string, message: string) { super(message); this.code = code; }
+  /** 排查明细:只有「接入 AI」页的连接测试 / 获取模型列表会带,HTTP 出口原样(再脱敏一次)放进 `detail` 字段 */
+  detail?: string;
+  constructor(code: string, message: string, detail?: string) { super(message); this.code = code; if (detail) this.detail = detail; }
 }
 
 const SYMBOL_RE = /^[A-Za-z0-9.\-]{1,12}$/;       // 主体代码:数字 / 字母 / 点 / 连字符,长度 1-12
@@ -1913,7 +1915,50 @@ export async function llmProbe(ctx: ServiceContext, req: { llm?: LlmOverride }, 
         direct_reason: error instanceof RuntimeProviderError ? error.message : "该 AI 来源不走模型 API 直连" };
     }
   } catch (e) {
-    if (e instanceof ChatError) throw new ServiceError(e.code, e.message);
+    // 设置页要能照着页面上的信息排查:探针把错误码 / HTTP 状态 / 上游原文(已抹 key)一并交回
+    if (e instanceof ChatError) throw new ServiceError(e.code, e.message, e.detail);
+    throw e;
+  }
+}
+
+/**
+ * 设置页「获取可用模型」:按页面填的 Base URL + key 调 `GET {baseURL}/models`,只读不存。
+ * 来源解析与对话同一套(模板、自填端点、远程模式只收公网 https),所以这里不会被拿去连别的地址。
+ * 订阅档没有模型列表(模型由 CLI 登录态决定),直接拒。
+ */
+export async function llmModels(ctx: ServiceContext, req: { llm?: LlmOverride }, signal?: AbortSignal): Promise<{ models: ListedModel[]; hidden: number; url: string; duration_ms: number }> {
+  if (!req || typeof req !== "object" || Array.isArray(req)) throw new ServiceError("bad_models_request", "获取模型列表的请求必须是对象");
+  const llm = checkLlmShape(req.llm);
+  if (!llm) throw new ServiceError("bad_models_request", "获取模型列表要带上页面填的 llm 配置");
+  // 列模型时还没选模型:给一个占位,只为了走同一套来源解析与地址校验,不会发给上游
+  const probeLlm: LlmOverride = { ...llm, model: llm.model?.trim() ? llm.model : "model-list-probe" };
+  let api: ResolvedApiProvider;
+  try {
+    api = resolveDirectProvider(ctx.repoRoot, ctx.dataRoot, probeLlm);
+  } catch (e) {
+    if (e instanceof RuntimeProviderError) {
+      if (e.code === "direct_provider_unsupported") throw new ServiceError("models_unsupported", "订阅接入的模型由本机 CLI 的登录决定，没有模型列表可取");
+      throw new ServiceError(e.code, e.message);
+    }
+    throw e;
+  }
+  const t0 = Date.now();
+  try {
+    const { models, hidden } = await listModelsCore({ baseURL: api.baseURL, apiKey: api.apiKey, timeoutMs: 20_000, ...(signal ? { signal } : {}) });
+    // 地址按规则不带查询串和用户名密码,路径里仍可能被填进 key:回给页面前同样抹一次
+    return { models, hidden, url: scrubSecrets(modelListUrl(api.baseURL), api.apiKey), duration_ms: Date.now() - t0 };
+  } catch (e) {
+    if (e instanceof DirectTransportError) {
+      if (e.code === "cancelled") throw new ServiceError("cancelled", "获取模型列表已取消");
+      const why = e.code === "timeout" ? "获取模型列表超时（20 秒）"
+        : e.status === 401 || e.status === 403 ? "模型 API 拒绝了当前的 API key，列不出模型"
+          : e.status === 404 ? "这个端点没有提供模型列表（GET /models 返回 404），请手动填写模型名"
+            : e.code === "redirect" ? "模型列表地址返回了跳转，产品不会跟随；请把 Base URL 改成最终地址"
+              : e.code === "forbidden_address" ? "模型地址解析到了本机或内网地址，远程访问模式下不允许连接"
+                : e.code === "network_error" ? "连不上模型 API，请检查网络与 Base URL"
+                  : "没能取到模型列表，可以直接手动填写模型名";
+      throw new ServiceError("models_failed", why, apiFailureDetail(e, api.apiKey));
+    }
     throw e;
   }
 }

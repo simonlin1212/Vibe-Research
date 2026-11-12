@@ -21,7 +21,7 @@ import path from "node:path";
 import { createToolExecutor, openAssistantBridge, MAX_TOOL_CALLS_PER_TURN, type AssistantTool, type ToolExecutor, type ToolReceipt } from "./assistant_bridge.ts";
 import { gatePatterns } from "./config.ts";
 import { maskKnownSecret } from "./agent_runner.ts";
-import { DirectTransportError, chatCompletion, publicApiFailure, type ChatMessage, type ChatReply, type ChatRequest, type ChatToolCall } from "./engines/direct_transport.ts";
+import { DirectTransportError, apiFailureDetail, chatCompletion, publicApiFailure, scrubSecrets, type ChatMessage, type ChatReply, type ChatRequest, type ChatToolCall } from "./engines/direct_transport.ts";
 import { complianceGate } from "./gate.ts";
 import { currentPlugin } from "./plugin.ts";
 import { LocalAgentError, runLocalAgent, type LocalAgentId, type RunLocalAgentOptions } from "./local_agent_runtime.ts";
@@ -33,10 +33,16 @@ import { RuntimeProviderError, resolveSelectedRuntime, type LlmOverride, type Re
 
 export class ChatError extends Error {
   code: string;
-  constructor(code: string, message: string) {
+  /**
+   * 排查明细(错误码、HTTP 状态、上游原文,已抹 key 并截断)。
+   * 🔴 只有设置页的连接探针会把它交给浏览器;业务对话照旧只给 message 里的固定文案。
+   */
+  detail?: string;
+  constructor(code: string, message: string, detail?: string) {
     super(message);
     this.name = "ChatError";
     this.code = code;
+    if (detail) this.detail = detail;
   }
 }
 
@@ -196,6 +202,7 @@ function publicLocalAgentFailure(error: LocalAgentError): ChatError {
   return new ChatError(
     error.code,
     messages[error.code] ?? "当前 AI 暂时没有连接成功。请到「接入 AI」检查当前连接后重试。",
+    `错误码 ${error.code}\n${scrubSecrets(error.message).slice(0, 600)}`,
   );
 }
 
@@ -373,7 +380,7 @@ async function apiTurn(
     }
     if (e instanceof DirectTransportError) {
       const failure = publicApiFailure(e, "模型名不对、上下文过长，或这个模型不支持工具调用", "chat");
-      throw new ChatError(failure.code, failure.message);
+      throw new ChatError(failure.code, failure.message, apiFailureDetail(e, api.apiKey));
     }
     throw publicAgentFailure(e, api.apiKey);
   } finally {
@@ -633,7 +640,9 @@ export async function llmProbe(
     { session: "llm-probe", message: `连接检测令牌:${token}`, ...(req.llm ? { llm: req.llm } : {}) },
   );
   if (!turn.reply.includes(token)) {
-    throw new ChatError("probe_bad_output", "模型已响应,但没有按要求回复本次连接检测令牌。请确认所选模型能遵循指令后重试");
+    const shown = turn.reply.trim().slice(0, 300) || "(空回复)";
+    throw new ChatError("probe_bad_output", "模型已响应,但没有按要求回复本次连接检测令牌。请确认所选模型能遵循指令后重试",
+      `期望回复:${token}\n模型实际回复(前 300 字):${shown}`);
   }
   return { ok: true, duration_ms: turn.duration_ms };
 }
@@ -657,15 +666,16 @@ const AGENT_TRANSPORT_DETAIL = /reconnecting|unexpected status|https?:\/\/|wss?:
 /** 未归类错误给 HTTP / 浏览器的出口：保留可行动信息，不暴露连接地址与鉴权细节。 */
 function publicAgentFailure(error: unknown, key: string): ChatError {
   const clean = scrubKey(error instanceof Error ? error.message : String(error), key);
+  const detail = `未归类错误\n${scrubSecrets(clean, key).slice(0, 600)}`;
   if (AGENT_AUTH_ERROR.test(clean)) {
-    return new ChatError("agent_not_ready", "当前 AI 登录已失效或尚未完成。请先到「接入 AI」重新连接。");
+    return new ChatError("agent_not_ready", "当前 AI 登录已失效或尚未完成。请先到「接入 AI」重新连接。", detail);
   }
   if (AGENT_TRANSPORT_DETAIL.test(clean)) {
-    return new ChatError("turn_failed", "当前 AI 暂时没有连接成功。请到「接入 AI」检查当前连接后重试。");
+    return new ChatError("turn_failed", "当前 AI 暂时没有连接成功。请到「接入 AI」检查当前连接后重试。", detail);
   }
   // 未知报错同样是内部诊断信息。默认不透传，只有进入本函数前由产品自己构造的
   // ChatError / RuntimeProviderError / LocalAgentError 才保留具体、可行动的产品文案。
-  return new ChatError("turn_failed", "当前 AI 暂时没有连接成功。请到「接入 AI」检查当前连接后重试。");
+  return new ChatError("turn_failed", "当前 AI 暂时没有连接成功。请到「接入 AI」检查当前连接后重试。", detail);
 }
 
 /**

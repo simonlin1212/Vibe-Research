@@ -102,6 +102,17 @@ function decoders(encoding: string | undefined): NodeJS.ReadWriteStream[] | null
  */
 export function publicOnlyPost(url: string, init: { headers: Record<string, string>; body: string; signal: AbortSignal },
   deps: { resolve?: LookupFn; allowed?: (ip: string) => boolean } = {}): Promise<Response> {
+  return publicOnlyRequest(url, { method: "POST", ...init }, deps);
+}
+
+/** 只连公网地址的 GET(设置页「获取可用模型」用),其余规则与 publicOnlyPost 相同 */
+export function publicOnlyGet(url: string, init: { headers: Record<string, string>; signal: AbortSignal },
+  deps: { resolve?: LookupFn; allowed?: (ip: string) => boolean } = {}): Promise<Response> {
+  return publicOnlyRequest(url, { method: "GET", ...init }, deps);
+}
+
+function publicOnlyRequest(url: string, init: { method: "GET" | "POST"; headers: Record<string, string>; body?: string; signal: AbortSignal },
+  deps: { resolve?: LookupFn; allowed?: (ip: string) => boolean }): Promise<Response> {
   const target = new URL(url);
   const allowed = deps.allowed ?? isPublicAddress;
   const host = target.hostname.replace(/^\[|\]$/g, "");
@@ -112,9 +123,12 @@ export function publicOnlyPost(url: string, init: { headers: Record<string, stri
   const mod = target.protocol === "https:" ? https : http;
   return new Promise<Response>((resolve, reject) => {
     const req = mod.request(target, {
-      method: "POST",
+      method: init.method,
       // 与 fetch 一样声明能解压的编码(调用方自己给了就用调用方的)
-      headers: { "accept-encoding": "gzip, deflate, br", ...init.headers, "content-length": String(Buffer.byteLength(init.body)) },
+      headers: {
+        "accept-encoding": "gzip, deflate, br", ...init.headers,
+        ...(init.body !== undefined ? { "content-length": String(Buffer.byteLength(init.body)) } : {}),
+      },
       signal: init.signal,
       agent: false,
       lookup: publicOnlyLookup(deps.resolve, allowed) as unknown as net.LookupFunction,
@@ -133,6 +147,6 @@ export function publicOnlyPost(url: string, init: { headers: Record<string, stri
       } catch (e) { res.destroy(); reject(e); }
     });
     req.on("error", reject);
-    req.end(init.body);
+    if (init.body !== undefined) req.end(init.body); else req.end();
   });
 }
