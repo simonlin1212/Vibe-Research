@@ -116,11 +116,12 @@ function fakeCodeBuddy(dir = fs.mkdtempSync(path.join(os.tmpdir(), "vra-fake-cod
 const a=process.argv.slice(2);
 if(process.env.FAKE_CALLS_FILE) require('node:fs').appendFileSync(process.env.FAKE_CALLS_FILE,a[0]+'\\n');
 if(process.env.FAKE_REQUIRE_LITE_BUNDLE==='1'&&process.env.CODEBUDDY_FORCE_LITE_WB_BUNDLE!=='1'){console.error("Cannot find module '../dist/codebuddy'");process.exit(1)}
+if(process.env.FAKE_REJECT_LITE_BUNDLE==='1'&&process.env.CODEBUDDY_FORCE_LITE_WB_BUNDLE==='1'){console.error("lite bundle forced on standalone CLI");process.exit(1)}
 if(a[0]==='--version'){console.log(process.env.FAKE_VERSION||'2.143.1 (CodeBuddy Code)');process.exit(0)}
 if(a[0]==='--help'){
   if(process.env.FAKE_COLD_HELP==='1') Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,5500);
   const required='--tools --strict-mcp-config --mcp-config --setting-sources --input-format --output-format --system-prompt --json-schema --max-turns --agent --permission-mode --subagent-permission-mode';
-  console.log(process.env.FAKE_OLD_HELP==='1'?'--output-format':required+(process.env.FAKE_LEGACY_HELP==='1'?'':' --no-session-persistence'));
+  console.log(process.env.FAKE_OLD_HELP==='1'?'--output-format':required+(process.env.FAKE_LEGACY_HELP==='1'?'':' --no-session-persistence')+(process.env.FAKE_HELP_PORT==='1'?'\\n  --port <number>  HTTP listen port':''));
   process.exit(0)
 }
 let input='';process.stdin.setEncoding('utf8');process.stdin.on('data',x=>input+=x);process.stdin.on('end',()=>{
@@ -139,7 +140,12 @@ let input='';process.stdin.setEncoding('utf8');process.stdin.on('data',x=>input+
   if(process.env.FAKE_ECHO_MCP_ENV==='1') result.result+='|wait='+process.env.CODEBUDDY_WAIT_FOR_MCP_SERVERS_ENABLED+'|prewait='+process.env.CODEBUDDY_FIRST_RUN_MCP_PREWAIT_TIMEOUT_MS;
   if(process.env.FAKE_IMAGE_INPUT==='1') result.result+='|input_format='+a[a.indexOf('--input-format')+1]+'|builtin_tools='+a[a.indexOf('--tools')+1]+'|model_override='+a.includes('--model');
   if(process.env.FAKE_REQUIRE_LITE_BUNDLE==='1') result.result+='|lite='+process.env.CODEBUDDY_FORCE_LITE_WB_BUNDLE+'|headless='+Boolean(process.env.CODEBUDDY_FORCE_HEADLESS_BUNDLE)+'|host='+Boolean(process.env.WORKBUDDY_AUTH_TOKEN);
-  console.log(JSON.stringify(process.env.FAKE_LEGACY_HELP==='1'?[{type:'message'},result]:result));
+  if(process.env.FAKE_ECHO_PORT==='1') result.result+='|port='+(a.includes('--port')?a[a.indexOf('--port')+1]:'none');
+  if(process.env.FAKE_BIG_OUTPUT) result.result+='|'+'x'.repeat(Number(process.env.FAKE_BIG_OUTPUT))+'|end';
+  const out=JSON.stringify(process.env.FAKE_LEGACY_HELP==='1'?[{type:'message'},result]:result);
+  // 照真实 CLI 的收尾：一次写完整份结果，紧接着 process.exit()。
+  if(process.env.FAKE_EXIT_AFTER_WRITE==='1'){process.stdout.write(out+'\\n');process.exit(0)}
+  console.log(out);
 });
 `);
   return { dir, bin };
@@ -572,6 +578,9 @@ test("CodeBuddy 参数关闭工具、MCP、配置、记忆与子代理，正文�
   assert.ok(args[1]?.startsWith("--"), "-p 后不得带位置 prompt，否则官方 CLI 会忽略 stdin 里的用户正文");
   assert.ok(args.includes("--json-schema"));
   assert.ok(!args.join(" ").includes("USER_SECRET_PROMPT"));
+  assert.ok(!args.includes("--port"), "老版本不认识的参数默认不传");
+  const withPort = codeBuddyArgs("SYSTEM", { type: "object" }, false, undefined, true);
+  assert.deepEqual(withPort.slice(0, 3), ["-p", "--port", "0"]);
 });
 
 test("CodeBuddy Deep 只开显式 MCP 白名单，并允许多轮工具调用", () => {
@@ -1087,8 +1096,12 @@ test("独立 CodeBuddy CLI 2.161.0 的无 token 账号可检测与调用，保�
 });
 
 test("WorkBuddy 2.161.0 精简包在检测与调用中固定选择 lite bundle，保持宿主环境隔离", async (t) => {
-  const f = fakeCodeBuddy();
-  t.after(() => fs.rmSync(f.dir, { recursive: true, force: true }));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "vra-workbuddy-lite-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const binDir = path.join(root, "WorkBuddy", "resources", "app.asar.unpacked", "cli", "bin");
+  fs.mkdirSync(binDir, { recursive: true });
+  const f = fakeCodeBuddy(binDir);
+  assert.equal(isWorkBuddyBundledCli(f.bin), true);
   for (const override of [undefined, "0"]) {
     const env = { ...PLATFORM_ENV, CODEBUDDY_BIN: f.bin, PATH: "", FAKE_VERSION: "2.161.0 (CodeBuddy Code)",
       FAKE_REQUIRE_LITE_BUNDLE: "1", CODEBUDDY_FORCE_LITE_WB_BUNDLE: override, CODEBUDDY_FORCE_HEADLESS_BUNDLE: "1",
@@ -1105,6 +1118,61 @@ test("WorkBuddy 2.161.0 精简包在检测与调用中固定选择 lite bundle�
     assert.match(result, /^hello\|api=false\|token=false\|base=false\|/);
     assert.match(result, /\|noSession=true\|permission=dontAsk\|lite=1\|headless=false\|host=false$/);
   }
+});
+
+test("#59 独立安装的 CodeBuddy CLI 检测与调用都不强加 WorkBuddy 精简包", async (t) => {
+  const f = fakeCodeBuddy();
+  t.after(() => fs.rmSync(f.dir, { recursive: true, force: true }));
+  assert.equal(isWorkBuddyBundledCli(f.bin), false);
+  // 强加了精简包，假 CLI 就报错退出：检测与调用都通过，说明两处都没加。
+  const env = { ...PLATFORM_ENV, CODEBUDDY_BIN: f.bin, PATH: "", FAKE_VERSION: "2.179.2 (CodeBuddy Code)", FAKE_REJECT_LITE_BUNDLE: "1",
+    FAKE_ACCOUNT: JSON.stringify({ uid: "secret-user", type: "personal", userId: "secret-user", token: "secret-token" }) };
+  const status = await probeCodeBuddy(env);
+  assert.equal(status.status, "ready");
+  const result = await runLocalAgent("codebuddy", { systemPrompt: "规则", userPrompt: "hello", env });
+  assert.match(result, /^hello\|api=false\|/);
+});
+
+test("#59 CodeBuddy 一次写出超过 64 KB 的结果后立刻 process.exit()，产品仍拿到完整回答", async (t) => {
+  const f = fakeCodeBuddy();
+  t.after(() => fs.rmSync(f.dir, { recursive: true, force: true }));
+  const size = 300 * 1024;
+  const env = { ...PLATFORM_ENV, CODEBUDDY_BIN: f.bin, PATH: "", FAKE_BIG_OUTPUT: String(size), FAKE_EXIT_AFTER_WRITE: "1",
+    FAKE_ACCOUNT: JSON.stringify({ uid: "secret-user", type: "personal", userId: "secret-user", token: "secret-token" }) };
+  const result = await runLocalAgent("codebuddy", { systemPrompt: "规则", userPrompt: "hello", env });
+  assert.ok(result.startsWith("hello|api=false|"));
+  assert.ok(result.endsWith("x".repeat(64) + "|end"), "回答末尾要完整");
+  assert.ok(result.length > size);
+});
+
+test("#59 写文件后输出上限照样生效：超过 4 MB 按输出过大处理", async (t) => {
+  const f = fakeCodeBuddy();
+  t.after(() => fs.rmSync(f.dir, { recursive: true, force: true }));
+  const env = { ...PLATFORM_ENV, CODEBUDDY_BIN: f.bin, PATH: "", FAKE_BIG_OUTPUT: String(5 * 1024 * 1024), FAKE_EXIT_AFTER_WRITE: "1",
+    FAKE_ACCOUNT: JSON.stringify({ uid: "secret-user", type: "personal", userId: "secret-user", token: "secret-token" }) };
+  await assert.rejects(runLocalAgent("codebuddy", { systemPrompt: "规则", userPrompt: "hello", env }),
+    (e: unknown) => e instanceof LocalAgentError && e.code === "agent_output_too_large");
+});
+
+test("Claude 一次写出超过 64 KB 的结果后立刻 process.exit()，产品仍拿到完整回答", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "vra-fake-claude-big-"));
+  const answer = "y".repeat(300 * 1024) + "|end";
+  const bin = fakeNodeExecutable(dir, "claude", `
+if(process.argv[2]==='--version'){console.log('2.1.226 (Claude Code)');process.exit(0)}
+process.stdin.resume();process.stdin.on('end',()=>{process.stdout.write(JSON.stringify({result:${JSON.stringify(answer)}})+'\\n');process.exit(0)});`);
+  try {
+    assert.equal(await runLocalAgent("claude", { systemPrompt: "规则", userPrompt: "测试",
+      env: { ...PLATFORM_ENV, CLAUDE_BIN: bin, PATH: process.env.PATH } }), answer);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("vibe-astock #28 帮助里列出 --port 才传 --port 0，不去抢交互会话占着的固定端口", async (t) => {
+  const f = fakeCodeBuddy();
+  t.after(() => fs.rmSync(f.dir, { recursive: true, force: true }));
+  const base = { ...PLATFORM_ENV, CODEBUDDY_BIN: f.bin, PATH: "", FAKE_ECHO_PORT: "1",
+    FAKE_ACCOUNT: JSON.stringify({ uid: "secret-user", type: "personal", userId: "secret-user", token: "secret-token" }) };
+  assert.match(await runLocalAgent("codebuddy", { systemPrompt: "规则", userPrompt: "hello", env: { ...base, FAKE_HELP_PORT: "1" } }), /\|port=0$/);
+  assert.match(await runLocalAgent("codebuddy", { systemPrompt: "规则", userPrompt: "hello", env: base }), /\|port=none$/);
 });
 
 test("WorkBuddy 旧 CLI 的无 token 账号不能绕过临时 HOME 所需凭据", async (t) => {
@@ -1377,6 +1445,47 @@ setInterval(()=>{},1000);
     assert.equal(terminateActiveLocalAgentProcesses("SIGKILL"), 1);
     await assert.rejects(running, (e: unknown) => e instanceof LocalAgentError && e.code === "agent_failed");
     assert.throws(() => process.kill(pid, 0), /ESRCH/);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("父服务被 SIGTERM 停掉时，同步删掉还在跑的 Agent 的临时工作区", { skip: process.platform === "win32" }, async () => {
+  // 正常收尾由 finish() 删临时工作区；父服务被信号停掉时来不及走到那一步，里面的回答原文不能留在系统临时目录。
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "vra-parent-exit-"));
+  const tmpRoot = path.join(dir, "tmp");
+  fs.mkdirSync(tmpRoot);
+  const infoFile = path.join(dir, "agent.json");
+  const bin = fakeNodeExecutable(dir, "claude", `
+const fs=require('node:fs');
+process.stdout.write('{"partial":');
+fs.writeFileSync(${JSON.stringify(infoFile)},JSON.stringify({pid:process.pid,cwd:process.cwd()}));
+setInterval(()=>{},1000);
+`);
+  const parentScript = path.join(dir, "parent.mjs");
+  fs.writeFileSync(parentScript, `
+import fs from "node:fs";
+import { runLocalAgent } from ${JSON.stringify(new URL("../src/local_agent_runtime.ts", import.meta.url).href)};
+const [bin, infoFile] = process.argv.slice(2);
+runLocalAgent("claude", { systemPrompt: "规则", userPrompt: "等待", timeoutMs: 60_000, env: { CLAUDE_BIN: bin, PATH: process.env.PATH } }).catch(() => {});
+const poll = setInterval(() => { if (fs.existsSync(infoFile)) { clearInterval(poll); process.kill(process.pid, "SIGTERM"); } }, 20);
+setTimeout(() => process.exit(3), 30_000);
+`);
+  try {
+    const child = spawn(process.execPath, [parentScript, bin, infoFile], {
+      env: { PATH: process.env.PATH, HOME: process.env.HOME, TMPDIR: tmpRoot }, stdio: ["ignore", "ignore", "pipe"],
+    });
+    let stderr = "";
+    child.stderr!.on("data", (d) => { stderr += String(d); });
+    const [code, signal] = await new Promise<[number | null, NodeJS.Signals | null]>((resolve) => child.on("exit", (c, s) => resolve([c, s])));
+    assert.equal(signal, "SIGTERM", `父服务应按 SIGTERM 退出（code=${code}）：${stderr}`);
+    const info = JSON.parse(fs.readFileSync(infoFile, "utf8")) as { pid: number; cwd: string };
+    assert.ok(info.cwd.startsWith(fs.realpathSync(tmpRoot) + path.sep), "假 CLI 应在父服务的临时目录里运行");
+    assert.equal(fs.existsSync(info.cwd), false, "临时工作区应在父服务退出前删掉");
+    assert.deepEqual(fs.readdirSync(tmpRoot).filter((name) => name.startsWith("vra-")), []);
+    for (let i = 0; i < 100; i += 1) {
+      try { process.kill(info.pid, 0); } catch { break; }
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    assert.throws(() => process.kill(info.pid, 0), /ESRCH/);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 

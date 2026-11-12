@@ -81,6 +81,14 @@ const SECURITY_HEADERS = { "Cache-Control": "no-store", "Referrer-Policy": "no-r
  */
 const HTML_CSP = "default-src 'none'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'; sandbox";
 
+/**
+ * /ui 与 /ui/runs/:id 是本服务自己拼的页面(运行 ID、报告正文都先转义),不带脚本,只靠普通链接互相跳转。
+ * 纯 `sandbox` 会把页面变成不透明来源:点页面里的链接时浏览器把请求当成跨站
+ * (Sec-Fetch-Site: cross-site 被拒成 403;SameSite=Strict 的 cookie 也不带,成 401)(VA #27 同一处)。
+ * 这两页加 allow-same-origin 让同源链接照常带 cookie;仍不许脚本(没有 allow-scripts、没有 script-src)、表单和外部资源。
+ */
+const UI_CSP = "default-src 'none'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'; sandbox allow-same-origin";
+
 /** Cookie 只对这些只读 GET 路由有效(白名单,而不是"任何 GET");其余路由只认 Bearer */
 export const COOKIE_GET_ROUTES: readonly RegExp[] = [/^\/ui$/, /^\/ui\/runs\/[^/]+$/, /^\/runs$/, /^\/runs\/[^/]+\/(viewer|report|status)$/];
 
@@ -189,8 +197,8 @@ export function createApiServer(ctx: ServiceContext, opts: { token: string; cook
       }
       const cookieOk = cookieLogin && req.method === "GET" && COOKIE_GET_ROUTES.some((re) => re.test(url.pathname)) && cookieToken(req) === opts.token;
       if (!bearerOk && !cookieOk) return send(res, 401, { error: "unauthorized" });
-      if (req.method === "GET" && url.pathname === "/ui") return send(res, 200, uiIndex(ctx), "text/html; charset=utf-8");
-      if (req.method === "GET" && /^\/ui\/runs\/[^/]+$/.test(url.pathname)) { const t = uiRun(ctx, decodeURIComponent(url.pathname.split("/")[3])); return t === null ? send(res, 404, { error: "no such run" }) : send(res, 200, t, "text/html; charset=utf-8"); }
+      if (req.method === "GET" && url.pathname === "/ui") return send(res, 200, uiIndex(ctx), "text/html; charset=utf-8", UI_CSP);
+      if (req.method === "GET" && /^\/ui\/runs\/[^/]+$/.test(url.pathname)) { const t = uiRun(ctx, decodeURIComponent(url.pathname.split("/")[3])); return t === null ? send(res, 404, { error: "no such run" }) : send(res, 200, t, "text/html; charset=utf-8", UI_CSP); }
       const parts = url.pathname.split("/").filter(Boolean);
       const q = Object.fromEntries(url.searchParams.entries());
       if (req.method === "GET" && url.pathname === "/health") return send(res, 200, { ok: true, version: productVersion() });

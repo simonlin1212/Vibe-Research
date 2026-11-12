@@ -1027,6 +1027,35 @@ test("运行产物的 HTML 以 CSP 送出 —— 产物里混进 <script> 时不
   }
 });
 
+test("运行列表和运行页的 CSP 允许同源跳转、仍不许脚本 —— 否则点页面里的链接会被当成跨站拒掉", async () => {
+  const ctx = svcCtx();
+  const runDir = path.join(ctx.dataRoot, "runs", "r1");
+  fs.mkdirSync(runDir, { recursive: true });
+  fs.writeFileSync(path.join(runDir, "report.md"), "# 报告\n");
+  fs.writeFileSync(path.join(runDir, "viewer.html"), "<html><body>hi</body></html>");
+  writeJson(path.join(runDir, "manifest.json"), { status: "complete", exit_code: 0, finished_at: "2026-09-05T12:00:00+08:00" });
+  const server = createApiServer(ctx, { token: "t-test-token-0123456789" });
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+  const port = (server.address() as { port: number }).port;
+  try {
+    for (const route of ["/ui", "/ui/runs/r1"]) {
+      const r = await fetch(`http://127.0.0.1:${port}${route}`, { headers: { authorization: "Bearer t-test-token-0123456789" } });
+      assert.equal(r.status, 200, route);
+      const csp = r.headers.get("content-security-policy") ?? "";
+      assert.match(csp, /default-src 'none'/, route);
+      assert.match(csp, /form-action 'none'/, route);
+      assert.match(csp, /sandbox allow-same-origin(?:;|$)/, route);
+      assert.doesNotMatch(csp, /allow-scripts|script-src/, `${route} 不许跑脚本`);
+    }
+    // 查看器是运行产物、带脚本，照旧不给 allow-same-origin：只有这两页放宽
+    const viewer = await fetch(`http://127.0.0.1:${port}/runs/r1/viewer`, { headers: { authorization: "Bearer t-test-token-0123456789" } });
+    assert.equal(viewer.status, 200);
+    assert.doesNotMatch(viewer.headers.get("content-security-policy") ?? "", /allow-same-origin/);
+  } finally {
+    server.close();
+  }
+});
+
 test("🔴 同一份查询并发进来只真取一次(single-flight)—— 否则一屏五个卡片打五次上游", async () => {
   const ctx = realRepoCtx();
   let spawned = 0;

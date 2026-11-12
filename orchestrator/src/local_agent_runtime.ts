@@ -7,7 +7,7 @@
  * 普通 Agent 对话与 Deep 研究使用各自的产品 MCP；连接探针等内部任务不挂载工具。
  * 所有路径都关闭会话落盘与用户配置；没有等价隔离参数的 CLI 不能把按钮点亮。
  */
-import { execFile, spawn, spawnSync, type ChildProcess, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { execFile, spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
@@ -19,6 +19,8 @@ const execFileAsync = promisify(execFile);
 const MAX_ACTIVE_LOCAL_AGENTS = 4;
 let activeLocalAgents = 0;
 const activeLocalAgentProcesses = new Set<ChildProcess>();
+// 还在跑的 Agent 的临时工作区。父服务被信号停掉时 finish() 来不及删，退出前在这里同步删掉。
+const activeLocalAgentWorkspaces = new Set<string>();
 type ParentSignal = "SIGINT" | "SIGTERM" | "SIGHUP";
 const parentSignalHandlers = new Map<ParentSignal, () => void>();
 let parentExitHookInstalled = false;
@@ -70,8 +72,17 @@ function removeParentShutdownHooks(): void {
   parentSignalHandlers.clear();
 }
 
+/** 父服务要退出了：同步删掉还在跑的 Agent 的临时工作区（里面有回答原文、用户图片）。不重试、不等待。 */
+function removeActiveLocalAgentWorkspaces(): void {
+  for (const dir of activeLocalAgentWorkspaces) {
+    try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* 尽力清理 */ }
+  }
+  activeLocalAgentWorkspaces.clear();
+}
+
 function onParentExit(): void {
   terminateActiveLocalAgentProcesses("SIGKILL");
+  removeActiveLocalAgentWorkspaces();
 }
 
 function installParentShutdownHooks(): void {
@@ -83,6 +94,7 @@ function installParentShutdownHooks(): void {
     const handler = () => {
       // 父进程已经收到终止信号；此时不等 CLI 自行收尾，先同步杀整棵树，避免继续消耗订阅额度。
       terminateActiveLocalAgentProcesses("SIGKILL");
+      removeActiveLocalAgentWorkspaces();
       removeParentShutdownHooks();
       // 恢复该信号的默认语义。延后一拍让同一轮中已有的其他监听器先完成同步清理。
       setImmediate(() => { try { process.kill(process.pid, signal); } catch { process.exit(1); } });
@@ -723,6 +735,8 @@ export function localSubscriptionEnv(base: NodeJS.ProcessEnv, agent: LocalAgentI
 interface CodeBuddyRuntime {
   login: CodeBuddyLogin | null;
   legacyEphemeralHome: boolean;
+  /** `--help` 列出了 `--port`：执行时传 `--port 0`，不去抢 ~/.codebuddy 记下的固定端口（vibe-astock #28）。 */
+  ephemeralPort: boolean;
 }
 
 /** WorkBuddy 桌面版内置的 CLI（安装包 app.asar.unpacked/cli/bin 下）；软链接到那里的也算。 */
@@ -749,7 +763,7 @@ function codeBuddyLoginHint(bin: string, env: NodeJS.ProcessEnv): string {
 
 function codeBuddySubscriptionEnv(
   base: NodeJS.ProcessEnv,
-  options: { account?: CodeBuddyAccount | null; ephemeralHome?: string } = {},
+  options: { account?: CodeBuddyAccount | null; ephemeralHome?: string; workBuddyBundled?: boolean } = {},
 ): NodeJS.ProcessEnv {
   const env = localSubscriptionEnv(base, "codebuddy");
   // 这一张卡承诺复用本机登录账号。API key、临时 OAuth token、自定义端点和模型覆盖
@@ -765,7 +779,8 @@ function codeBuddySubscriptionEnv(
     DISABLE_TELEMETRY: "1",
     DISABLE_ERROR_REPORTING: "1",
     // WorkBuddy 2.161.0 仅附带 lite bundle；官方入口在该产物缺失时回退 headless / full。
-    CODEBUDDY_FORCE_LITE_WB_BUNDLE: "1",
+    // 只给桌面版内置的 CLI 指定：独立 CLI 本来走 headless 包，强加这一项会换成给 WorkBuddy 用的精简包（#59）。
+    ...(options.workBuddyBundled ? { CODEBUDDY_FORCE_LITE_WB_BUNDLE: "1" } : {}),
     CODEBUDDY_DISABLE_IDE: "1",
     CODEBUDDY_DISABLE_AUTO_MEMORY: "1",
     CODEBUDDY_CODE_DISABLE_AUTO_MEMORY: "1",
@@ -899,7 +914,7 @@ async function codeBuddyLogin(bin: string, env: NodeJS.ProcessEnv, legacyEphemer
 }
 
 async function inspectCodeBuddy(bin: string, env: NodeJS.ProcessEnv): Promise<{ version: string | null; runtime: CodeBuddyRuntime }> {
-  const runEnv = codeBuddySubscriptionEnv(env);
+  const runEnv = codeBuddySubscriptionEnv(env, { workBuddyBundled: isWorkBuddyBundledCli(bin) });
   const versionCall = executableInvocation(bin, ["--version"], runEnv);
   // These read-only CLI probes have no graceful shutdown work. WorkBuddy's embedded
   // CLI can ignore SIGTERM even for --help; execFile would then never settle on timeout.
@@ -918,7 +933,9 @@ async function inspectCodeBuddy(bin: string, env: NodeJS.ProcessEnv): Promise<{ 
   if (legacyEphemeralHome && login?.kind === "native") {
     throw new LocalAgentError("agent_cli_too_old", "CodeBuddy 已登录，但此版本无法安全隔离会话；请升级 WorkBuddy / CodeBuddy 后重试");
   }
-  return { version, runtime: { login, legacyEphemeralHome } };
+  // 只认独立的参数名（前后是空白、逗号、等号或尖括号），不把 `--port-xxx` 一类别的参数当成它。
+  const ephemeralPort = /(?:^|[\s,[])--port(?=[\s=,<\]]|$)/m.test(help);
+  return { version, runtime: { login, legacyEphemeralHome, ephemeralPort } };
 }
 
 /**
@@ -1362,7 +1379,7 @@ export function claudeArgs(systemPrompt: string, outputSchema?: unknown,
 
 /** CodeBuddy 的 `--print` 不携位置 prompt，因此只从 stdin 取用户正文，不进 argv / 进程列表。 */
 export function codeBuddyArgs(systemPrompt: string, outputSchema?: unknown, legacyEphemeralHome = false,
-  controlledMcp?: RunLocalAgentOptions["controlledMcp"]): string[] {
+  controlledMcp?: RunLocalAgentOptions["controlledMcp"], ephemeralPort = false): string[] {
   const isolation = codeBuddyIsolationArgs(legacyEphemeralHome);
   if (controlledMcp) {
     isolation[isolation.indexOf("--tools") + 1] = `NoDefer(mcp__${controlledMcp.serverName}__*)`;
@@ -1374,6 +1391,10 @@ export function codeBuddyArgs(systemPrompt: string, outputSchema?: unknown, lega
   }
   const args = [
     "-p",
+    // 不传时 CLI 去绑 ~/.codebuddy 里记下的固定端口；那个端口被开着的交互会话或并发的另一个请求占着，
+    // CLI 就 EADDRINUSE 直接退出，表现为「检测通过、提问没回答」（vibe-astock #28）。0 = 让系统给一个空闲端口。
+    // 只在 `--help` 列出这个参数时才传，老版本不认识的参数不往里塞。
+    ...(ephemeralPort ? ["--port", "0"] : []),
     "--agent", "cli",
     ...isolation,
     ...(controlledMcp ? ["--allowedTools", ...controlledMcp.allowedTools] : []),
@@ -1587,7 +1608,13 @@ export async function runLocalAgent(
 
   const loginHint = agent === "codebuddy" ? codeBuddyLoginHint(bin, baseEnv) : undefined;
   return await new Promise<string>((resolve, reject) => {
-    let child: ChildProcessWithoutNullStreams;
+    let child: ChildProcess;
+    // Claude / CodeBuddy 的回答写进临时文件，不走管道（#59；vibe-astock #28 同一问题）。
+    // 它们都是 Node 程序：stdout 是管道时，Node 在 macOS 等系统上异步写；CLI 答完直接 process.exit()，
+    // 管道里没写完的部分（超过约 64 KB 的那段）就丢了，表现为「JSON 被截断、解析失败」；写文件是同步的，不会丢。
+    // Codex 仍走管道：它的 JSONL 要边收边查。
+    const stdoutFile = agent === "codex" ? null : path.join(tmpDir, ".vra-agent-stdout");
+    let stdoutFd: number | null = null;
     try {
     const runEnv = agent === "claude"
       ? subscriptionEnv(baseEnv)
@@ -1596,6 +1623,7 @@ export async function runLocalAgent(
       : codeBuddySubscriptionEnv(baseEnv, {
         account: codeBuddyRuntime!.legacyEphemeralHome && codeBuddyRuntime!.login?.kind === "legacy" ? codeBuddyRuntime!.login.account : null,
         ephemeralHome: codeBuddyRuntime!.legacyEphemeralHome ? tmpDir : undefined,
+        workBuddyBundled: isWorkBuddyBundledCli(bin),
       });
     // M6 的无工具对话刻意不等 MCP；Deep 研究则必须反过来。
     // 否则真实 WorkBuddy 会在 stdio server 尚未初始化时就开始首轮，
@@ -1610,25 +1638,31 @@ export async function runLocalAgent(
       ? claudeArgs(opts.systemPrompt, opts.outputSchema, opts.controlledMcp)
       : agent === "codex"
       ? codexArgs(opts.systemPrompt, tmpDir, { controlledMcp: opts.controlledMcp, outputSchemaFile, imageFiles })
-      : codeBuddyArgs(opts.systemPrompt, opts.outputSchema, codeBuddyRuntime!.legacyEphemeralHome, opts.controlledMcp);
+      : codeBuddyArgs(opts.systemPrompt, opts.outputSchema, codeBuddyRuntime!.legacyEphemeralHome, opts.controlledMcp,
+        codeBuddyRuntime!.ephemeralPort);
     if (agent === "codebuddy" && opts.userImages?.length) args.push("--input-format", "stream-json");
     const launch = executableInvocation(bin, args, runEnv);
+    if (stdoutFile) stdoutFd = fs.openSync(stdoutFile, "w", 0o600);
     child = spawn(launch.file, launch.args, {
       cwd: tmpDir,
       windowsHide: true,
       env: runEnv,
-      stdio: ["pipe", "pipe", "pipe"],
+      stdio: ["pipe", stdoutFd ?? "pipe", "pipe"],
       // POSIX 下创建独立进程组。本机 Agent CLI 可能继续派生 node / shell 子进程；
       // 只杀直接 child 会让后代留在后台继续消耗订阅额度。
       detached: process.platform !== "win32",
     });
     } catch {
       // 参数拼装或 spawn 同步失败(如提示词里有 NUL):还没有子进程,当场释放槽位与工作区。
+      if (stdoutFd !== null) { try { fs.closeSync(stdoutFd); } catch { /* 已关闭 */ } }
       releaseSlot();
       try { fs.rmSync(tmpDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); } catch { /* 尽力清理 */ }
       reject(new LocalAgentError("agent_launch_failed", `${label} 未能启动`));
       return;
     }
+    // 子进程已经拿到自己的一份句柄；本进程这份立刻关掉，Windows 上才删得掉临时目录。
+    if (stdoutFd !== null) { try { fs.closeSync(stdoutFd); } catch { /* 已关闭 */ } stdoutFd = null; }
+    activeLocalAgentWorkspaces.add(tmpDir);
     trackLocalAgentProcess(child);
     let stdout = "";
     let stderr = "";
@@ -1637,6 +1671,10 @@ export async function runLocalAgent(
     let terminationError: LocalAgentError | null = null;
     let hardKillTimer: NodeJS.Timeout | null = null;
     let killFallbackTimer: NodeJS.Timeout | null = null;
+    let outputSizeTimer: NodeJS.Timeout | null = null;
+    const stdoutFileSize = (): number => {
+      try { return fs.statSync(stdoutFile!).size; } catch { return 0; }
+    };
 
     const cleanup = () => {
       opts.signal?.removeEventListener("abort", onAbort);
@@ -1653,8 +1691,10 @@ export async function runLocalAgent(
       clearTimeout(timer);
       if (hardKillTimer) clearTimeout(hardKillTimer);
       if (killFallbackTimer) clearTimeout(killFallbackTimer);
+      if (outputSizeTimer) clearInterval(outputSizeTimer);
       activeLocalAgents = Math.max(0, activeLocalAgents - 1);
       untrackLocalAgentProcess(child);
+      activeLocalAgentWorkspaces.delete(tmpDir);
       try { cleanup(); }
       catch {
         reject(new LocalAgentError("agent_cleanup_failed", `${label} 临时工作区清理失败，请检查本机文件权限`));
@@ -1679,8 +1719,9 @@ export async function runLocalAgent(
       if (settled || terminationError) return;
       terminationError = error;
       clearTimeout(timer);
+      if (outputSizeTimer) clearInterval(outputSizeTimer);
       opts.signal?.removeEventListener("abort", onAbort);
-      try { child.stdin.destroy(); } catch { /* 已关闭 */ }
+      try { child.stdin?.destroy(); } catch { /* 已关闭 */ }
       signalTree("SIGTERM");
       // Promise 不能在 TERM 发出后立刻返回：那会清掉临时目录与监听器，
       // 却无法证明整个进程组已经退出。两秒后杀整组，再等 close。
@@ -1715,12 +1756,18 @@ export async function runLocalAgent(
       terminate(new LocalAgentError("agent_timeout", `${label} 超时（>${Math.round(timeoutMs / 1000)} 秒）`));
     }, timeoutMs);
 
-    child.stdin.on("error", () => { /* 提前退出时的 EPIPE 由 close 统一处理 */ });
-    child.stdout.setEncoding("utf8");
-    child.stderr.setEncoding("utf8");
+    child.stdin?.on("error", () => { /* 提前退出时的 EPIPE 由 close 统一处理 */ });
+    child.stdout?.setEncoding("utf8");
+    child.stderr?.setEncoding("utf8");
     const codexStream = agent === "codex" ? new CodexEventStream(opts.controlledMcp) : null;
     let pendingLine = "";
-    child.stdout.on("data", (chunk: string) => {
+    // 写文件时收不到 data 事件：定时量文件大小，超过上限照样终止。
+    if (stdoutFile) {
+      outputSizeTimer = setInterval(() => {
+        if (stdoutFileSize() > maxOut) terminate(new LocalAgentError("agent_output_too_large", `${label} 输出超出上限，已终止`));
+      }, 500);
+    }
+    child.stdout?.on("data", (chunk: string) => {
       if (terminationError) return;
       if (codexStream) {
         const lines = (pendingLine + chunk).split("\n");
@@ -1739,7 +1786,7 @@ export async function runLocalAgent(
       }
       stdout += chunk;
     });
-    child.stderr.on("data", (chunk: string) => {
+    child.stderr?.on("data", (chunk: string) => {
       if (Buffer.byteLength(stderr, "utf8") < maxErr) stderr += chunk;
     });
     child.on("error", () => {
@@ -1754,8 +1801,17 @@ export async function runLocalAgent(
         return finish(() => reject(terminationError!));
       }
       clearTimeout(timer);
+      if (outputSizeTimer) clearInterval(outputSizeTimer);
       settleOwnedProcessGroup(child.pid).then(() => {
         if (terminationError) return finish(() => reject(terminationError!));
+        // 整个进程组都退出了，文件不会再变，这时才读（临时目录在 finish 里才删）。
+        if (stdoutFile) {
+          if (stdoutFileSize() > maxOut) {
+            return finish(() => reject(new LocalAgentError("agent_output_too_large", `${label} 输出超出上限，已终止`)));
+          }
+          try { stdout = fs.readFileSync(stdoutFile, "utf8"); }
+          catch { return finish(() => reject(new LocalAgentError("agent_bad_output", `${label} 的输出读取失败`))); }
+        }
         const lastViolation = codexStream && pendingLine ? codexStream.push(pendingLine) : null;
         if (lastViolation) return finish(() => reject(new LocalAgentError("agent_policy_violation", lastViolation)));
         // Codex 的 stdout 是整段工具往来；分类只看它的终止原因，免得把研究正文里的 “401” 误判成掉登录。
@@ -1777,6 +1833,6 @@ export async function runLocalAgent(
     // 先返回就等不到 close，只能误报“退出未确认”。
     opts.signal?.addEventListener("abort", onAbort, { once: true });
     if (opts.signal?.aborted) return onAbort();
-    child.stdin.end(input, "utf8");
+    child.stdin?.end(input, "utf8");
   });
 }
